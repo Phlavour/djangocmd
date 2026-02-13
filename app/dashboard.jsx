@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+import HealthPanel from './health';
+
+
 // ═══════════════════════════════════════════════════════════════
 // THEME & CONSTANTS
 // ═══════════════════════════════════════════════════════════════
@@ -1242,7 +1245,7 @@ function TwitterPanel({ apiKey }) {
 // PLACEHOLDER PANELS
 // ═══════════════════════════════════════════════════════════════
 
-function HealthPlaceholder() {
+function HealthPanel /() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>♥</div>
