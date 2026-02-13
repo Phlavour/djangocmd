@@ -104,6 +104,27 @@ const PILLAR_COLORS_FN = () => ({
   shitposting: T.red,
 });
 
+const CATEGORIES = ["growth", "market", "lifestyle", "busting", "shitposting"];
+
+const STRUCTURES = [
+  "Problem → Insight → Action",
+  "Framework (3 steps)",
+  "Contrarian take + reasoning",
+  "Personal story + lesson",
+  "Myth busting + truth",
+  "Before/After transformation",
+  "Tactical how-to",
+  "Market observation + prediction",
+  "Trend analysis + context",
+  "Data + interpretation",
+  "Mindset shift",
+  "Discipline story",
+  "Health/productivity tip",
+  "One-liner / Hot take",
+  "Meme / Relatable",
+  "Thread opener",
+];
+
 const TABS_CONFIG_FN = () => ({
   DRAFT: { color: T.blue, icon: "✎", label: "Draft" },
   POST: { color: T.green, icon: "◉", label: "Post" },
@@ -339,19 +360,21 @@ function DailyResearch({ account }) {
 // WEEKLY CONTENT — reads from Google Sheets
 // ═══════════════════════════════════════════════════════════════
 
-function WeeklyContent({ sheetData, loading, onRefresh }) {
+function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("default");
   const [newPostText, setNewPostText] = useState("");
+  const [newPostCat, setNewPostCat] = useState("growth");
+  const [newPostStructure, setNewPostStructure] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [localPosts, setLocalPosts] = useState([]); // locally added posts for DRAFT
+  const [localPosts, setLocalPosts] = useState([]);
+  const [aiLoading, setAiLoading] = useState(null); // post index being scored
+  const [aiResults, setAiResults] = useState({}); // idx -> {notes, score}
   const TC = TABS_CONFIG_FN();
 
-  // Get rows for current tab
   const tabData = sheetData[activeTab];
   let rows = tabData?.rows || [];
 
-  // Merge local posts into DRAFT
   if (activeTab === "DRAFT") {
     rows = [...rows, ...localPosts];
   }
@@ -369,7 +392,6 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
     rows = [...rows].sort((a, b) => parseInt(b["Engagements"] || 0) - parseInt(a["Engagements"] || 0));
   }
 
-  // Count per tab
   const counts = {};
   STATUS_ORDER.forEach(t => {
     let c = (sheetData[t]?.rows || []).length;
@@ -383,10 +405,12 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
   const addLocalPost = () => {
     if (!newPostText.trim()) return;
     setLocalPosts(prev => [...prev, {
-      Category: "", Structure: "", Post: newPostText.trim(),
-      Notes: "Added from dashboard", Score: "", _local: true,
+      Category: newPostCat, Structure: newPostStructure, Post: newPostText.trim(),
+      Notes: "", Score: "", _local: true,
     }]);
     setNewPostText("");
+    setNewPostCat("growth");
+    setNewPostStructure("");
     setShowAdd(false);
   };
 
@@ -394,19 +418,59 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
     setLocalPosts(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Sort options based on tab
+  // AI Scoring
+  const askClaude = async (postText, idx) => {
+    if (!apiKey) {
+      alert("Add your Claude API key in Settings (⚙️ icon in top bar)");
+      return;
+    }
+    setAiLoading(idx);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          messages: [{ role: "user", content: `You are a crypto Twitter content strategist. Rate this post for viral potential on crypto Twitter.
+
+Post: "${postText}"
+
+Respond ONLY in this exact JSON format, nothing else:
+{"score": 7.5, "notes": "Brief explanation why this score, what makes it good or bad, and one suggestion to improve it"}
+
+Score should be 1-10 where:
+- 9-10: Exceptional viral potential, strong hook, unique insight
+- 7-8: Good post, solid engagement potential
+- 5-6: Average, needs work
+- 1-4: Weak, needs major revision
+
+Be honest and critical. Consider: hook strength, uniqueness, relatability, engagement potential, authenticity.` }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "";
+      try {
+        const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+        setAiResults(prev => ({ ...prev, [idx]: parsed }));
+      } catch {
+        setAiResults(prev => ({ ...prev, [idx]: { score: "?", notes: text } }));
+      }
+    } catch (err) {
+      setAiResults(prev => ({ ...prev, [idx]: { score: "!", notes: "Error: " + err.message } }));
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
   const sortOptions = isUsedTab
-    ? [
-        { value: "default", label: "Default" },
-        { value: "impressions", label: "Impressions ↓" },
-        { value: "engagement", label: "Engagement ↓" },
-      ]
-    : [
-        { value: "default", label: "Default" },
-        { value: "category", label: "Category A-Z" },
-        { value: "score-desc", label: "Score ↓" },
-        { value: "score-asc", label: "Score ↑" },
-      ];
+    ? [{ value: "default", label: "Default" }, { value: "impressions", label: "Impressions ↓" }, { value: "engagement", label: "Engagement ↓" }]
+    : [{ value: "default", label: "Default" }, { value: "category", label: "Category A-Z" }, { value: "score-desc", label: "Score ↓" }, { value: "score-asc", label: "Score ↑" }];
+
+  const selectStyle = {
+    background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px",
+    color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer",
+  };
 
   return (
     <div>
@@ -458,6 +522,21 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
           {showAdd ? (
             <Card>
               <Heading icon="✎">New Draft Post</Heading>
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
+                  <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={selectStyle}>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 2 }}>
+                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
+                  <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+                    <option value="">-- select structure --</option>
+                    {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
                 placeholder="write your post fam..."
                 style={{
@@ -473,7 +552,7 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
                 <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
               </div>
               <div style={{ fontSize: 10, color: T.textDim, marginTop: 8 }}>
-                💡 Posts added here are local only. Copy them to Google Sheets to make them permanent.
+                💡 Posts added here are local. Copy them to Google Sheets to make permanent.
               </div>
             </Card>
           ) : (
@@ -591,6 +670,37 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
                 {isLocal && (
                   <div style={{ marginTop: 8 }}>
                     <Btn small color={T.red} outline onClick={() => removeLocalPost(localPosts.indexOf(row))}>✕ Remove</Btn>
+                  </div>
+                )}
+
+                {/* AI Score button */}
+                {!isUsedTab && (
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                    <Btn small color={T.purple}
+                      disabled={aiLoading === idx || !post}
+                      onClick={() => askClaude(post, idx)}>
+                      {aiLoading === idx ? "⏳ Scoring..." : "🤖 Ask Claude"}
+                    </Btn>
+                    {aiResults[idx] && (
+                      <Badge color={
+                        parseFloat(aiResults[idx].score) >= 8.5 ? T.green :
+                        parseFloat(aiResults[idx].score) >= 7 ? T.amber :
+                        parseFloat(aiResults[idx].score) >= 5 ? T.blue : T.red
+                      }>
+                        AI Score: {aiResults[idx].score}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* AI Result */}
+                {aiResults[idx] && aiResults[idx].notes && (
+                  <div style={{
+                    marginTop: 8, fontSize: 12, color: T.text, background: T.purpleDim,
+                    border: `1px solid ${T.purple}30`, padding: "10px 14px", borderRadius: 8, lineHeight: 1.6,
+                  }}>
+                    <span style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 4 }}>🤖 Claude's Analysis</span>
+                    {aiResults[idx].notes}
                   </div>
                 )}
               </div>
@@ -850,7 +960,7 @@ function WeeklyAnalytics({ sheetData, loading }) {
 // TWITTER PANEL
 // ═══════════════════════════════════════════════════════════════
 
-function TwitterPanel() {
+function TwitterPanel({ apiKey }) {
   const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
@@ -891,7 +1001,7 @@ function TwitterPanel() {
 
       {/* Sub Panel Content */}
       {subTab === "research" && <DailyResearch account={account} />}
-      {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} />}
+      {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
       {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} />}
     </div>
   );
@@ -935,6 +1045,9 @@ export default function App() {
   const [nav, setNav] = useState("twitter");
   const [time, setTime] = useState(new Date());
   const [isDark, setIsDark] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [keyInput, setKeyInput] = useState("");
 
   T = isDark ? DARK : LIGHT;
 
@@ -942,6 +1055,11 @@ export default function App() {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const saveKey = () => {
+    setApiKey(keyInput);
+    setShowSettings(false);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'Satoshi', 'Segoe UI', sans-serif" }}>
@@ -1016,6 +1134,19 @@ export default function App() {
               {isDark ? "nite" : "day"}
             </span>
           </button>
+          {/* Settings */}
+          <button onClick={() => { setKeyInput(apiKey); setShowSettings(true); }} style={{
+            background: apiKey ? T.greenDim : T.card, border: `1px solid ${apiKey ? T.greenMid : T.border}`,
+            borderRadius: 20, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 14,
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = T.green}
+            onMouseLeave={e => e.currentTarget.style.borderColor = apiKey ? T.greenMid : T.border}
+          >
+            ⚙
+            <span style={{ fontSize: 10, color: apiKey ? T.green : T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {apiKey ? "AI on" : "settings"}
+            </span>
+          </button>
           <div style={{
             fontSize: 12, color: T.text, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 500,
             background: T.card, padding: "5px 10px", borderRadius: 6, border: `1px solid ${T.border}`,
@@ -1027,10 +1158,55 @@ export default function App() {
 
       {/* CONTENT */}
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
-        {nav === "twitter" && <TwitterPanel />}
+        {nav === "twitter" && <TwitterPanel apiKey={apiKey} />}
         {nav === "health" && <HealthPlaceholder />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
+
+      {/* SETTINGS MODAL */}
+      {showSettings && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 1000, backdropFilter: "blur(4px)",
+        }} onClick={() => setShowSettings(false)}>
+          <div style={{
+            background: T.card, border: `1px solid ${T.border}`, borderRadius: 16,
+            padding: 28, width: 440, maxWidth: "90vw",
+          }} onClick={e => e.stopPropagation()}>
+            <Heading icon="⚙">Settings</Heading>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>Claude API Key</div>
+              <div style={{ fontSize: 11, color: T.textSoft, marginBottom: 8, lineHeight: 1.5 }}>
+                Required for AI post scoring. Key is stored in memory only — never saved to disk or sent anywhere except Anthropic's API.
+              </div>
+              <input
+                type="password"
+                value={keyInput}
+                onChange={e => setKeyInput(e.target.value)}
+                placeholder="sk-ant-api03-..."
+                style={{
+                  width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
+                  borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 13,
+                  fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box",
+                }}
+                onFocus={e => e.target.style.borderColor = T.green}
+                onBlur={e => e.target.style.borderColor = T.border}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn color={T.green} onClick={saveKey}>Save</Btn>
+              {apiKey && <Btn color={T.red} outline onClick={() => { setApiKey(""); setKeyInput(""); }}>Remove Key</Btn>}
+              <Btn outline onClick={() => setShowSettings(false)}>Cancel</Btn>
+            </div>
+            {apiKey && (
+              <div style={{ marginTop: 12, fontSize: 11, color: T.green, display: "flex", alignItems: "center", gap: 4 }}>
+                <Dot color={T.green} pulse /> API key active — AI scoring enabled
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
