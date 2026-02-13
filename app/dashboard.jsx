@@ -193,8 +193,7 @@ const TABS_CONFIG_FN = () => ({
 const STATUS_ORDER = ["DRAFT", "POST", "USED", "DATABASE", "BAD"];
 
 const ACCOUNTS = [
-  { handle: "@django_crypto", name: "Django", avatar: "/pfp-django.jpg", gradient: ["#00e87b", "#00a855"] },
-  { handle: "@henryk0x", name: "Henryk", avatar: "/pfp-henryk.png", gradient: ["#3d8bfd", "#6644ff"] },
+  { handle: "@django_crypto", name: "Django", avatar: "/pfp-django.jpg", gradient: ["#00e87b", "#00aa55"] },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -414,7 +413,7 @@ function DailyResearch({ account }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// WEEKLY CONTENT — reads from Google Sheets
+// WEEKLY CONTENT — local state management + Google Sheets import
 // ═══════════════════════════════════════════════════════════════
 
 function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
@@ -424,140 +423,129 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [localPosts, setLocalPosts] = useState([]);
-  const [aiLoading, setAiLoading] = useState(null); // post index being scored
-  const [aiResults, setAiResults] = useState({}); // idx -> {notes, score}
+  const [aiLoading, setAiLoading] = useState(null);
+  const [aiResults, setAiResults] = useState({});
+  const [allPosts, setAllPosts] = useState(null);
   const TC = TABS_CONFIG_FN();
+  const PC = PILLAR_COLORS_FN();
 
-  const tabData = sheetData[activeTab];
-  let rows = tabData?.rows || [];
+  // Initialize from Sheets
+  useEffect(() => {
+    if (!loading && sheetData && allPosts === null) {
+      const posts = [];
+      let id = 1;
+      for (const tab of STATUS_ORDER) {
+        for (const row of (sheetData[tab]?.rows || [])) {
+          posts.push({
+            id: id++, tab,
+            category: row["Category"] || "", structure: row["Structure"] || "",
+            post: row["Post"] || row["Post text"] || "",
+            notes: row["Notes"] || row["Why Bad"] || "", score: row["Score"] || "",
+            howToFix: row["How to Fix"] || "", day: "",
+            postLink: row["Post Link"] || row["Post link"] || "",
+            impressions: row["Impressions"] || "", likes: row["Likes"] || "",
+            engagements: row["Engagements"] || "", bookmarks: row["Bookmarks"] || "",
+            replies: row["Replies"] || "", reposts: row["Reposts"] || "",
+            profileVisits: row["Profile visits"] || "", newFollows: row["New follows"] || "",
+            urlClicks: row["URL Clicks"] || "",
+          });
+        }
+      }
+      setAllPosts(posts);
+    }
+  }, [loading, sheetData, allPosts]);
 
-  if (activeTab === "DRAFT") {
-    rows = [...rows, ...localPosts];
-  }
+  const reloadFromSheets = () => { setAllPosts(null); onRefresh(); };
 
-  // Sorting
-  if (sortBy === "category") {
-    rows = [...rows].sort((a, b) => (a["Category"] || "").localeCompare(b["Category"] || ""));
-  } else if (sortBy === "score-desc") {
-    rows = [...rows].sort((a, b) => parseFloat(b["Score"] || 0) - parseFloat(a["Score"] || 0));
-  } else if (sortBy === "score-asc") {
-    rows = [...rows].sort((a, b) => parseFloat(a["Score"] || 0) - parseFloat(b["Score"] || 0));
-  } else if (sortBy === "impressions") {
-    rows = [...rows].sort((a, b) => parseInt(b["Impressions"] || 0) - parseInt(a["Impressions"] || 0));
-  } else if (sortBy === "engagement") {
-    rows = [...rows].sort((a, b) => parseInt(b["Engagements"] || 0) - parseInt(a["Engagements"] || 0));
+  // Filtered + sorted posts
+  const tabPosts = allPosts ? allPosts.filter(p => p.tab === activeTab) : [];
+  let sorted = [...tabPosts];
+  if (sortBy === "category") sorted.sort((a, b) => a.category.localeCompare(b.category));
+  else if (sortBy === "score-desc") sorted.sort((a, b) => parseFloat(b.score || 0) - parseFloat(a.score || 0));
+  else if (sortBy === "score-asc") sorted.sort((a, b) => parseFloat(a.score || 0) - parseFloat(b.score || 0));
+  else if (sortBy === "impressions") sorted.sort((a, b) => parseInt(b.impressions || 0) - parseInt(a.impressions || 0));
+  else if (sortBy === "day") {
+    const D = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    sorted.sort((a, b) => (D.indexOf(a.day) < 0 ? 99 : D.indexOf(a.day)) - (D.indexOf(b.day) < 0 ? 99 : D.indexOf(b.day)));
   }
 
   const counts = {};
-  STATUS_ORDER.forEach(t => {
-    let c = (sheetData[t]?.rows || []).length;
-    if (t === "DRAFT") c += localPosts.length;
-    counts[t] = c;
-  });
+  STATUS_ORDER.forEach(t => { counts[t] = allPosts ? allPosts.filter(p => p.tab === t).length : 0; });
 
-  const isUsedTab = activeTab === "USED";
-  const isBadTab = activeTab === "BAD";
+  const isUsed = activeTab === "USED", isBad = activeTab === "BAD",
+    isPost = activeTab === "POST", isDraft = activeTab === "DRAFT", isDb = activeTab === "DATABASE";
 
-  const addLocalPost = () => {
+  // Actions
+  const movePost = (id, to) => setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
+  const delPost = (id) => setAllPosts(p => p.filter(x => x.id !== id));
+  const setDay = (id, day) => setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
+
+  const addPost = () => {
     if (!newPostText.trim()) return;
-    setLocalPosts(prev => [...prev, {
-      Category: newPostCat, Structure: newPostStructure, Post: newPostText.trim(),
-      Notes: "", Score: "", _local: true,
+    const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+    setAllPosts(p => [...(p || []), {
+      id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
+      post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
+      postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
+      replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     }]);
-    setNewPostText("");
-    setNewPostCat("growth");
-    setNewPostStructure("");
-    setShowAdd(false);
+    setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
   };
 
-  const removeLocalPost = (idx) => {
-    setLocalPosts(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // AI Scoring
-  const askClaude = async (postText, idx) => {
-    if (!apiKey) {
-      alert("Add your Claude API key in Settings (⚙️ icon in top bar)");
-      return;
-    }
-    setAiLoading(idx);
+  // AI
+  const askClaude = async (text, pid) => {
+    if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
+    setAiLoading(pid);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 300,
-          messages: [{ role: "user", content: `You are a crypto Twitter content strategist. Rate this post for viral potential on crypto Twitter.
-
-Post: "${postText}"
-
-Respond ONLY in this exact JSON format, nothing else:
-{"score": 7.5, "notes": "Brief explanation why this score, what makes it good or bad, and one suggestion to improve it"}
-
-Score should be 1-10 where:
-- 9-10: Exceptional viral potential, strong hook, unique insight
-- 7-8: Good post, solid engagement potential
-- 5-6: Average, needs work
-- 1-4: Weak, needs major revision
-
-Be honest and critical. Consider: hook strength, uniqueness, relatability, engagement potential, authenticity.` }],
+          model: "claude-sonnet-4-20250514", max_tokens: 300,
+          messages: [{ role: "user", content: `You are a crypto Twitter strategist. Rate this post for viral potential.\n\nPost: "${text}"\n\nRespond ONLY in JSON: {"score": 7.5, "notes": "Brief explanation + suggestion"}\nScore 1-10. Be honest and critical.` }],
         }),
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text || "";
-      try {
-        const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-        setAiResults(prev => ({ ...prev, [idx]: parsed }));
-      } catch {
-        setAiResults(prev => ({ ...prev, [idx]: { score: "?", notes: text } }));
-      }
-    } catch (err) {
-      setAiResults(prev => ({ ...prev, [idx]: { score: "!", notes: "Error: " + err.message } }));
-    } finally {
-      setAiLoading(null);
-    }
+      const t = data.content?.[0]?.text || "";
+      try { setAiResults(prev => ({ ...prev, [pid]: JSON.parse(t.replace(/```json|```/g, "").trim()) })); }
+      catch { setAiResults(prev => ({ ...prev, [pid]: { score: "?", notes: t } })); }
+    } catch (err) { setAiResults(prev => ({ ...prev, [pid]: { score: "!", notes: err.message } })); }
+    finally { setAiLoading(null); }
   };
 
-  const sortOptions = isUsedTab
-    ? [{ value: "default", label: "Default" }, { value: "impressions", label: "Impressions ↓" }, { value: "engagement", label: "Engagement ↓" }]
-    : [{ value: "default", label: "Default" }, { value: "category", label: "Category A-Z" }, { value: "score-desc", label: "Score ↓" }, { value: "score-asc", label: "Score ↑" }];
+  const sortOpts = isUsed
+    ? [{ v: "default", l: "Default" }, { v: "impressions", l: "Impressions ↓" }]
+    : isPost
+    ? [{ v: "default", l: "Default" }, { v: "day", l: "Day of Week" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }]
+    : [{ v: "default", l: "Default" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }, { v: "score-asc", l: "Score ↑" }];
 
-  const selectStyle = {
-    background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px",
-    color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer",
-  };
+  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
+
+  if (!allPosts) return <div style={{ textAlign: "center", padding: 60 }}><LoadingDots /></div>;
 
   return (
     <div>
-      {/* Refresh + Sort */}
+      {/* Top */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
-          {loading ? <LoadingDots /> : `Live data from Google Sheets`}
-        </div>
+        <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{allPosts.length} posts · local mode</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
-            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px",
-            color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer",
-          }}>
-            {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
+            {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
-          <Btn small color={T.cyan} onClick={onRefresh} disabled={loading}>↻ Refresh</Btn>
+          <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
       </div>
 
-      {/* Content Tabs */}
+      {/* Tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
             active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy("default"); }}
-            color={TC[tab].color} count={counts[tab]}
-          />
+            color={TC[tab].color} count={counts[tab]} />
         ))}
       </div>
 
-      {/* Content Stats */}
+      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10, marginBottom: 20 }}>
         {STATUS_ORDER.map(tab => (
           <div key={tab} style={{
@@ -565,246 +553,142 @@ Be honest and critical. Consider: hook strength, uniqueness, relatability, engag
             border: `1px solid ${activeTab === tab ? `${TC[tab].color}30` : T.border}`,
             borderRadius: 8, padding: "10px 12px", textAlign: "center", cursor: "pointer",
           }} onClick={() => setActiveTab(tab)}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: TC[tab].color, fontFamily: "'Satoshi', sans-serif" }}>
-              {counts[tab]}
-            </div>
-            <div style={{ fontSize: 9, color: T.textSoft, textTransform: "uppercase", letterSpacing: ".08em" }}>{tab}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: TC[tab].color, fontFamily: "'Satoshi', sans-serif" }}>{counts[tab]}</div>
+            <div style={{ fontSize: 9, color: T.textSoft, textTransform: "uppercase" }}>{tab}</div>
           </div>
         ))}
       </div>
 
-      {/* Add Post (DRAFT only) */}
-      {activeTab === "DRAFT" && (
+      {/* Add Post */}
+      {isDraft && (
         <div style={{ marginBottom: 16 }}>
           {showAdd ? (
             <Card>
-              <Heading icon="✎">New Draft Post</Heading>
+              <Heading icon="✎">New Draft</Heading>
               <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
-                  <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={selectStyle}>
+                  <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 2 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
-                  <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
-                    <option value="">-- select structure --</option>
+                  <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...sel, width: "100%" }}>
+                    <option value="">-- select --</option>
                     {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
-                placeholder="write your post fam..."
-                style={{
-                  width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`,
-                  borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace",
-                  resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box",
-                }}
-                onFocus={e => e.target.style.borderColor = T.green}
-                onBlur={e => e.target.style.borderColor = T.border}
-              />
+              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post fam..."
+                style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
+                onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <Btn color={T.green} onClick={addLocalPost}>Add to Draft</Btn>
+                <Btn color={T.green} onClick={addPost}>Add to Draft</Btn>
                 <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
-              </div>
-              <div style={{ fontSize: 10, color: T.textDim, marginTop: 8 }}>
-                💡 Posts added here are local. Copy them to Google Sheets to make permanent.
               </div>
             </Card>
           ) : (
-            <div style={{ textAlign: "center" }}>
-              <Btn color={T.green} onClick={() => setShowAdd(true)}>+ Add New Post</Btn>
-            </div>
+            <div style={{ textAlign: "center" }}><Btn color={T.green} onClick={() => setShowAdd(true)}>+ New Post</Btn></div>
           )}
         </div>
       )}
 
-      {/* Posts List */}
-      {loading ? (
-        <div style={{ textAlign: "center", padding: 40 }}><LoadingDots /></div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rows.length === 0 && (
-            <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>
-              No posts in {TC[activeTab]?.label || activeTab}. Data is loaded from Google Sheets.
-            </div>
-          )}
-          {rows.map((row, idx) => {
-            const PC = PILLAR_COLORS_FN();
-            const cat = row["Category"] || row["category"] || "";
-            const post = row["Post"] || row["Post text"] || "";
-            const structure = row["Structure"] || "";
-            const notes = isBadTab ? (row["Why Bad"] || "") : (row["Notes"] || "");
-            const howToFix = isBadTab ? (row["How to Fix"] || "") : "";
-            const score = row["Score"] || "";
-            const scheduled = row["Scheduled"] || "";
-            const status = row["Status"] || "";
-            const isLocal = row._local;
+      {/* Posts */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {sorted.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No posts in {TC[activeTab]?.label}</div>}
+        {sorted.map(p => {
+          const ai = aiResults[p.id];
+          return (
+            <div key={p.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, transition: "all .12s" }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = (TC[activeTab]?.color || T.green) + "40"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
 
-            // USED tab analytics fields
-            const impressions = row["Impressions"] || "";
-            const likes = row["Likes"] || "";
-            const engagements = row["Engagements"] || "";
-            const bookmarks = row["Bookmarks"] || "";
-            const replies = row["Replies"] || "";
-            const reposts = row["Reposts"] || "";
-            const profileVisits = row["Profile visits"] || "";
-            const urlClicks = row["URL Clicks"] || "";
-            const postLink = row["Post Link"] || row["Post link"] || "";
-            const newFollows = row["New follows"] || "";
-
-            return (
-              <div key={idx} style={{
-                background: isLocal ? `${T.green}08` : T.surface,
-                border: `1px solid ${isLocal ? T.greenMid : T.border}`,
-                borderRadius: 10, padding: 16, transition: "all .12s",
-              }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = (TC[activeTab]?.color || T.green) + "40"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = isLocal ? T.greenMid : T.border}
-              >
-                {/* Post text */}
-                <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, marginBottom: 10, whiteSpace: "pre-wrap" }}>
-                  {post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty post</span>}
+              {/* Header: post text left, badges right */}
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty</span>}
                 </div>
-
-                {/* POST tab: day selector + move to USED */}
-                {activeTab === "POST" && (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                    <select defaultValue={scheduled || ""} style={{
-                      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px",
-                      color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", outline: "none",
-                    }}>
-                      <option value="">📅 Pick day</option>
-                      {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                    <Btn small color={T.green}>✓ Mark as Posted → USED</Btn>
-                    <Btn small color={T.red} outline>✕ → BAD</Btn>
-                    <Btn small color={T.purple} outline>◈ → DATABASE</Btn>
-                  </div>
-                )}
-
-                {/* DRAFT tab: move buttons */}
-                {activeTab === "DRAFT" && !isLocal && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                    <Btn small color={T.green}>◉ → POST</Btn>
-                    <Btn small color={T.purple} outline>◈ → DATABASE</Btn>
-                    <Btn small color={T.red} outline>✕ → BAD</Btn>
-                  </div>
-                )}
-
-                {/* DATABASE tab: move buttons */}
-                {activeTab === "DATABASE" && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                    <Btn small color={T.blue}>✎ → DRAFT</Btn>
-                    <Btn small color={T.green} outline>◉ → POST</Btn>
-                  </div>
-                )}
-
-                {/* Tags row */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    {cat && <Badge color={PC[cat] || PC[cat.charAt(0).toUpperCase() + cat.slice(1)] || T.textSoft}>{cat}</Badge>}
-                    {structure && <Badge color={T.textDim}>{structure}</Badge>}
-                    {score && <Badge color={parseFloat(score) >= 8.5 ? T.green : parseFloat(score) >= 7 ? T.amber : T.textSoft}>Score {score}</Badge>}
-                    {scheduled && <Badge color={T.cyan}>📅 {scheduled}</Badge>}
-                    {status && <Badge color={status === "Posted" ? T.green : T.amber}>{status}</Badge>}
-                    {isLocal && <Badge color={T.green}>📌 Local Draft</Badge>}
-                    {postLink && (
-                      <a href={postLink} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.cyan, textDecoration: "none" }}>
-                        🔗 View on X
-                      </a>
-                    )}
-                  </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
+                  {p.category && <Badge color={PC[p.category] || PC[p.category.charAt(0).toUpperCase() + p.category.slice(1)] || T.textSoft}>{p.category}</Badge>}
+                  {p.structure && <Badge color={T.textDim}>{p.structure}</Badge>}
+                  {p.score && <Badge color={parseFloat(p.score) >= 8.5 ? T.green : parseFloat(p.score) >= 7 ? T.amber : T.textSoft}>⭐ {p.score}</Badge>}
+                  {p.day && <Badge color={T.cyan}>📅 {p.day}</Badge>}
                 </div>
-
-                {/* USED tab: analytics metrics row */}
-                {isUsedTab && impressions && (
-                  <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-                    {[
-                      { label: "Impressions", val: impressions, color: T.green },
-                      { label: "Likes", val: likes, color: T.red },
-                      { label: "Engagements", val: engagements, color: T.blue },
-                      { label: "Bookmarks", val: bookmarks, color: T.amber },
-                      { label: "Replies", val: replies, color: T.cyan },
-                      { label: "Reposts", val: reposts, color: T.purple },
-                      { label: "Profile Visits", val: profileVisits, color: T.textSoft },
-                      { label: "New Follows", val: newFollows, color: T.green },
-                      { label: "URL Clicks", val: urlClicks, color: T.cyan },
-                    ].filter(m => m.val && m.val !== "0").map((m, mi) => (
-                      <div key={mi} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>{m.label}:</span>
-                        <span style={{ fontSize: 12, color: m.color, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" }}>
-                          {parseInt(m.val).toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Notes */}
-                {notes && !isUsedTab && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: T.textSoft }}>
-                    💡 {notes}
-                  </div>
-                )}
-
-                {/* BAD tab: how to fix */}
-                {isBadTab && howToFix && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: T.amber, background: T.amberDim, padding: "6px 10px", borderRadius: 6 }}>
-                    🔧 Fix: {howToFix}
-                  </div>
-                )}
-
-                {/* Remove button for local posts */}
-                {isLocal && (
-                  <div style={{ marginTop: 8 }}>
-                    <Btn small color={T.red} outline onClick={() => removeLocalPost(localPosts.indexOf(row))}>✕ Remove</Btn>
-                  </div>
-                )}
-
-                {/* AI Score button */}
-                {!isUsedTab && (
-                  <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
-                    <Btn small color={T.purple}
-                      disabled={aiLoading === idx || !post}
-                      onClick={() => askClaude(post, idx)}>
-                      {aiLoading === idx ? "⏳ Scoring..." : "🤖 Ask Claude"}
-                    </Btn>
-                    {aiResults[idx] && (
-                      <Badge color={
-                        parseFloat(aiResults[idx].score) >= 8.5 ? T.green :
-                        parseFloat(aiResults[idx].score) >= 7 ? T.amber :
-                        parseFloat(aiResults[idx].score) >= 5 ? T.blue : T.red
-                      }>
-                        AI Score: {aiResults[idx].score}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-
-                {/* AI Result */}
-                {aiResults[idx] && aiResults[idx].notes && (
-                  <div style={{
-                    marginTop: 8, fontSize: 12, color: T.text, background: T.purpleDim,
-                    border: `1px solid ${T.purple}30`, padding: "10px 14px", borderRadius: 8, lineHeight: 1.6,
-                  }}>
-                    <span style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 4 }}>🤖 Claude's Analysis</span>
-                    {aiResults[idx].notes}
-                  </div>
-                )}
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Info note */}
+              {/* USED analytics */}
+              {isUsed && p.impressions && (
+                <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+                  {[
+                    { l: "Imp", v: p.impressions, c: T.green }, { l: "Likes", v: p.likes, c: T.red },
+                    { l: "Eng", v: p.engagements, c: T.blue }, { l: "Bkm", v: p.bookmarks, c: T.amber },
+                    { l: "Replies", v: p.replies, c: T.cyan }, { l: "RT", v: p.reposts, c: T.purple },
+                  ].filter(m => m.v && m.v !== "0").map((m, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <span style={{ fontSize: 9, color: T.textDim }}>{m.l}:</span>
+                      <span style={{ fontSize: 12, color: m.c, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" }}>{parseInt(m.v).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {p.postLink && <a href={p.postLink} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.cyan }}>🔗 View</a>}
+                </div>
+              )}
+
+              {/* Notes */}
+              {p.notes && !isUsed && <div style={{ marginTop: 6, fontSize: 11, color: T.textSoft }}>💡 {p.notes}</div>}
+              {isBad && p.howToFix && <div style={{ marginTop: 6, fontSize: 11, color: T.amber, background: T.amberDim, padding: "6px 10px", borderRadius: 6 }}>🔧 {p.howToFix}</div>}
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {isDraft && <>
+                  <Btn small color={T.green} onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
+                  <Btn small color={T.purple} outline onClick={() => movePost(p.id, "DATABASE")}>◈ → DB</Btn>
+                  <Btn small color={T.red} outline onClick={() => movePost(p.id, "BAD")}>✕ → Bad</Btn>
+                </>}
+                {isPost && <>
+                  <select value={p.day} onChange={e => setDay(p.id, e.target.value)} style={{ ...sel, fontSize: 11, padding: "4px 8px" }}>
+                    <option value="">📅 Day</option>
+                    {["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <Btn small color={T.green} onClick={() => movePost(p.id, "USED")}>✓ → Used</Btn>
+                  <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                  <Btn small color={T.red} outline onClick={() => movePost(p.id, "BAD")}>✕ → Bad</Btn>
+                </>}
+                {isDb && <>
+                  <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                  <Btn small color={T.green} outline onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
+                </>}
+                {isBad && <>
+                  <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                  <Btn small color={T.red} outline onClick={() => delPost(p.id)}>🗑 Delete</Btn>
+                </>}
+                {isUsed && <>
+                  <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                </>}
+
+                {!isUsed && <>
+                  <Btn small color={T.purple} disabled={aiLoading === p.id || !p.post} onClick={() => askClaude(p.post, p.id)}>
+                    {aiLoading === p.id ? "⏳..." : "🤖 Claude"}
+                  </Btn>
+                  {ai && <Badge color={parseFloat(ai.score) >= 8.5 ? T.green : parseFloat(ai.score) >= 7 ? T.amber : parseFloat(ai.score) >= 5 ? T.blue : T.red}>AI: {ai.score}</Badge>}
+                </>}
+              </div>
+
+              {/* AI result */}
+              {ai?.notes && (
+                <div style={{ marginTop: 8, fontSize: 12, color: T.text, background: T.purpleDim, border: `1px solid ${T.purple}30`, padding: "10px 14px", borderRadius: 8, lineHeight: 1.6 }}>
+                  <span style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", display: "block", marginBottom: 4 }}>🤖 Claude</span>
+                  {ai.notes}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <div style={{ marginTop: 20, padding: 14, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, color: T.textSoft, lineHeight: 1.6 }}>
-        💡 Data loaded live from <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer" style={{ color: T.cyan }}>Google Sheets</a>.
-        To move posts between tabs, edit directly in Sheets — changes appear here after refresh.
+        💡 Loaded from <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer" style={{ color: T.cyan }}>Sheets</a>.
+        All moves are local. "↻ Reload" re-imports from Sheets.
       </div>
     </div>
   );
@@ -1053,19 +937,14 @@ function WeeklyAnalytics({ sheetData, loading }) {
 // ═══════════════════════════════════════════════════════════════
 
 function TwitterPanel({ apiKey }) {
-  const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
 
   return (
     <div>
-      {/* Account Selector */}
+      {/* Account */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginRight: 4 }}>ACCOUNT:</span>
-        {ACCOUNTS.map(a => (
-          <AccountPill key={a.handle} account={a.handle} active={account === a.handle} onClick={() => setAccount(a.handle)} />
-        ))}
-        <Btn small outline color={T.textDim} style={{ borderStyle: "dashed", marginLeft: 4 }}>+ Add Account</Btn>
+        <AccountPill account="@django_crypto" active={true} onClick={() => {}} />
       </div>
 
       {/* Error banner */}
@@ -1092,7 +971,7 @@ function TwitterPanel({ apiKey }) {
       </div>
 
       {/* Sub Panel Content */}
-      {subTab === "research" && <DailyResearch account={account} />}
+      {subTab === "research" && <DailyResearch account="@django_crypto" />}
       {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
       {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} />}
     </div>
@@ -1306,7 +1185,7 @@ export default function App() {
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
-          DjangoCMD v1.1 · live google sheets · see you on the timeline, xoxo
+          DjangoCMD v1.7 · local mode · see you on the timeline, xoxo
         </span>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
           gm fam · {time.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
