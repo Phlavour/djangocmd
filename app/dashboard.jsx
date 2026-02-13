@@ -53,99 +53,49 @@ function getSheetCSVUrl(tabName) {
 }
 
 function parseCSV(text, tabName) {
-  const lines = text.split("\n").filter(l => l.trim());
-  if (lines.length === 0) return { headers: [], rows: [] };
-  
-  const parseLine = (line) => {
-    const result = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+  if (!text || !text.trim()) return { headers: [], rows: [] };
+
+  // Proper CSV parser: handles newlines inside quoted fields
+  const records = [];
+  let current = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
       if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = "";
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
       } else {
-        current += ch;
+        field += ch;
       }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { current.push(field.trim()); field = ""; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        current.push(field.trim());
+        if (current.some(f => f.length > 0)) records.push(current);
+        current = []; field = "";
+      } else { field += ch; }
     }
-    result.push(current.trim());
-    return result;
-  };
+  }
+  current.push(field.trim());
+  if (current.some(f => f.length > 0)) records.push(current);
 
-  const headers = parseLine(lines[0]);
-  const rawRows = lines.slice(1).map(line => {
-    const values = parseLine(line);
+  if (records.length === 0) return { headers: [], rows: [] };
+
+  const headers = records[0];
+  const rows = records.slice(1).map(rec => {
     const row = {};
-    headers.forEach((h, i) => { row[h] = values[i] || ""; });
+    headers.forEach((h, i) => { row[h] = rec[i] || ""; });
     return row;
-  });
-
-  // USED tab has unique headers (Post text, Impressions, etc.) — each row is one post, no merging needed
-  const isUsedTab = tabName === "USED";
-  if (isUsedTab) {
-    return {
-      headers,
-      rows: rawRows.filter(r => {
-        const post = (r["Post text"] || r["Post"] || "").trim();
-        return post.length > 2;
-      })
-    };
-  }
-
-  // For DRAFT/POST/DATABASE/BAD: merge multiline posts
-  // Strategy: Category appears on the LAST row of a post group (at the bottom)
-  // So we collect text lines upward and assign Category/Structure from the row that has them
-  
-  // First pass: identify "anchor" rows (rows that have Category OR Structure filled)
-  // and "text-only" rows (only Post column has content)
-  
-  const groups = [];
-  let currentGroup = { textLines: [], meta: {} };
-  
-  for (const row of rawRows) {
+  }).filter(row => {
+    const post = (row["Post"] || row["Post text"] || "").trim();
     const cat = (row["Category"] || "").trim();
-    const structure = (row["Structure"] || "").trim();
-    const post = (row["Post"] || "").trim();
-    const notes = (row["Notes"] || row["Why Bad"] || "").trim();
-    const score = (row["Score"] || "").trim();
-    const hasMeta = cat.length > 0 || structure.length > 0;
-    
-    if (post.length > 0) {
-      currentGroup.textLines.push(post);
-    }
-    
-    if (hasMeta) {
-      // This row has Category/Structure — it's the anchor for the current group
-      currentGroup.meta = { ...row };
-      // Finalize this group
-      if (currentGroup.textLines.length > 0) {
-        groups.push({ ...currentGroup });
-      }
-      currentGroup = { textLines: [], meta: {} };
-    }
-  }
-  
-  // If there are leftover text lines without meta (shouldn't happen normally)
-  if (currentGroup.textLines.length > 0) {
-    groups.push({ ...currentGroup });
-  }
-
-  // Build final rows from groups
-  const rows = groups.map(g => {
-    const fullPost = g.textLines.join("\n");
-    return {
-      ...g.meta,
-      Post: fullPost,
-      Category: (g.meta["Category"] || "").trim(),
-      Structure: (g.meta["Structure"] || "").trim(),
-      Notes: (g.meta["Notes"] || g.meta["Why Bad"] || "").trim(),
-      Score: (g.meta["Score"] || "").trim(),
-    };
-  }).filter(r => (r.Post || "").trim().length > 2);
+    return post.length > 2 || cat.length > 1;
+  });
 
   return { headers, rows };
 }
@@ -194,6 +144,7 @@ const STATUS_ORDER = ["DRAFT", "POST", "USED", "DATABASE", "BAD"];
 
 const ACCOUNTS = [
   { handle: "@django_crypto", name: "Django", avatar: "/pfp-django.jpg", gradient: ["#00e87b", "#00aa55"] },
+  { handle: "@henryk0x", name: "Henryk", avatar: "/pfp-henryk.png", gradient: ["#3d8bfd", "#6644ff"] },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -479,6 +430,11 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   const movePost = (id, to) => setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
   const delPost = (id) => setAllPosts(p => p.filter(x => x.id !== id));
   const setDay = (id, day) => setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
+  const moveToBad = (id) => {
+    const reason = prompt("Why is this post bad? (will be saved as feedback)");
+    if (reason === null) return; // cancelled
+    setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: "BAD", notes: reason || "", howToFix: "" } : x));
+  };
 
   const addPost = () => {
     if (!newPostText.trim()) return;
@@ -643,7 +599,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
                 {isDraft && <>
                   <Btn small color={T.green} onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
                   <Btn small color={T.purple} outline onClick={() => movePost(p.id, "DATABASE")}>◈ → DB</Btn>
-                  <Btn small color={T.red} outline onClick={() => movePost(p.id, "BAD")}>✕ → Bad</Btn>
+                  <Btn small color={T.red} outline onClick={() => moveToBad(p.id)}>✕ → Bad</Btn>
                 </>}
                 {isPost && <>
                   <select value={p.day} onChange={e => setDay(p.id, e.target.value)} style={{ ...sel, fontSize: 11, padding: "4px 8px" }}>
@@ -652,7 +608,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
                   </select>
                   <Btn small color={T.green} onClick={() => movePost(p.id, "USED")}>✓ → Used</Btn>
                   <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
-                  <Btn small color={T.red} outline onClick={() => movePost(p.id, "BAD")}>✕ → Bad</Btn>
+                  <Btn small color={T.red} outline onClick={() => moveToBad(p.id)}>✕ → Bad</Btn>
                 </>}
                 {isDb && <>
                   <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
@@ -937,43 +893,53 @@ function WeeklyAnalytics({ sheetData, loading }) {
 // ═══════════════════════════════════════════════════════════════
 
 function TwitterPanel({ apiKey }) {
+  const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
 
   return (
     <div>
-      {/* Account */}
+      {/* Account Selector */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
-        <AccountPill account="@django_crypto" active={true} onClick={() => {}} />
+        {ACCOUNTS.map(a => (
+          <AccountPill key={a.handle} account={a.handle} active={account === a.handle} onClick={() => setAccount(a.handle)} />
+        ))}
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div style={{ background: T.redDim, border: `1px solid ${T.red}40`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: T.red }}>
-          ⚠️ Error loading sheets: {error}. Check if sheet is shared as "Anyone with the link".
-        </div>
+      {/* Henryk placeholder */}
+      {account === "@henryk0x" && (
+        <Card style={{ textAlign: "center", padding: 40 }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
+          <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 8 }}>@henryk0x</div>
+          <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>Content pipeline coming soon. Connect a Google Sheet to get started.</div>
+          <Badge color={T.amber}>PLACEHOLDER</Badge>
+        </Card>
       )}
 
-      {/* Sub Navigation */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 24, alignItems: "center" }}>
-        <TabBtn label="🔍 Daily Research" active={subTab === "research"} onClick={() => setSubTab("research")} color={T.cyan} />
-        <TabBtn label="✍️ Weekly Content" active={subTab === "content"} onClick={() => setSubTab("content")} color={T.green}
-          count={sheetData?.DRAFT?.rows?.length}
-        />
-        <TabBtn label="📊 Analytics" active={subTab === "analytics"} onClick={() => setSubTab("analytics")} color={T.purple}
-          count={sheetData?.USED?.rows?.length}
-        />
-        {lastFetch && (
-          <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginLeft: "auto" }}>
-            Last sync: {lastFetch.toLocaleTimeString("en-GB", { hour12: false })}
-          </span>
+      {account === "@django_crypto" && <>
+        {/* Error banner */}
+        {error && (
+          <div style={{ background: T.redDim, border: `1px solid ${T.red}40`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: T.red }}>
+            ⚠️ Error loading sheets: {error}
+          </div>
         )}
-      </div>
 
-      {/* Sub Panel Content */}
-      {subTab === "research" && <DailyResearch account="@django_crypto" />}
-      {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
-      {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} />}
+        {/* Sub Navigation */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 24, alignItems: "center" }}>
+          <TabBtn label="🔍 Research" active={subTab === "research"} onClick={() => setSubTab("research")} color={T.cyan} />
+          <TabBtn label="✍️ Content" active={subTab === "content"} onClick={() => setSubTab("content")} color={T.green} />
+          <TabBtn label="📊 Analytics" active={subTab === "analytics"} onClick={() => setSubTab("analytics")} color={T.purple} />
+          {lastFetch && (
+            <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginLeft: "auto" }}>
+              Synced: {lastFetch.toLocaleTimeString("en-GB", { hour12: false })}
+            </span>
+          )}
+        </div>
+
+        {subTab === "research" && <DailyResearch account={account} />}
+        {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
+        {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} />}
+      </>}
     </div>
   );
 }
