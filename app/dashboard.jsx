@@ -385,7 +385,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   });
   const [goalTarget, setGoalTarget] = useState(20000);
   const [goalCurrent, setGoalCurrent] = useState(0);
-  const [goalDeadline] = useState("2025-12-31");
+  const [goalDeadline] = useState("2027-01-01");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
   const [supaLoaded, setSupaLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -565,12 +565,14 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   const addPost = () => {
     if (!newPostText.trim()) return;
     const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
-    setAllPosts(p => [...(p || []), {
+    const newPost = {
       id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
       post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
-    }]);
+    };
+    setAllPosts(p => [...(p || []), newPost]);
+    if (supa) savePostsToSupa([newPost]);
     setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
   };
 
@@ -822,11 +824,21 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
       </div>
 
       {/* GOAL + Delete All row */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "stretch" }}>
-        {/* GOAL Card */}
-        <Card style={{ flex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>🎯 Goal</span>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
+        {/* Left: Delete All + info */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minHeight: 160 }}>
+          {counts[activeTab] > 0 && (
+            <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
+          )}
+        </div>
+
+        {/* Right: GOAL Card — square */}
+        <Card style={{ width: 280, minHeight: 160, position: "relative", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: T.text, fontFamily: "'Satoshi', sans-serif", letterSpacing: "-.02em" }}>🎯 GOAL</div>
+              <div style={{ fontSize: 9, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>jan 1, 2027</div>
+            </div>
             <Btn small outline onClick={() => setShowGoalEdit(!showGoalEdit)}>✎</Btn>
           </div>
           {showGoalEdit ? (
@@ -841,7 +853,7 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
                 <input type="number" value={goalTarget} onChange={e => saveGoal(parseInt(e.target.value) || 20000, goalCurrent)}
                   style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, width: 90, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
               </div>
-              <Btn small color={T.green} onClick={() => setShowGoalEdit(false)}>✓ Done</Btn>
+              <Btn small color={T.green} onClick={() => setShowGoalEdit(false)}>✓</Btn>
             </div>
           ) : (() => {
             const pct = goalTarget > 0 ? Math.min(100, (goalCurrent / goalTarget) * 100) : 0;
@@ -850,32 +862,31 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
             const end = new Date(goalDeadline);
             const daysLeft = Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
             const perDay = remaining > 0 ? Math.ceil(remaining / daysLeft) : 0;
+            const perWeek = perDay * 7;
             const onTrack = perDay <= 30;
             return (
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.textSoft, marginBottom: 4 }}>
-                  <span>{goalCurrent.toLocaleString()} / {goalTarget.toLocaleString()} followers</span>
-                  <span>{pct.toFixed(1)}%</span>
+                <div style={{ fontSize: 28, fontWeight: 800, color: T.green, fontFamily: "'Satoshi', sans-serif", marginBottom: 2 }}>
+                  {goalCurrent.toLocaleString()}
                 </div>
-                <div style={{ height: 8, background: T.bg2, borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
-                  <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`, borderRadius: 4, transition: "width .3s" }} />
+                <div style={{ fontSize: 11, color: T.textSoft, marginBottom: 10 }}>
+                  of {goalTarget.toLocaleString()} followers
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}>
-                  <span style={{ color: T.textSoft }}>{daysLeft} days left · need <strong style={{ color: T.text }}>+{perDay}/day</strong></span>
-                  <Badge color={onTrack ? T.green : T.amber}>{onTrack ? "✓ on track" : "⚠ behind pace"}</Badge>
+                <div style={{ height: 6, background: T.bg2, borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`, borderRadius: 3, transition: "width .3s" }} />
                 </div>
-                {goalCurrent === 0 && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>Click ✎ to set your current follower count</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10 }}>
+                  <div style={{ color: T.textSoft, lineHeight: 1.6 }}>
+                    <div>{daysLeft} days left</div>
+                    <div>need <strong style={{ color: T.text }}>+{perDay}/day</strong> · <strong style={{ color: T.text }}>+{perWeek}/week</strong></div>
+                  </div>
+                  <Badge color={onTrack ? T.green : T.amber}>{onTrack ? "✓" : "⚠"}</Badge>
+                </div>
+                {goalCurrent === 0 && <div style={{ marginTop: 8, fontSize: 10, color: T.amber }}>Click ✎ to set current followers</div>}
               </div>
             );
           })()}
         </Card>
-
-        {/* Delete All */}
-        {counts[activeTab] > 0 && (
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
-          </div>
-        )}
       </div>
 
       {/* Add Post */}
