@@ -1137,7 +1137,9 @@ export default function App() {
   const [nav, setNav] = useState("twitter");
   const [time, setTime] = useState(new Date());
   const [isDark, setIsDark] = useState(false);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(() => {
+    try { return window.sessionStorage.getItem("claude_key") || ""; } catch { return ""; }
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [keyInput, setKeyInput] = useState("");
 
@@ -1150,6 +1152,7 @@ export default function App() {
 
   const saveKey = () => {
     setApiKey(keyInput);
+    try { window.sessionStorage.setItem("claude_key", keyInput); } catch {}
     setShowSettings(false);
   };
 
@@ -1288,7 +1291,7 @@ export default function App() {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn color={T.green} onClick={saveKey}>Save</Btn>
-              {apiKey && <Btn color={T.red} outline onClick={() => { setApiKey(""); setKeyInput(""); }}>Remove Key</Btn>}
+              {apiKey && <Btn color={T.red} outline onClick={() => { setApiKey(""); setKeyInput(""); try { window.sessionStorage.removeItem("claude_key"); } catch {} }}>Remove Key</Btn>}
               <Btn outline onClick={() => setShowSettings(false)}>Cancel</Btn>
             </div>
             {apiKey && (
