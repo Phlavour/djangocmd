@@ -52,7 +52,7 @@ function getSheetCSVUrl(tabName) {
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 }
 
-function parseCSV(text) {
+function parseCSV(text, tabName) {
   const lines = text.split("\n").filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
   
@@ -84,45 +84,68 @@ function parseCSV(text) {
     return row;
   });
 
-  // Merge multiline posts: if a row has no Category AND no Structure,
-  // it's a continuation of the previous post's text
-  const merged = [];
+  // USED tab has unique headers (Post text, Impressions, etc.) — each row is one post, no merging needed
+  const isUsedTab = tabName === "USED";
+  if (isUsedTab) {
+    return {
+      headers,
+      rows: rawRows.filter(r => {
+        const post = (r["Post text"] || r["Post"] || "").trim();
+        return post.length > 2;
+      })
+    };
+  }
+
+  // For DRAFT/POST/DATABASE/BAD: merge multiline posts
+  // Strategy: Category appears on the LAST row of a post group (at the bottom)
+  // So we collect text lines upward and assign Category/Structure from the row that has them
+  
+  // First pass: identify "anchor" rows (rows that have Category OR Structure filled)
+  // and "text-only" rows (only Post column has content)
+  
+  const groups = [];
+  let currentGroup = { textLines: [], meta: {} };
+  
   for (const row of rawRows) {
     const cat = (row["Category"] || "").trim();
     const structure = (row["Structure"] || "").trim();
-    const post = (row["Post"] || row["Post text"] || "").trim();
+    const post = (row["Post"] || "").trim();
+    const notes = (row["Notes"] || row["Why Bad"] || "").trim();
+    const score = (row["Score"] || "").trim();
+    const hasMeta = cat.length > 0 || structure.length > 0;
     
-    // Check if this row has substantial identifying info (Category or Structure)
-    const isNewPost = cat.length > 0 || structure.length > 0;
+    if (post.length > 0) {
+      currentGroup.textLines.push(post);
+    }
     
-    if (isNewPost || merged.length === 0) {
-      // New post entry
-      merged.push({ ...row });
-    } else if (post.length > 0 && merged.length > 0) {
-      // Continuation of previous post - append text
-      const prev = merged[merged.length - 1];
-      const prevPostKey = prev["Post"] !== undefined ? "Post" : "Post text";
-      const prevPost = (prev[prevPostKey] || "").trim();
-      prev[prevPostKey] = prevPost + (prevPost ? "\n" : "") + post;
-      
-      // Also merge any other filled fields
-      for (const h of headers) {
-        if (h !== "Post" && h !== "Post text" && h !== "Category" && h !== "Structure") {
-          const val = (row[h] || "").trim();
-          if (val && !(prev[h] || "").trim()) {
-            prev[h] = val;
-          }
-        }
+    if (hasMeta) {
+      // This row has Category/Structure — it's the anchor for the current group
+      currentGroup.meta = { ...row };
+      // Finalize this group
+      if (currentGroup.textLines.length > 0) {
+        groups.push({ ...currentGroup });
       }
+      currentGroup = { textLines: [], meta: {} };
     }
   }
+  
+  // If there are leftover text lines without meta (shouldn't happen normally)
+  if (currentGroup.textLines.length > 0) {
+    groups.push({ ...currentGroup });
+  }
 
-  // Filter out rows that have no real content
-  const rows = merged.filter(row => {
-    const post = (row["Post"] || row["Post text"] || "").trim();
-    const cat = (row["Category"] || "").trim();
-    return post.length > 2 || cat.length > 1;
-  });
+  // Build final rows from groups
+  const rows = groups.map(g => {
+    const fullPost = g.textLines.join("\n");
+    return {
+      ...g.meta,
+      Post: fullPost,
+      Category: (g.meta["Category"] || "").trim(),
+      Structure: (g.meta["Structure"] || "").trim(),
+      Notes: (g.meta["Notes"] || g.meta["Why Bad"] || "").trim(),
+      Score: (g.meta["Score"] || "").trim(),
+    };
+  }).filter(r => (r.Post || "").trim().length > 2);
 
   return { headers, rows };
 }
@@ -297,7 +320,7 @@ function useSheetData() {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Failed to fetch ${tab}: ${res.status}`);
         const text = await res.text();
-        const parsed = parseCSV(text);
+        const parsed = parseCSV(text, tab);
         results[tab] = parsed;
       }
       setData(results);
@@ -660,6 +683,23 @@ Be honest and critical. Consider: hook strength, uniqueness, relatability, engag
                     <Btn small color={T.green}>✓ Mark as Posted → USED</Btn>
                     <Btn small color={T.red} outline>✕ → BAD</Btn>
                     <Btn small color={T.purple} outline>◈ → DATABASE</Btn>
+                  </div>
+                )}
+
+                {/* DRAFT tab: move buttons */}
+                {activeTab === "DRAFT" && !isLocal && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                    <Btn small color={T.green}>◉ → POST</Btn>
+                    <Btn small color={T.purple} outline>◈ → DATABASE</Btn>
+                    <Btn small color={T.red} outline>✕ → BAD</Btn>
+                  </div>
+                )}
+
+                {/* DATABASE tab: move buttons */}
+                {activeTab === "DATABASE" && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                    <Btn small color={T.blue}>✎ → DRAFT</Btn>
+                    <Btn small color={T.green} outline>◉ → POST</Btn>
                   </div>
                 )}
 
