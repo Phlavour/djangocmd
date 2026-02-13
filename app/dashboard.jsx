@@ -56,7 +56,6 @@ function parseCSV(text) {
   const lines = text.split("\n").filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
   
-  // Parse CSV properly handling quoted fields
   const parseLine = (line) => {
     const result = [];
     let current = "";
@@ -78,16 +77,51 @@ function parseCSV(text) {
   };
 
   const headers = parseLine(lines[0]);
-  const rows = lines.slice(1).map(line => {
+  const rawRows = lines.slice(1).map(line => {
     const values = parseLine(line);
     const row = {};
     headers.forEach((h, i) => { row[h] = values[i] || ""; });
     return row;
-  }).filter(row => {
-    // Row must have actual content in Post or Category column (not just empty/whitespace)
-    const post = row["Post"] || row["Post text"] || "";
-    const cat = row["Category"] || "";
-    return (post.trim().length > 2) || (cat.trim().length > 1);
+  });
+
+  // Merge multiline posts: if a row has no Category AND no Structure,
+  // it's a continuation of the previous post's text
+  const merged = [];
+  for (const row of rawRows) {
+    const cat = (row["Category"] || "").trim();
+    const structure = (row["Structure"] || "").trim();
+    const post = (row["Post"] || row["Post text"] || "").trim();
+    
+    // Check if this row has substantial identifying info (Category or Structure)
+    const isNewPost = cat.length > 0 || structure.length > 0;
+    
+    if (isNewPost || merged.length === 0) {
+      // New post entry
+      merged.push({ ...row });
+    } else if (post.length > 0 && merged.length > 0) {
+      // Continuation of previous post - append text
+      const prev = merged[merged.length - 1];
+      const prevPostKey = prev["Post"] !== undefined ? "Post" : "Post text";
+      const prevPost = (prev[prevPostKey] || "").trim();
+      prev[prevPostKey] = prevPost + (prevPost ? "\n" : "") + post;
+      
+      // Also merge any other filled fields
+      for (const h of headers) {
+        if (h !== "Post" && h !== "Post text" && h !== "Category" && h !== "Structure") {
+          const val = (row[h] || "").trim();
+          if (val && !(prev[h] || "").trim()) {
+            prev[h] = val;
+          }
+        }
+      }
+    }
+  }
+
+  // Filter out rows that have no real content
+  const rows = merged.filter(row => {
+    const post = (row["Post"] || row["Post text"] || "").trim();
+    const cat = (row["Category"] || "").trim();
+    return post.length > 2 || cat.length > 1;
   });
 
   return { headers, rows };
@@ -607,9 +641,27 @@ Be honest and critical. Consider: hook strength, uniqueness, relatability, engag
                 onMouseLeave={e => e.currentTarget.style.borderColor = isLocal ? T.greenMid : T.border}
               >
                 {/* Post text */}
-                <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>
+                <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, marginBottom: 10, whiteSpace: "pre-wrap" }}>
                   {post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty post</span>}
                 </div>
+
+                {/* POST tab: day selector + move to USED */}
+                {activeTab === "POST" && (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                    <select defaultValue={scheduled || ""} style={{
+                      background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px",
+                      color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", outline: "none",
+                    }}>
+                      <option value="">📅 Pick day</option>
+                      {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                    <Btn small color={T.green}>✓ Mark as Posted → USED</Btn>
+                    <Btn small color={T.red} outline>✕ → BAD</Btn>
+                    <Btn small color={T.purple} outline>◈ → DATABASE</Btn>
+                  </div>
+                )}
 
                 {/* Tags row */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
