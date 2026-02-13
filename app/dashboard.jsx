@@ -249,8 +249,8 @@ const LoadingDots = () => {
 
 const NAV = [
   { id: "twitter", icon: "𝕏", label: "Twitter" },
-  { id: "health", icon: "♥", label: "Health", disabled: true },
-  { id: "bots", icon: "⬡", label: "Bots", disabled: true },
+  { id: "health", icon: "♥", label: "Health", disabled: false },
+  { id: "bots", icon: "⬡", label: "Bots", disabled: false },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1396,7 +1396,7 @@ export default function App() {
       {/* CONTENT */}
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
         {nav === "twitter" && <TwitterPanel apiKey={apiKey} />}
-        {nav === "health" && <HealthPlaceholder />}
+        {nav === "health" && <HealthPanel />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
 
