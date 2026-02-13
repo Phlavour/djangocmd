@@ -754,8 +754,8 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
 
   return (
     <div>
-      {/* Top */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      {/* Top bar + GOAL */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{allPosts.length} posts · {supa ? "supabase" : "local mode"}</div>
           {supa && <Dot color={T.green} pulse />}
@@ -770,35 +770,92 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
         </div>
       </div>
 
-      {/* Generate Weekly Content */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 14 }}>🤖</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Content Generator</span>
-            {brandVoice && <Badge color={T.green}>Brand voice loaded</Badge>}
+      {/* Generator + GOAL row */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
+        {/* Generator */}
+        <Card style={{ flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 14 }}>🤖</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Content Generator</span>
+              {brandVoice && <Badge color={T.green}>Brand voice loaded</Badge>}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!brandVoice && (
+                <label style={{ cursor: "pointer" }}>
+                  <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
+                  <Btn small color={T.cyan} style={{ pointerEvents: "none" }}>📄 Upload Brand Voice .txt</Btn>
+                </label>
+              )}
+              {brandVoice && (
+                <label style={{ cursor: "pointer" }}>
+                  <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
+                  <Btn small outline style={{ pointerEvents: "none" }}>↻ Update Voice</Btn>
+                </label>
+              )}
+              <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
+                {genLoading ? "⏳ Generating..." : "⚡ Generate 42 Posts"}
+              </Btn>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            {!brandVoice && (
-              <label style={{ cursor: "pointer" }}>
-                <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
-                <Btn small color={T.cyan} style={{ pointerEvents: "none" }}>📄 Upload Brand Voice .txt</Btn>
-              </label>
-            )}
-            {brandVoice && (
-              <label style={{ cursor: "pointer" }}>
-                <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
-                <Btn small outline style={{ pointerEvents: "none" }}>↻ Update Voice</Btn>
-              </label>
-            )}
-            <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-              {genLoading ? "⏳ Generating..." : "⚡ Generate 42 Posts"}
-            </Btn>
+          {genProgress && <div style={{ marginTop: 8, fontSize: 11, color: genProgress.startsWith("✅") ? T.green : genProgress.startsWith("❌") ? T.red : T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>{genProgress}</div>}
+          {!apiKey && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>⚠ Add Claude API key in Settings first</div>}
+        </Card>
+
+        {/* GOAL Card — square, top-right */}
+        <Card style={{ width: 240, minHeight: 150, flexShrink: 0, position: "relative" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.text, fontFamily: "'Satoshi', sans-serif", letterSpacing: "-.02em" }}>🎯 GOAL</div>
+              <div style={{ fontSize: 9, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>jan 1, 2027</div>
+            </div>
+            <Btn small outline onClick={() => setShowGoalEdit(!showGoalEdit)}>✎</Btn>
           </div>
-        </div>
-        {genProgress && <div style={{ marginTop: 8, fontSize: 11, color: genProgress.startsWith("✅") ? T.green : genProgress.startsWith("❌") ? T.red : T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>{genProgress}</div>}
-        {!apiKey && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>⚠ Add Claude API key in Settings first</div>}
-      </Card>
+          {showGoalEdit ? (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>CURRENT</div>
+                <input type="number" value={goalCurrent} onChange={e => saveGoal(goalTarget, parseInt(e.target.value) || 0)}
+                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 6px", color: T.text, fontSize: 11, width: 80, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>TARGET</div>
+                <input type="number" value={goalTarget} onChange={e => saveGoal(parseInt(e.target.value) || 20000, goalCurrent)}
+                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 6px", color: T.text, fontSize: 11, width: 80, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
+              </div>
+              <Btn small color={T.green} onClick={() => setShowGoalEdit(false)}>✓</Btn>
+            </div>
+          ) : (() => {
+            const pct = goalTarget > 0 ? Math.min(100, (goalCurrent / goalTarget) * 100) : 0;
+            const remaining = Math.max(0, goalTarget - goalCurrent);
+            const now = new Date();
+            const end = new Date(goalDeadline);
+            const daysLeft = Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+            const perDay = remaining > 0 ? Math.ceil(remaining / daysLeft) : 0;
+            const perWeek = perDay * 7;
+            const onTrack = perDay <= 30;
+            return (
+              <div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 28, fontWeight: 800, color: T.cyan, fontFamily: "'Satoshi', sans-serif" }}>{remaining.toLocaleString()}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.textSoft }}>LEFT</span>
+                </div>
+                <div style={{ fontSize: 10, color: T.textDim, marginBottom: 8 }}>
+                  {goalCurrent.toLocaleString()} / {goalTarget.toLocaleString()} · {pct.toFixed(1)}%
+                </div>
+                <div style={{ height: 5, background: T.bg2, borderRadius: 3, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`, borderRadius: 3, transition: "width .3s" }} />
+                </div>
+                <div style={{ fontSize: 10, color: T.textSoft, lineHeight: 1.6 }}>
+                  {daysLeft} days · <strong style={{ color: T.text }}>+{perDay}/day</strong> · <strong style={{ color: T.text }}>+{perWeek}/wk</strong>
+                  <Badge color={onTrack ? T.green : T.amber} style={{ marginLeft: 6 }}>{onTrack ? "✓" : "⚠"}</Badge>
+                </div>
+                {goalCurrent === 0 && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>Click ✎ to set followers</div>}
+              </div>
+            );
+          })()}
+        </Card>
+      </div>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
@@ -823,71 +880,12 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
         ))}
       </div>
 
-      {/* GOAL + Delete All row */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
-        {/* Left: Delete All + info */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, minHeight: 160 }}>
-          {counts[activeTab] > 0 && (
-            <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
-          )}
+      {/* Delete All */}
+      {counts[activeTab] > 0 && (
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+          <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
         </div>
-
-        {/* Right: GOAL Card — square */}
-        <Card style={{ width: 280, minHeight: 160, position: "relative", flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: T.text, fontFamily: "'Satoshi', sans-serif", letterSpacing: "-.02em" }}>🎯 GOAL</div>
-              <div style={{ fontSize: 9, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>jan 1, 2027</div>
-            </div>
-            <Btn small outline onClick={() => setShowGoalEdit(!showGoalEdit)}>✎</Btn>
-          </div>
-          {showGoalEdit ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>CURRENT</div>
-                <input type="number" value={goalCurrent} onChange={e => saveGoal(goalTarget, parseInt(e.target.value) || 0)}
-                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, width: 90, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>TARGET</div>
-                <input type="number" value={goalTarget} onChange={e => saveGoal(parseInt(e.target.value) || 20000, goalCurrent)}
-                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, width: 90, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
-              </div>
-              <Btn small color={T.green} onClick={() => setShowGoalEdit(false)}>✓</Btn>
-            </div>
-          ) : (() => {
-            const pct = goalTarget > 0 ? Math.min(100, (goalCurrent / goalTarget) * 100) : 0;
-            const remaining = goalTarget - goalCurrent;
-            const now = new Date();
-            const end = new Date(goalDeadline);
-            const daysLeft = Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
-            const perDay = remaining > 0 ? Math.ceil(remaining / daysLeft) : 0;
-            const perWeek = perDay * 7;
-            const onTrack = perDay <= 30;
-            return (
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: T.green, fontFamily: "'Satoshi', sans-serif", marginBottom: 2 }}>
-                  {goalCurrent.toLocaleString()}
-                </div>
-                <div style={{ fontSize: 11, color: T.textSoft, marginBottom: 10 }}>
-                  of {goalTarget.toLocaleString()} followers
-                </div>
-                <div style={{ height: 6, background: T.bg2, borderRadius: 3, overflow: "hidden", marginBottom: 10 }}>
-                  <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`, borderRadius: 3, transition: "width .3s" }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10 }}>
-                  <div style={{ color: T.textSoft, lineHeight: 1.6 }}>
-                    <div>{daysLeft} days left</div>
-                    <div>need <strong style={{ color: T.text }}>+{perDay}/day</strong> · <strong style={{ color: T.text }}>+{perWeek}/week</strong></div>
-                  </div>
-                  <Badge color={onTrack ? T.green : T.amber}>{onTrack ? "✓" : "⚠"}</Badge>
-                </div>
-                {goalCurrent === 0 && <div style={{ marginTop: 8, fontSize: 10, color: T.amber }}>Click ✎ to set current followers</div>}
-              </div>
-            );
-          })()}
-        </Card>
-      </div>
+      )}
 
       {/* Add Post */}
       {isDraft && (
