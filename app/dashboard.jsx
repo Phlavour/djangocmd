@@ -654,436 +654,529 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
 // WEEKLY ANALYTICS — reads USED tab + CSV upload
 // ═══════════════════════════════════════════════════════════════
 
-function WeeklyAnalytics({ sheetData, loading }) {
-  const [contentCSV, setContentCSV] = useState(null);
-  const [overviewCSV, setOverviewCSV] = useState(null);
-  const [view, setView] = useState("performance");
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS DASHBOARD — unified, long-term tracking
+// ═══════════════════════════════════════════════════════════════
 
-  // Parse CSV uploads
+const WEEK_STORAGE_KEY = "djangocmd_weekly_history";
+
+function getWeekLabel(dateStr) {
+  // "Thu, Feb 12, 2026" -> "2026-W07"
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    const oneJan = new Date(d.getFullYear(), 0, 1);
+    const wk = Math.ceil(((d - oneJan) / 86400000 + oneJan.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${String(wk).padStart(2, "0")}`;
+  } catch { return null; }
+}
+
+function loadWeeklyHistory() {
+  try { return JSON.parse(sessionStorage.getItem(WEEK_STORAGE_KEY) || "{}"); } catch { return {}; }
+}
+function saveWeeklyHistory(h) {
+  try { sessionStorage.setItem(WEEK_STORAGE_KEY, JSON.stringify(h)); } catch {}
+}
+
+function WeeklyAnalytics({ sheetData, loading, apiKey }) {
+  const [history, setHistory] = useState(() => loadWeeklyHistory());
+  const [weeklyReportText, setWeeklyReportText] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Save history whenever it changes
+  useEffect(() => { saveWeeklyHistory(history); }, [history]);
+
+  // CSV Upload handlers
   const handleContentCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => { setContentCSV(parseCSV(ev.target.result, "CONTENT").rows); };
+    reader.onload = (ev) => {
+      const rows = parseCSV(ev.target.result, "CONTENT").rows;
+      // Filter: originals only, with impressions
+      const originals = rows.filter(r => {
+        const text = r["Post text"] || r["Post"] || "";
+        return !text.startsWith("@") && (parseInt(r["Impressions"] || 0) || 0) > 0;
+      });
+      // Detect week from first row date
+      const firstDate = rows[0]?.["Date"] || "";
+      const week = getWeekLabel(firstDate) || `upload-${Date.now()}`;
+      setHistory(prev => {
+        const next = { ...prev };
+        if (!next[week]) next[week] = {};
+        next[week].originals = originals;
+        next[week].uploadDate = new Date().toISOString();
+        return next;
+      });
+    };
     reader.readAsText(file);
+    e.target.value = "";
   };
+
   const handleOverviewCSV = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => { setOverviewCSV(parseCSV(ev.target.result, "OVERVIEW").rows); };
+    reader.onload = (ev) => {
+      const rows = parseCSV(ev.target.result, "OVERVIEW").rows;
+      const firstDate = rows[0]?.["Date"] || "";
+      const week = getWeekLabel(firstDate) || `upload-${Date.now()}`;
+      setHistory(prev => {
+        const next = { ...prev };
+        if (!next[week]) next[week] = {};
+        next[week].daily = rows;
+        return next;
+      });
+    };
     reader.readAsText(file);
+    e.target.value = "";
   };
 
-  // Also use USED tab as fallback content source
-  const usedRows = sheetData["USED"]?.rows || [];
-  const rawContent = contentCSV || usedRows;
+  // Get all weeks sorted
+  const weeks = Object.keys(history).sort();
+  const latestWeek = weeks[weeks.length - 1];
+  const prevWeek = weeks.length > 1 ? weeks[weeks.length - 2] : null;
 
-  // Filter: ONLY originals (no replies), must have impressions
-  const originals = rawContent.map(r => {
-    const text = r["Post text"] || r["Post"] || "";
-    const imp = parseInt(r["Impressions"] || 0) || 0;
-    return {
-      text, imp,
+  // Process latest week data
+  const processWeek = (wk) => {
+    if (!wk || !history[wk]) return null;
+    const h = history[wk];
+    const originals = (h.originals || []).map(r => {
+      const imp = parseInt(r["Impressions"] || 0) || 0;
+      return {
+        text: r["Post text"] || r["Post"] || "",
+        imp, likes: parseInt(r["Likes"] || 0) || 0,
+        eng: parseInt(r["Engagements"] || 0) || 0,
+        bookmarks: parseInt(r["Bookmarks"] || 0) || 0,
+        replies: parseInt(r["Replies"] || 0) || 0,
+        reposts: parseInt(r["Reposts"] || 0) || 0,
+        follows: parseInt(r["New follows"] || 0) || 0,
+        link: r["Post Link"] || r["Post link"] || "",
+        date: r["Date"] || "",
+        engRate: imp > 0 ? (parseInt(r["Engagements"] || 0) || 0) / imp * 100 : 0,
+      };
+    });
+    const daily = (h.daily || []).map(r => ({
+      date: (r["Date"] || "").replace(/,\s*\d{4}$/, "").replace(/^\w+,\s*/, ""),
+      imp: parseInt(r["Impressions"] || 0) || 0,
       likes: parseInt(r["Likes"] || 0) || 0,
       eng: parseInt(r["Engagements"] || 0) || 0,
-      bookmarks: parseInt(r["Bookmarks"] || 0) || 0,
-      replies: parseInt(r["Replies"] || 0) || 0,
-      reposts: parseInt(r["Reposts"] || 0) || 0,
       follows: parseInt(r["New follows"] || 0) || 0,
-      link: r["Post Link"] || r["Post link"] || "",
-      date: r["Date"] || "",
-      engRate: imp > 0 ? (imp > 0 ? (parseInt(r["Engagements"] || 0) || 0) / imp * 100 : 0) : 0,
-    };
-  }).filter(p => !p.text.startsWith("@") && p.imp > 0);
+      unfollows: parseInt(r["Unfollows"] || 0) || 0,
+    })).reverse();
 
-  // Daily overview
-  const dailyData = (overviewCSV || []).map(r => ({
-    date: (r["Date"] || "").replace(/,\s*\d{4}$/, "").replace(/^\w+,\s*/, ""),
-    imp: parseInt(r["Impressions"] || 0) || 0,
-    likes: parseInt(r["Likes"] || 0) || 0,
-    eng: parseInt(r["Engagements"] || 0) || 0,
-    follows: parseInt(r["New follows"] || 0) || 0,
-    unfollows: parseInt(r["Unfollows"] || 0) || 0,
-    profileVisits: parseInt(r["Profile visits"] || 0) || 0,
-  })).reverse();
+    const totalImp = originals.reduce((s, p) => s + p.imp, 0);
+    const totalLikes = originals.reduce((s, p) => s + p.likes, 0);
+    const totalEng = originals.reduce((s, p) => s + p.eng, 0);
+    const avgEngRate = originals.length > 0 ? originals.reduce((s, p) => s + p.engRate, 0) / originals.length : 0;
+    const dailyImp = daily.reduce((s, d) => s + d.imp, 0);
+    const netFollows = daily.reduce((s, d) => s + d.follows - d.unfollows, 0);
+    const totalFollows = daily.reduce((s, d) => s + d.follows, 0);
+    const totalUnfollows = daily.reduce((s, d) => s + d.unfollows, 0);
 
-  // Match posts with AI scores from DATABASE/DRAFT tabs
+    return { originals, daily, totalImp, totalLikes, totalEng, avgEngRate, dailyImp, netFollows, totalFollows, totalUnfollows };
+  };
+
+  const current = processWeek(latestWeek);
+  const prev = processWeek(prevWeek);
+
+  // Match posts to categories from Database
   const dbPosts = [...(sheetData["DATABASE"]?.rows || []), ...(sheetData["DRAFT"]?.rows || []), ...(sheetData["POST"]?.rows || [])];
-  
-  const matchScore = (text) => {
+  const matchPost = (text) => {
     const clean = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().slice(0, 50);
     const target = clean(text);
     for (const db of dbPosts) {
       const dbText = clean(db["Post"] || "");
-      if (dbText && target && (dbText.includes(target) || target.includes(dbText))) {
-        return {
-          score: parseFloat(db["Score"] || 0) || 0,
-          category: (db["Category"] || "").toLowerCase(),
-          structure: db["Structure"] || "",
-        };
-      }
+      if (dbText && target && (dbText.includes(target) || target.includes(dbText)))
+        return { score: parseFloat(db["Score"] || 0) || 0, category: (db["Category"] || "").toLowerCase(), structure: db["Structure"] || "" };
     }
     return null;
   };
 
-  // Enrich originals with matched scores/categories
-  const enriched = originals.map(p => {
-    const match = matchScore(p.text);
-    return { ...p, aiScore: match?.score || 0, category: match?.category || "uncategorized", structure: match?.structure || "" };
-  });
+  // Enrich originals
+  const enriched = current ? current.originals.map(p => {
+    const m = matchPost(p.text);
+    return { ...p, aiScore: m?.score || 0, category: m?.category || "", structure: m?.structure || "" };
+  }) : [];
 
-  // ═══ PILLAR PERFORMANCE ═══
+  // Pillar data
   const pillarMap = {};
   for (const p of enriched) {
     const cat = p.category || "uncategorized";
     if (!pillarMap[cat]) pillarMap[cat] = { posts: 0, imp: 0, likes: 0, eng: 0, engRateSum: 0 };
-    pillarMap[cat].posts++;
-    pillarMap[cat].imp += p.imp;
-    pillarMap[cat].likes += p.likes;
-    pillarMap[cat].eng += p.eng;
-    pillarMap[cat].engRateSum += p.engRate;
+    pillarMap[cat].posts++; pillarMap[cat].imp += p.imp; pillarMap[cat].likes += p.likes;
+    pillarMap[cat].eng += p.eng; pillarMap[cat].engRateSum += p.engRate;
   }
   const pillarData = Object.entries(pillarMap).map(([cat, d]) => ({
-    name: cat, posts: d.posts, imp: d.imp, likes: d.likes, eng: d.eng,
+    name: cat, posts: d.posts, imp: d.imp, likes: d.likes,
     avgEngRate: d.posts > 0 ? d.engRateSum / d.posts : 0,
     avgImp: d.posts > 0 ? Math.round(d.imp / d.posts) : 0,
+  })).filter(d => d.name !== "uncategorized").sort((a, b) => b.avgImp - a.avgImp);
+
+  // Structure data
+  const structMap = {};
+  for (const p of enriched) {
+    const st = p.structure || "unknown";
+    if (st === "unknown") continue;
+    if (!structMap[st]) structMap[st] = { posts: 0, imp: 0, engRateSum: 0 };
+    structMap[st].posts++; structMap[st].imp += p.imp; structMap[st].engRateSum += p.engRate;
+  }
+  const structData = Object.entries(structMap).map(([st, d]) => ({
+    name: st, posts: d.posts, avgImp: d.posts > 0 ? Math.round(d.imp / d.posts) : 0,
+    avgEngRate: d.posts > 0 ? d.engRateSum / d.posts : 0,
   })).sort((a, b) => b.avgImp - a.avgImp);
 
-  const PC = PILLAR_COLORS_FN();
-
-  // ═══ SCORE VS REALITY ═══
+  // Score vs reality
   const scored = enriched.filter(p => p.aiScore > 0);
-  const scoreVsReality = scored.map(p => ({
-    name: p.text.slice(0, 25) + "...",
-    aiScore: p.aiScore,
-    realScore: Math.min(10, p.engRate / 3), // normalize eng rate to ~10 scale
-    imp: p.imp,
-    engRate: p.engRate,
-    text: p.text,
-  }));
 
-  // Aggregates
-  const totalImp = originals.reduce((s, p) => s + p.imp, 0);
-  const totalLikes = originals.reduce((s, p) => s + p.likes, 0);
-  const totalEng = originals.reduce((s, p) => s + p.eng, 0);
-  const avgEngRate = originals.length > 0 ? originals.reduce((s, p) => s + p.engRate, 0) / originals.length : 0;
-  const netGrowth = dailyData.reduce((s, d) => s + d.follows - d.unfollows, 0);
-  const bestDay = dailyData.length > 0 ? dailyData.reduce((a, b) => a.imp > b.imp ? a : b) : null;
+  // WoW (week over week) changes
+  const wow = current && prev ? {
+    impChange: prev.dailyImp > 0 ? ((current.dailyImp - prev.dailyImp) / prev.dailyImp * 100) : null,
+    engChange: prev.avgEngRate > 0 ? ((current.avgEngRate - prev.avgEngRate) / prev.avgEngRate * 100) : null,
+    followChange: current.netFollows - prev.netFollows,
+    postChange: current.originals.length - prev.originals.length,
+  } : null;
 
-  const hasData = originals.length > 0 || dailyData.length > 0;
+  // Weekly trend (all weeks)
+  const weeklyTrend = weeks.map(w => {
+    const d = processWeek(w);
+    return d ? { week: w.replace(/^\d{4}-/, ""), imp: d.dailyImp || d.totalImp, eng: d.avgEngRate, net: d.netFollows, posts: d.originals.length } : null;
+  }).filter(Boolean);
+
+  // Pillar trend across weeks
+  const pillarTrend = weeks.map(w => {
+    const h = history[w];
+    if (!h?.originals) return null;
+    const ors = h.originals.map(r => {
+      const text = r["Post text"] || r["Post"] || "";
+      const m = matchPost(text);
+      const imp = parseInt(r["Impressions"] || 0) || 0;
+      return { category: m?.category || "", imp };
+    });
+    const entry = { week: w.replace(/^\d{4}-/, "") };
+    for (const cat of CATEGORIES) {
+      const catPosts = ors.filter(p => p.category === cat);
+      entry[cat] = catPosts.length > 0 ? Math.round(catPosts.reduce((s, p) => s + p.imp, 0) / catPosts.length) : 0;
+    }
+    return entry;
+  }).filter(Boolean);
+
+  const PC = PILLAR_COLORS_FN();
+  const fmt = (n) => typeof n === "number" ? n.toLocaleString() : n;
+  const pct = (n) => n > 0 ? `+${n.toFixed(1)}%` : `${n.toFixed(1)}%`;
+
+  // Weekly Report Generator
+  const generateReport = async () => {
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+    if (!current) return;
+    setReportLoading(true);
+    const topPosts = [...enriched].sort((a, b) => b.imp - a.imp).slice(0, 5).map(p => `"${p.text.slice(0, 100)}" — ${p.imp} imp, ${p.engRate.toFixed(1)}% eng, cat: ${p.category}`).join("\n");
+    const pillarSummary = pillarData.map(p => `${p.name}: ${p.posts} posts, avg ${p.avgImp} imp, ${p.avgEngRate.toFixed(1)}% eng`).join("\n");
+    const prompt = `You are a crypto Twitter growth strategist analyzing weekly performance for @django_crypto.
+
+THIS WEEK DATA:
+- ${current.originals.length} original posts published
+- ${fmt(current.dailyImp || current.totalImp)} total impressions
+- ${current.avgEngRate.toFixed(1)}% avg engagement rate
+- ${current.netFollows >= 0 ? "+" : ""}${current.netFollows} net followers
+${wow ? `\nVS LAST WEEK: impressions ${wow.impChange ? pct(wow.impChange) : "n/a"}, engagement ${wow.engChange ? pct(wow.engChange) : "n/a"}` : ""}
+
+TOP POSTS:\n${topPosts}
+
+PILLAR BREAKDOWN:\n${pillarSummary}
+
+Write a concise weekly report (max 250 words) with:
+1. What worked this week (specific posts/patterns)
+2. What didn't work
+3. 3 specific action items for next week
+4. Which pillar to double down on and which to adjust
+
+Tone: direct, no fluff, like a coach giving real talk. Use lowercase.`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+      });
+      const data = await res.json();
+      setWeeklyReportText(data.content?.[0]?.text || "Error generating report");
+    } catch (err) { setWeeklyReportText("Error: " + err.message); }
+    finally { setReportLoading(false); }
+  };
+
+  // Export/Import history
+  const exportHistory = () => {
+    const blob = new Blob([JSON.stringify(history, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "djangocmd-analytics-history.json"; a.click();
+  };
+  const importHistory = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try { const h = JSON.parse(ev.target.result); setHistory(prev => ({ ...prev, ...h })); }
+      catch { alert("Invalid JSON file"); }
+    };
+    reader.readAsText(file);
+  };
 
   if (loading) return <div style={{ textAlign: "center", padding: 60 }}><LoadingDots /></div>;
 
+  const hasData = current !== null;
+  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 8px", color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
+
   return (
     <div>
-      {/* CSV Upload */}
+      {/* ═══ UPLOAD BAR ═══ */}
       <Card style={{ marginBottom: 20 }}>
-        <Heading icon="📁">Import X Analytics</Heading>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div>
-            <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Content CSV (per-post data)</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <label style={{ cursor: "pointer" }}>
               <input type="file" accept=".csv" onChange={handleContentCSV} style={{ display: "none" }} />
-              <Btn color={contentCSV ? T.green : T.cyan} style={{ pointerEvents: "none" }}>
-                {contentCSV ? `✓ ${originals.length} originals loaded` : "Upload"}
-              </Btn>
+              <Btn color={T.cyan} style={{ pointerEvents: "none" }}>📄 Upload Content CSV</Btn>
             </label>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Account Overview CSV (daily)</div>
             <label style={{ cursor: "pointer" }}>
               <input type="file" accept=".csv" onChange={handleOverviewCSV} style={{ display: "none" }} />
-              <Btn color={overviewCSV ? T.green : T.cyan} style={{ pointerEvents: "none" }}>
-                {overviewCSV ? `✓ ${dailyData.length} days loaded` : "Upload"}
-              </Btn>
+              <Btn color={T.cyan} outline style={{ pointerEvents: "none" }}>📊 Upload Overview CSV</Btn>
             </label>
           </div>
-          {contentCSV && <div style={{ fontSize: 10, color: T.textDim }}>Replies auto-filtered. Showing originals only.</div>}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {weeks.length > 0 && <Badge color={T.green}>{weeks.length} week{weeks.length > 1 ? "s" : ""} tracked</Badge>}
+            <Btn small outline onClick={exportHistory}>↓ Export</Btn>
+            <label style={{ cursor: "pointer" }}>
+              <input type="file" accept=".json" onChange={importHistory} style={{ display: "none" }} />
+              <Btn small outline style={{ pointerEvents: "none" }}>↑ Import</Btn>
+            </label>
+          </div>
         </div>
+        {!hasData && <div style={{ marginTop: 10, fontSize: 12, color: T.textSoft }}>Export CSVs from X → Analytics → Posts / Account Overview. Replies are auto-filtered.</div>}
       </Card>
 
       {!hasData && (
-        <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>
-          Upload your X analytics CSVs above, or add data to the USED tab in Google Sheets.
-        </div>
+        <div style={{ textAlign: "center", padding: 60, color: T.textDim, fontSize: 13 }}>Upload your first week's CSV to start tracking.</div>
       )}
 
       {hasData && <>
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-          <TabBtn label="📊 Performance" active={view === "performance"} onClick={() => setView("performance")} color={T.green} />
-          <TabBtn label="🎯 Pillars" active={view === "pillars"} onClick={() => setView("pillars")} color={T.purple} />
-          <TabBtn label="🤖 Score Check" active={view === "scoring"} onClick={() => setView("scoring")} color={T.amber} />
-          <TabBtn label="📋 Weekly Summary" active={view === "summary"} onClick={() => setView("summary")} color={T.cyan} />
+        {/* ═══ KEY METRICS ═══ */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+          <Stat label="Impressions" value={fmt(current.dailyImp || current.totalImp)} color={T.green}
+            sub={wow?.impChange != null ? pct(wow.impChange) + " vs last week" : `${latestWeek}`} />
+          <Stat label="Avg Engagement" value={current.avgEngRate.toFixed(1)} suffix="%" color={T.blue}
+            sub={wow?.engChange != null ? pct(wow.engChange) + " vs last week" : ""} />
+          <Stat label="Net Followers" value={current.netFollows >= 0 ? `+${current.netFollows}` : current.netFollows} color={current.netFollows >= 0 ? T.green : T.red}
+            sub={`+${current.totalFollows} / -${current.totalUnfollows}`} />
+          <Stat label="Originals Posted" value={current.originals.length} color={T.purple}
+            sub={wow?.postChange != null ? `${wow.postChange >= 0 ? "+" : ""}${wow.postChange} vs last week` : ""} />
         </div>
 
-        {/* ═══════════ PERFORMANCE ═══════════ */}
-        {view === "performance" && <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-            <Stat label="Impressions (Originals)" value={totalImp} color={T.green} />
-            <Stat label="Avg Engagement Rate" value={avgEngRate.toFixed(1)} suffix="%" color={T.blue} />
-            <Stat label="Net Follower Growth" value={netGrowth >= 0 ? `+${netGrowth}` : netGrowth} color={netGrowth >= 0 ? T.green : T.red} />
-            <Stat label="Original Posts" value={originals.length} color={T.purple} />
-          </div>
-
-          {/* Daily performance chart */}
-          {dailyData.length > 0 && (
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="📈">Daily Impressions</Heading>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="date" stroke={T.textDim} fontSize={10} />
-                  <YAxis stroke={T.textDim} fontSize={10} />
-                  <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }}
-                    formatter={(v) => [v.toLocaleString()]} />
-                  <Bar dataKey="imp" fill={T.green} radius={[4, 4, 0, 0]} name="Impressions" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          )}
-
-          {/* Follower growth chart */}
-          {dailyData.length > 0 && (
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="👥">Follower Movement</Heading>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="date" stroke={T.textDim} fontSize={10} />
-                  <YAxis stroke={T.textDim} fontSize={10} />
-                  <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }} />
-                  <Bar dataKey="follows" fill={T.green} radius={[3, 3, 0, 0]} name="Follows" />
-                  <Bar dataKey="unfollows" fill={T.red} radius={[3, 3, 0, 0]} name="Unfollows" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          )}
-
-          {/* Top original posts */}
-          <Card>
-            <Heading icon="🏆">Top Posts (Originals Only)</Heading>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[...originals].sort((a, b) => b.imp - a.imp).slice(0, 10).map((p, i) => (
-                <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: i < 3 ? T.green : T.textDim, fontFamily: "'Satoshi', sans-serif", minWidth: 28 }}>#{i + 1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 6, whiteSpace: "pre-wrap" }}>
-                        {p.text.slice(0, 200)}{p.text.length > 200 ? "..." : ""}
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Badge color={T.green}>{p.imp.toLocaleString()} imp</Badge>
-                        <Badge color={T.red}>{p.likes} likes</Badge>
-                        <Badge color={T.blue}>{p.engRate.toFixed(1)}% eng</Badge>
-                        {p.link && <a href={p.link} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.cyan }}>🔗 view</a>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {originals.length === 0 && <div style={{ color: T.textDim, textAlign: "center", padding: 20 }}>No original posts found</div>}
-            </div>
+        {/* ═══ DAILY CHART ═══ */}
+        {current.daily.length > 0 && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📈">Daily Performance</Heading>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={current.daily}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="date" stroke={T.textDim} fontSize={10} />
+                <YAxis stroke={T.textDim} fontSize={10} />
+                <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }}
+                  formatter={(v) => [v.toLocaleString()]} />
+                <Bar dataKey="imp" fill={T.green} radius={[4, 4, 0, 0]} name="Impressions" />
+              </BarChart>
+            </ResponsiveContainer>
           </Card>
-        </>}
+        )}
 
-        {/* ═══════════ PILLARS ═══════════ */}
-        {view === "pillars" && <>
-          <div style={{ fontSize: 12, color: T.textSoft, marginBottom: 16, lineHeight: 1.6 }}>
-            Which content pillar drives the most growth? Posts are matched to pillars from your Database categories.
-          </div>
-
-          {pillarData.length > 0 ? <>
-            {/* Pillar comparison chart */}
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="📊">Avg Impressions per Pillar</Heading>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={pillarData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="name" stroke={T.textDim} fontSize={11} />
-                  <YAxis stroke={T.textDim} fontSize={10} />
-                  <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v) => [v.toLocaleString()]} />
-                  <Bar dataKey="avgImp" radius={[4, 4, 0, 0]} name="Avg Impressions">
-                    {pillarData.map((d, i) => <Cell key={i} fill={PC[d.name] || PC[d.name.charAt(0).toUpperCase() + d.name.slice(1)] || T.textSoft} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-
-            {/* Pillar cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
-              {pillarData.map((d, i) => {
-                const color = PC[d.name] || PC[d.name.charAt(0).toUpperCase() + d.name.slice(1)] || T.textSoft;
-                return (
-                  <Card key={i} style={{ borderLeft: `3px solid ${color}` }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color, textTransform: "capitalize", marginBottom: 8 }}>{d.name}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>Posts</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.posts}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>Avg Imp</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.avgImp.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>Avg Eng Rate</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.avgEngRate.toFixed(1)}%</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>Total Likes</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.likes}</div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-
-            {/* Eng rate comparison */}
-            <Card>
-              <Heading icon="🔥">Engagement Rate by Pillar</Heading>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={pillarData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="name" stroke={T.textDim} fontSize={11} />
-                  <YAxis stroke={T.textDim} fontSize={10} unit="%" />
-                  <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v) => [`${v.toFixed(1)}%`]} />
-                  <Bar dataKey="avgEngRate" radius={[4, 4, 0, 0]} name="Avg Eng Rate">
-                    {pillarData.map((d, i) => <Cell key={i} fill={PC[d.name] || PC[d.name.charAt(0).toUpperCase() + d.name.slice(1)] || T.textSoft} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </> : (
-            <Card style={{ textAlign: "center", padding: 40 }}>
-              <div style={{ fontSize: 13, color: T.textDim, lineHeight: 1.6 }}>
-                No pillar data yet. Posts need Category tags in your Database to show pillar breakdown.
-                <br />Score posts with Claude and assign categories in Weekly Content.
-              </div>
-            </Card>
-          )}
-        </>}
-
-        {/* ═══════════ SCORE CHECK ═══════════ */}
-        {view === "scoring" && <>
-          <div style={{ fontSize: 12, color: T.textSoft, marginBottom: 16, lineHeight: 1.6 }}>
-            How well does Claude's AI scoring predict real post performance? Posts are matched by text between your Database (with AI scores) and X analytics.
-          </div>
-
-          {scored.length > 0 ? <>
-            {/* Score vs Reality chart */}
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="🎯">AI Score vs Real Engagement Rate</Heading>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={scoreVsReality}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="name" stroke={T.textDim} fontSize={9} />
-                  <YAxis stroke={T.textDim} fontSize={10} domain={[0, 10]} />
-                  <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
-                    labelFormatter={(l) => {
-                      const item = scoreVsReality.find(d => d.name === l);
-                      return item ? item.text.slice(0, 100) : l;
-                    }}
-                    formatter={(v, name) => [v.toFixed(1), name === "aiScore" ? "AI Predicted" : "Real Performance"]} />
-                  <Bar dataKey="aiScore" fill={T.purple} radius={[3, 3, 0, 0]} name="AI Predicted" />
-                  <Bar dataKey="realScore" fill={T.green} radius={[3, 3, 0, 0]} name="Real Performance" />
-                </BarChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 8, fontSize: 10, color: T.textSoft }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.purple} /> AI Predicted</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.green} /> Real Performance</span>
-              </div>
-            </Card>
-
-            {/* Detailed score table */}
-            <Card>
-              <Heading icon="📋">Score Breakdown</Heading>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {scored.sort((a, b) => b.imp - a.imp).map((p, i) => {
-                  const match = scoreVsReality.find(s => s.text === p.text);
-                  const diff = match ? match.aiScore - match.realScore : 0;
-                  const accuracy = Math.abs(diff) < 1.5 ? "good" : Math.abs(diff) < 3 ? "ok" : "off";
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          {/* ═══ PILLAR PERFORMANCE ═══ */}
+          <Card>
+            <Heading icon="🎯">Content Pillars</Heading>
+            {pillarData.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {pillarData.map((d, i) => {
+                  const color = PC[d.name] || PC[d.name.charAt(0).toUpperCase() + d.name.slice(1)] || T.textSoft;
                   return (
-                    <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px" }}>
-                      <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 6 }}>{p.text.slice(0, 150)}</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <Badge color={T.purple}>AI: {p.aiScore}</Badge>
-                        <Badge color={T.green}>{p.imp.toLocaleString()} imp</Badge>
-                        <Badge color={T.blue}>{p.engRate.toFixed(1)}% eng</Badge>
-                        <Badge color={accuracy === "good" ? T.green : accuracy === "ok" ? T.amber : T.red}>
-                          {accuracy === "good" ? "✓ Accurate" : accuracy === "ok" ? "~ Close" : "✕ Off"}
-                        </Badge>
+                    <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", borderLeft: `3px solid ${color}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color, textTransform: "capitalize" }}>{d.name}</span>
+                        <span style={{ fontSize: 10, color: T.textDim }}>{d.posts} posts</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <div><span style={{ fontSize: 9, color: T.textDim }}>Avg Imp</span><div style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{fmt(d.avgImp)}</div></div>
+                        <div><span style={{ fontSize: 9, color: T.textDim }}>Eng Rate</span><div style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.avgEngRate.toFixed(1)}%</div></div>
+                        <div><span style={{ fontSize: 9, color: T.textDim }}>Likes</span><div style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'Satoshi'" }}>{d.likes}</div></div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </Card>
-          </> : (
-            <Card style={{ textAlign: "center", padding: 40 }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>🤖</div>
-              <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 8 }}>No scored posts matched yet</div>
-              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, maxWidth: 500, margin: "0 auto" }}>
-                To see score accuracy:
-                <br />1. Score posts with "🤖 Claude" in Weekly Content
-                <br />2. Post them on X
-                <br />3. Upload your X Content CSV here
-                <br />Posts are matched by text to compare predictions vs reality.
+            ) : (
+              <div style={{ fontSize: 12, color: T.textDim, padding: 16, textAlign: "center" }}>
+                Assign categories to posts in Database to track pillar performance.
               </div>
-            </Card>
-          )}
-        </>}
-
-        {/* ═══════════ WEEKLY SUMMARY ═══════════ */}
-        {view === "summary" && (
-          <Card style={{ padding: 30 }}>
-            <Heading icon="📋">Weekly Summary</Heading>
-
-            {dailyData.length > 0 || originals.length > 0 ? <>
-              {/* Auto-generated insights */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 11, color: T.textDim, textTransform: "uppercase", marginBottom: 8 }}>This Week</div>
-                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.8 }}>
-                    <div>📊 <strong>{totalImp.toLocaleString()}</strong> impressions from <strong>{originals.length}</strong> original posts</div>
-                    <div>❤️ <strong>{totalLikes}</strong> likes · <strong>{totalEng}</strong> engagements</div>
-                    <div>📈 Avg engagement rate: <strong>{avgEngRate.toFixed(1)}%</strong></div>
-                    {netGrowth !== 0 && <div>👥 Net follower growth: <strong style={{ color: netGrowth > 0 ? T.green : T.red }}>{netGrowth > 0 ? "+" : ""}{netGrowth}</strong></div>}
-                    {bestDay && <div>🔥 Best day: <strong>{bestDay.date}</strong> ({bestDay.imp.toLocaleString()} imp)</div>}
-                  </div>
-                </div>
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 11, color: T.textDim, textTransform: "uppercase", marginBottom: 8 }}>Top Performer</div>
-                  {originals.length > 0 ? (() => {
-                    const top = [...originals].sort((a, b) => b.imp - a.imp)[0];
-                    return (
-                      <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>
-                        <div style={{ marginBottom: 6 }}>"{top.text.slice(0, 120)}..."</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          <Badge color={T.green}>{top.imp.toLocaleString()} imp</Badge>
-                          <Badge color={T.red}>{top.likes} likes</Badge>
-                          <Badge color={T.blue}>{top.engRate.toFixed(1)}%</Badge>
-                        </div>
-                      </div>
-                    );
-                  })() : <div style={{ color: T.textDim }}>No data</div>}
-                </div>
-              </div>
-
-              {/* Placeholder for custom weekly report */}
-              <div style={{ background: `${T.cyan}08`, border: `1px dashed ${T.cyan}40`, borderRadius: 10, padding: 20, textAlign: "center" }}>
-                <div style={{ fontSize: 13, color: T.cyan, fontWeight: 600, marginBottom: 4 }}>Weekly Report Generator</div>
-                <div style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6 }}>
-                  Space reserved for AI-generated weekly summary with trends, recommendations, and content strategy adjustments.
-                </div>
-              </div>
-            </> : (
-              <div style={{ textAlign: "center", padding: 20, color: T.textDim }}>Upload analytics CSVs to generate your weekly summary.</div>
             )}
           </Card>
+
+          {/* ═══ STRUCTURE PERFORMANCE ═══ */}
+          <Card>
+            <Heading icon="🧱">Post Structures</Heading>
+            {structData.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {structData.map((d, i) => (
+                  <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{d.name}</span>
+                      <span style={{ fontSize: 10, color: T.textDim }}>{d.posts} posts</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <Badge color={T.green}>{fmt(d.avgImp)} avg imp</Badge>
+                      <Badge color={T.blue}>{d.avgEngRate.toFixed(1)}% eng</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: T.textDim, padding: 16, textAlign: "center" }}>
+                Assign structures to posts to track which formats perform best.
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* ═══ SCORE VS REALITY ═══ */}
+        {scored.length > 0 && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="🤖">AI Score Accuracy</Heading>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scored.sort((a, b) => b.imp - a.imp).slice(0, 10).map(p => ({
+                name: p.text.slice(0, 20) + "...",
+                "AI Score": p.aiScore,
+                "Real": Math.min(10, p.engRate / 3),
+                text: p.text,
+              }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="name" stroke={T.textDim} fontSize={9} />
+                <YAxis stroke={T.textDim} fontSize={10} domain={[0, 10]} />
+                <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                  labelFormatter={(l) => { const i = scored.find(s => s.text.slice(0, 20) + "..." === l); return i ? i.text.slice(0, 100) : l; }} />
+                <Bar dataKey="AI Score" fill={T.purple} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Real" fill={T.green} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 6, fontSize: 10, color: T.textSoft }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.purple} /> AI Predicted</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.green} /> Real Performance</span>
+            </div>
+          </Card>
         )}
+
+        {/* ═══ WEEKLY TREND (multi-week) ═══ */}
+        {weeklyTrend.length > 1 && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📉">Week-over-Week Trend</Heading>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={weeklyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="week" stroke={T.textDim} fontSize={10} />
+                <YAxis stroke={T.textDim} fontSize={10} />
+                <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }} />
+                <Line type="monotone" dataKey="imp" stroke={T.green} strokeWidth={2} dot={{ r: 4 }} name="Impressions" />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
+
+        {/* ═══ PILLAR TREND (multi-week) ═══ */}
+        {pillarTrend.length > 1 && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📊">Pillar Trend Over Time</Heading>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={pillarTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="week" stroke={T.textDim} fontSize={10} />
+                <YAxis stroke={T.textDim} fontSize={10} />
+                <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }} />
+                {CATEGORIES.map(cat => (
+                  <Line key={cat} type="monotone" dataKey={cat} stroke={PC[cat] || T.textSoft} strokeWidth={2} dot={{ r: 3 }} name={cat} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 6, fontSize: 10 }}>
+              {CATEGORIES.map(cat => (
+                <span key={cat} style={{ display: "flex", alignItems: "center", gap: 4, color: T.textSoft }}>
+                  <Dot color={PC[cat] || T.textSoft} /> {cat}
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* ═══ TOP POSTS ═══ */}
+        <Card style={{ marginBottom: 16 }}>
+          <Heading icon="🏆">Top Posts This Week</Heading>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[...enriched].sort((a, b) => b.imp - a.imp).slice(0, 8).map((p, i) => (
+              <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: i < 3 ? T.green : T.textDim, fontFamily: "'Satoshi'", minWidth: 28 }}>#{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{p.text.slice(0, 150)}{p.text.length > 150 ? "..." : ""}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <Badge color={T.green}>{fmt(p.imp)} imp</Badge>
+                    <Badge color={T.red}>{p.likes} likes</Badge>
+                    <Badge color={T.blue}>{p.engRate.toFixed(1)}%</Badge>
+                    {p.category && <Badge color={PC[p.category] || T.textSoft}>{p.category}</Badge>}
+                    {p.aiScore > 0 && <Badge color={T.purple}>AI: {p.aiScore}</Badge>}
+                    {p.link && <a href={p.link} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.cyan }}>🔗</a>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* ═══ WEEKLY REPORT ═══ */}
+        <Card>
+          <Heading icon="📋" right={
+            <Btn small color={T.cyan} onClick={generateReport} disabled={reportLoading}>
+              {reportLoading ? "⏳ Generating..." : "🤖 Generate Weekly Report"}
+            </Btn>
+          }>Weekly Summary</Heading>
+
+          {/* Auto stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>This Week</div>
+              <div style={{ fontSize: 12, color: T.text, lineHeight: 1.8 }}>
+                📊 {fmt(current.dailyImp || current.totalImp)} imp<br/>
+                ❤️ {current.totalLikes} likes<br/>
+                📈 {current.avgEngRate.toFixed(1)}% avg eng<br/>
+                👥 {current.netFollows >= 0 ? "+" : ""}{current.netFollows} followers
+              </div>
+            </div>
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Consistency</div>
+              <div style={{ fontSize: 12, color: T.text, lineHeight: 1.8 }}>
+                ✍️ {current.originals.length} originals posted<br/>
+                📅 {current.daily.length} active days<br/>
+                🎯 {current.originals.length >= 7 ? <span style={{ color: T.green }}>On target</span> : <span style={{ color: T.amber }}>Below target (7/wk)</span>}
+              </div>
+            </div>
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Growth Rate</div>
+              <div style={{ fontSize: 12, color: T.text, lineHeight: 1.8 }}>
+                📈 {current.netFollows >= 0 ? "+" : ""}{current.netFollows}/week<br/>
+                🗓️ ~{Math.round(current.netFollows * 52)}/year projected<br/>
+                {current.netFollows > 0 ? <span style={{ color: T.green }}>Trending up</span> : <span style={{ color: T.red }}>Needs work</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Report */}
+          {weeklyReportText && (
+            <div style={{ background: T.purpleDim, border: `1px solid ${T.purple}30`, borderRadius: 10, padding: 16, fontSize: 13, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+              <div style={{ fontSize: 10, color: T.purple, fontWeight: 600, textTransform: "uppercase", marginBottom: 8 }}>🤖 Claude's Weekly Analysis</div>
+              {weeklyReportText}
+            </div>
+          )}
+        </Card>
       </>}
     </div>
   );
@@ -1139,7 +1232,7 @@ function TwitterPanel({ apiKey }) {
 
         {subTab === "research" && <DailyResearch account={account} />}
         {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
-        {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} />}
+        {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} />}
       </>}
     </div>
   );
