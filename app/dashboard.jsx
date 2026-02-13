@@ -383,6 +383,14 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   const [brandVoice, setBrandVoice] = useState(() => {
     try { return sessionStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
   });
+  const [goalTarget, setGoalTarget] = useState(() => {
+    try { return parseInt(sessionStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
+  });
+  const [goalCurrent, setGoalCurrent] = useState(() => {
+    try { return parseInt(sessionStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
+  });
+  const [goalDeadline] = useState("2025-12-31");
+  const [showGoalEdit, setShowGoalEdit] = useState(false);
   const TC = TABS_CONFIG_FN();
   const PC = PILLAR_COLORS_FN();
 
@@ -435,6 +443,14 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   // Actions
   const movePost = (id, to) => setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
   const delPost = (id) => setAllPosts(p => p.filter(x => x.id !== id));
+  const deleteAllInTab = (tab) => {
+    if (!confirm(`Delete ALL posts in ${tab}? This can't be undone.`)) return;
+    setAllPosts(p => p.filter(x => x.tab !== tab));
+  };
+  const saveGoal = (target, current) => {
+    setGoalTarget(target); setGoalCurrent(current);
+    try { sessionStorage.setItem("djangocmd_goal_target", target); sessionStorage.setItem("djangocmd_goal_current", current); } catch {}
+  };
   const setDay = (id, day) => setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
   const moveToBad = (id) => {
     const reason = prompt("Why is this post bad? (will be saved as feedback)");
@@ -693,6 +709,63 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
         ))}
       </div>
 
+      {/* GOAL + Delete All row */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "stretch" }}>
+        {/* GOAL Card */}
+        <Card style={{ flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>🎯 Goal</span>
+            <Btn small outline onClick={() => setShowGoalEdit(!showGoalEdit)}>✎</Btn>
+          </div>
+          {showGoalEdit ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>CURRENT</div>
+                <input type="number" value={goalCurrent} onChange={e => saveGoal(goalTarget, parseInt(e.target.value) || 0)}
+                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, width: 90, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: T.textSoft, marginBottom: 2 }}>TARGET</div>
+                <input type="number" value={goalTarget} onChange={e => saveGoal(parseInt(e.target.value) || 20000, goalCurrent)}
+                  style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, width: 90, fontFamily: "'IBM Plex Mono', monospace", outline: "none" }} />
+              </div>
+              <Btn small color={T.green} onClick={() => setShowGoalEdit(false)}>✓ Done</Btn>
+            </div>
+          ) : (() => {
+            const pct = goalTarget > 0 ? Math.min(100, (goalCurrent / goalTarget) * 100) : 0;
+            const remaining = goalTarget - goalCurrent;
+            const now = new Date();
+            const end = new Date(goalDeadline);
+            const daysLeft = Math.max(1, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+            const perDay = remaining > 0 ? Math.ceil(remaining / daysLeft) : 0;
+            const onTrack = perDay <= 30;
+            return (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.textSoft, marginBottom: 4 }}>
+                  <span>{goalCurrent.toLocaleString()} / {goalTarget.toLocaleString()} followers</span>
+                  <span>{pct.toFixed(1)}%</span>
+                </div>
+                <div style={{ height: 8, background: T.bg2, borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${T.green}, ${T.cyan})`, borderRadius: 4, transition: "width .3s" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}>
+                  <span style={{ color: T.textSoft }}>{daysLeft} days left · need <strong style={{ color: T.text }}>+{perDay}/day</strong></span>
+                  <Badge color={onTrack ? T.green : T.amber}>{onTrack ? "✓ on track" : "⚠ behind pace"}</Badge>
+                </div>
+                {goalCurrent === 0 && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>Click ✎ to set your current follower count</div>}
+              </div>
+            );
+          })()}
+        </Card>
+
+        {/* Delete All */}
+        {counts[activeTab] > 0 && (
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
+          </div>
+        )}
+      </div>
+
       {/* Add Post */}
       {isDraft && (
         <div style={{ marginBottom: 16 }}>
@@ -778,6 +851,7 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
                   <Btn small color={T.green} onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
                   <Btn small color={T.purple} outline onClick={() => movePost(p.id, "DATABASE")}>◈ → DB</Btn>
                   <Btn small color={T.red} outline onClick={() => moveToBad(p.id)}>✕ → Bad</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
                 {isPost && <>
                   <select value={p.day} onChange={e => setDay(p.id, e.target.value)} style={{ ...sel, fontSize: 11, padding: "4px 8px" }}>
@@ -787,10 +861,12 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
                   <Btn small color={T.green} onClick={() => movePost(p.id, "USED")}>✓ → Used</Btn>
                   <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
                   <Btn small color={T.red} outline onClick={() => moveToBad(p.id)}>✕ → Bad</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
                 {isDb && <>
                   <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
                   <Btn small color={T.green} outline onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
                 {isBad && <>
                   <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
@@ -798,6 +874,7 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
                 </>}
                 {isUsed && <>
                   <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
 
                 {!isUsed && <>
