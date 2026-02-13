@@ -1037,9 +1037,18 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
 const WEEK_STORAGE_KEY = "djangocmd_weekly_history";
 
 function getWeekLabel(dateStr) {
-  // "Thu, Feb 12, 2026" -> "2026-W07"
+  // Handles: "Thu, Feb 12, 2026", "2026-02-12", "Feb 12, 2026", "02/12/2026", "12/02/2026"
+  if (!dateStr) return null;
   try {
-    const d = new Date(dateStr);
+    // Clean up common CSV artifacts
+    let clean = dateStr.trim().replace(/^["']|["']$/g, "");
+    // Try parsing directly
+    let d = new Date(clean);
+    // If that fails, try removing day name prefix
+    if (isNaN(d)) {
+      clean = clean.replace(/^\w+,\s*/, ""); // Remove "Thu, " prefix
+      d = new Date(clean);
+    }
     if (isNaN(d)) return null;
     const oneJan = new Date(d.getFullYear(), 0, 1);
     const wk = Math.ceil(((d - oneJan) / 86400000 + oneJan.getDay() + 1) / 7);
@@ -1070,12 +1079,17 @@ function WeeklyAnalytics({ sheetData, loading, apiKey }) {
       const rows = parseCSV(ev.target.result, "CONTENT").rows;
       // Filter: originals only, with impressions
       const originals = rows.filter(r => {
-        const text = r["Post text"] || r["Post"] || "";
-        return !text.startsWith("@") && (parseInt(r["Impressions"] || 0) || 0) > 0;
+        const text = r["Post text"] || r["Post"] || r["Tweet text"] || "";
+        return !text.startsWith("@") && (parseInt(r["Impressions"] || r["impressions"] || 0) || 0) > 0;
       });
-      // Detect week from first row date
-      const firstDate = rows[0]?.["Date"] || "";
-      const week = getWeekLabel(firstDate) || `upload-${Date.now()}`;
+      // Detect week - try multiple date columns, try all rows until we get a valid date
+      let week = null;
+      for (const row of rows) {
+        const dateVal = row["Date"] || row["date"] || row["Post date"] || "";
+        week = getWeekLabel(dateVal);
+        if (week) break;
+      }
+      if (!week) week = `upload-${Date.now()}`;
       setHistory(prev => {
         const next = { ...prev };
         if (!next[week]) next[week] = {};
@@ -1093,8 +1107,13 @@ function WeeklyAnalytics({ sheetData, loading, apiKey }) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const rows = parseCSV(ev.target.result, "OVERVIEW").rows;
-      const firstDate = rows[0]?.["Date"] || "";
-      const week = getWeekLabel(firstDate) || `upload-${Date.now()}`;
+      let week = null;
+      for (const row of rows) {
+        const dateVal = row["Date"] || row["date"] || "";
+        week = getWeekLabel(dateVal);
+        if (week) break;
+      }
+      if (!week) week = `upload-${Date.now()}`;
       setHistory(prev => {
         const next = { ...prev };
         if (!next[week]) next[week] = {};
@@ -1116,27 +1135,27 @@ function WeeklyAnalytics({ sheetData, loading, apiKey }) {
     if (!wk || !history[wk]) return null;
     const h = history[wk];
     const originals = (h.originals || []).map(r => {
-      const imp = parseInt(r["Impressions"] || 0) || 0;
+      const imp = parseInt(r["Impressions"] || r["impressions"] || 0) || 0;
       return {
-        text: r["Post text"] || r["Post"] || "",
-        imp, likes: parseInt(r["Likes"] || 0) || 0,
-        eng: parseInt(r["Engagements"] || 0) || 0,
-        bookmarks: parseInt(r["Bookmarks"] || 0) || 0,
-        replies: parseInt(r["Replies"] || 0) || 0,
-        reposts: parseInt(r["Reposts"] || 0) || 0,
-        follows: parseInt(r["New follows"] || 0) || 0,
-        link: r["Post Link"] || r["Post link"] || "",
-        date: r["Date"] || "",
-        engRate: imp > 0 ? (parseInt(r["Engagements"] || 0) || 0) / imp * 100 : 0,
+        text: r["Post text"] || r["Post"] || r["Tweet text"] || "",
+        imp, likes: parseInt(r["Likes"] || r["likes"] || 0) || 0,
+        eng: parseInt(r["Engagements"] || r["engagements"] || 0) || 0,
+        bookmarks: parseInt(r["Bookmarks"] || r["bookmarks"] || 0) || 0,
+        replies: parseInt(r["Replies"] || r["replies"] || 0) || 0,
+        reposts: parseInt(r["Reposts"] || r["reposts"] || r["Retweets"] || 0) || 0,
+        follows: parseInt(r["New follows"] || r["new follows"] || r["Follows"] || 0) || 0,
+        link: r["Post Link"] || r["Post link"] || r["Tweet link"] || "",
+        date: r["Date"] || r["date"] || r["Post date"] || "",
+        engRate: imp > 0 ? (parseInt(r["Engagements"] || r["engagements"] || 0) || 0) / imp * 100 : 0,
       };
     });
     const daily = (h.daily || []).map(r => ({
-      date: (r["Date"] || "").replace(/,\s*\d{4}$/, "").replace(/^\w+,\s*/, ""),
-      imp: parseInt(r["Impressions"] || 0) || 0,
-      likes: parseInt(r["Likes"] || 0) || 0,
-      eng: parseInt(r["Engagements"] || 0) || 0,
-      follows: parseInt(r["New follows"] || 0) || 0,
-      unfollows: parseInt(r["Unfollows"] || 0) || 0,
+      date: (r["Date"] || r["date"] || "").replace(/,\s*\d{4}$/, "").replace(/^\w+,\s*/, ""),
+      imp: parseInt(r["Impressions"] || r["impressions"] || 0) || 0,
+      likes: parseInt(r["Likes"] || r["likes"] || 0) || 0,
+      eng: parseInt(r["Engagements"] || r["engagements"] || 0) || 0,
+      follows: parseInt(r["New follows"] || r["new follows"] || r["Follows"] || 0) || 0,
+      unfollows: parseInt(r["Unfollows"] || r["unfollows"] || 0) || 0,
     })).reverse();
 
     const totalImp = originals.reduce((s, p) => s + p.imp, 0);
@@ -1322,6 +1341,7 @@ Tone: direct, no fluff, like a coach giving real talk. Use lowercase.`;
               <input type="file" accept=".json" onChange={importHistory} style={{ display: "none" }} />
               <Btn small outline style={{ pointerEvents: "none" }}>↑ Import</Btn>
             </label>
+            {weeks.length > 0 && <Btn small color={T.red} outline onClick={() => { if (confirm("Clear ALL analytics history?")) { setHistory({}); } }}>🗑 Clear</Btn>}
           </div>
         </div>
         {!hasData && <div style={{ marginTop: 10, fontSize: 12, color: T.textSoft }}>Export CSVs from X → Analytics → Posts / Account Overview. Replies are auto-filtered.</div>}
