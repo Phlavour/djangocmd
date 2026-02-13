@@ -83,7 +83,12 @@ function parseCSV(text) {
     const row = {};
     headers.forEach((h, i) => { row[h] = values[i] || ""; });
     return row;
-  }).filter(row => Object.values(row).some(v => v && v.trim()));
+  }).filter(row => {
+    // Row must have actual content in Post or Category column (not just empty/whitespace)
+    const post = row["Post"] || row["Post text"] || "";
+    const cat = row["Category"] || "";
+    return (post.trim().length > 2) || (cat.trim().length > 1);
+  });
 
   return { headers, rows };
 }
@@ -336,37 +341,96 @@ function DailyResearch({ account }) {
 
 function WeeklyContent({ sheetData, loading, onRefresh }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
+  const [sortBy, setSortBy] = useState("default");
+  const [newPostText, setNewPostText] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [localPosts, setLocalPosts] = useState([]); // locally added posts for DRAFT
   const TC = TABS_CONFIG_FN();
 
   // Get rows for current tab
   const tabData = sheetData[activeTab];
-  const rows = tabData?.rows || [];
+  let rows = tabData?.rows || [];
+
+  // Merge local posts into DRAFT
+  if (activeTab === "DRAFT") {
+    rows = [...rows, ...localPosts];
+  }
+
+  // Sorting
+  if (sortBy === "category") {
+    rows = [...rows].sort((a, b) => (a["Category"] || "").localeCompare(b["Category"] || ""));
+  } else if (sortBy === "score-desc") {
+    rows = [...rows].sort((a, b) => parseFloat(b["Score"] || 0) - parseFloat(a["Score"] || 0));
+  } else if (sortBy === "score-asc") {
+    rows = [...rows].sort((a, b) => parseFloat(a["Score"] || 0) - parseFloat(b["Score"] || 0));
+  } else if (sortBy === "impressions") {
+    rows = [...rows].sort((a, b) => parseInt(b["Impressions"] || 0) - parseInt(a["Impressions"] || 0));
+  } else if (sortBy === "engagement") {
+    rows = [...rows].sort((a, b) => parseInt(b["Engagements"] || 0) - parseInt(a["Engagements"] || 0));
+  }
 
   // Count per tab
   const counts = {};
   STATUS_ORDER.forEach(t => {
-    counts[t] = (sheetData[t]?.rows || []).length;
+    let c = (sheetData[t]?.rows || []).length;
+    if (t === "DRAFT") c += localPosts.length;
+    counts[t] = c;
   });
 
-  // Determine columns based on tab
-  const isBadTab = activeTab === "BAD";
   const isUsedTab = activeTab === "USED";
+  const isBadTab = activeTab === "BAD";
+
+  const addLocalPost = () => {
+    if (!newPostText.trim()) return;
+    setLocalPosts(prev => [...prev, {
+      Category: "", Structure: "", Post: newPostText.trim(),
+      Notes: "Added from dashboard", Score: "", _local: true,
+    }]);
+    setNewPostText("");
+    setShowAdd(false);
+  };
+
+  const removeLocalPost = (idx) => {
+    setLocalPosts(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Sort options based on tab
+  const sortOptions = isUsedTab
+    ? [
+        { value: "default", label: "Default" },
+        { value: "impressions", label: "Impressions ↓" },
+        { value: "engagement", label: "Engagement ↓" },
+      ]
+    : [
+        { value: "default", label: "Default" },
+        { value: "category", label: "Category A-Z" },
+        { value: "score-desc", label: "Score ↓" },
+        { value: "score-asc", label: "Score ↑" },
+      ];
 
   return (
     <div>
-      {/* Refresh button */}
+      {/* Refresh + Sort */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
           {loading ? <LoadingDots /> : `Live data from Google Sheets`}
         </div>
-        <Btn small color={T.cyan} onClick={onRefresh} disabled={loading}>↻ Refresh</Btn>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+            background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px",
+            color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer",
+          }}>
+            {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <Btn small color={T.cyan} onClick={onRefresh} disabled={loading}>↻ Refresh</Btn>
+        </div>
       </div>
 
       {/* Content Tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
-            active={activeTab === tab} onClick={() => setActiveTab(tab)}
+            active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy("default"); }}
             color={TC[tab].color} count={counts[tab]}
           />
         ))}
@@ -388,6 +452,38 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
         ))}
       </div>
 
+      {/* Add Post (DRAFT only) */}
+      {activeTab === "DRAFT" && (
+        <div style={{ marginBottom: 16 }}>
+          {showAdd ? (
+            <Card>
+              <Heading icon="✎">New Draft Post</Heading>
+              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
+                placeholder="write your post fam..."
+                style={{
+                  width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`,
+                  borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace",
+                  resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box",
+                }}
+                onFocus={e => e.target.style.borderColor = T.green}
+                onBlur={e => e.target.style.borderColor = T.border}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <Btn color={T.green} onClick={addLocalPost}>Add to Draft</Btn>
+                <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
+              </div>
+              <div style={{ fontSize: 10, color: T.textDim, marginTop: 8 }}>
+                💡 Posts added here are local only. Copy them to Google Sheets to make them permanent.
+              </div>
+            </Card>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <Btn color={T.green} onClick={() => setShowAdd(true)}>+ Add New Post</Btn>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Posts List */}
       {loading ? (
         <div style={{ textAlign: "center", padding: 40 }}><LoadingDots /></div>
@@ -408,38 +504,93 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
             const score = row["Score"] || "";
             const scheduled = row["Scheduled"] || "";
             const status = row["Status"] || "";
+            const isLocal = row._local;
+
+            // USED tab analytics fields
+            const impressions = row["Impressions"] || "";
+            const likes = row["Likes"] || "";
+            const engagements = row["Engagements"] || "";
+            const bookmarks = row["Bookmarks"] || "";
+            const replies = row["Replies"] || "";
+            const reposts = row["Reposts"] || "";
+            const profileVisits = row["Profile visits"] || "";
+            const urlClicks = row["URL Clicks"] || "";
+            const postLink = row["Post Link"] || row["Post link"] || "";
+            const newFollows = row["New follows"] || "";
 
             return (
               <div key={idx} style={{
-                background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
-                padding: 16, transition: "all .12s",
+                background: isLocal ? `${T.green}08` : T.surface,
+                border: `1px solid ${isLocal ? T.greenMid : T.border}`,
+                borderRadius: 10, padding: 16, transition: "all .12s",
               }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = (TC[activeTab]?.color || T.green) + "40"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = T.border}
+                onMouseLeave={e => e.currentTarget.style.borderColor = isLocal ? T.greenMid : T.border}
               >
+                {/* Post text */}
                 <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>
                   {post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty post</span>}
                 </div>
+
+                {/* Tags row */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    {cat && <Badge color={PC[cat] || T.textSoft}>{cat}</Badge>}
+                    {cat && <Badge color={PC[cat] || PC[cat.charAt(0).toUpperCase() + cat.slice(1)] || T.textSoft}>{cat}</Badge>}
                     {structure && <Badge color={T.textDim}>{structure}</Badge>}
                     {score && <Badge color={parseFloat(score) >= 8.5 ? T.green : parseFloat(score) >= 7 ? T.amber : T.textSoft}>Score {score}</Badge>}
                     {scheduled && <Badge color={T.cyan}>📅 {scheduled}</Badge>}
                     {status && <Badge color={status === "Posted" ? T.green : T.amber}>{status}</Badge>}
-                  </div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {notes && (
-                      <span style={{ fontSize: 11, color: T.textSoft, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                        title={notes}>
-                        💡 {notes}
-                      </span>
+                    {isLocal && <Badge color={T.green}>📌 Local Draft</Badge>}
+                    {postLink && (
+                      <a href={postLink} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: T.cyan, textDecoration: "none" }}>
+                        🔗 View on X
+                      </a>
                     )}
                   </div>
                 </div>
+
+                {/* USED tab: analytics metrics row */}
+                {isUsedTab && impressions && (
+                  <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+                    {[
+                      { label: "Impressions", val: impressions, color: T.green },
+                      { label: "Likes", val: likes, color: T.red },
+                      { label: "Engagements", val: engagements, color: T.blue },
+                      { label: "Bookmarks", val: bookmarks, color: T.amber },
+                      { label: "Replies", val: replies, color: T.cyan },
+                      { label: "Reposts", val: reposts, color: T.purple },
+                      { label: "Profile Visits", val: profileVisits, color: T.textSoft },
+                      { label: "New Follows", val: newFollows, color: T.green },
+                      { label: "URL Clicks", val: urlClicks, color: T.cyan },
+                    ].filter(m => m.val && m.val !== "0").map((m, mi) => (
+                      <div key={mi} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase" }}>{m.label}:</span>
+                        <span style={{ fontSize: 12, color: m.color, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace" }}>
+                          {parseInt(m.val).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Notes */}
+                {notes && !isUsedTab && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: T.textSoft }}>
+                    💡 {notes}
+                  </div>
+                )}
+
+                {/* BAD tab: how to fix */}
                 {isBadTab && howToFix && (
                   <div style={{ marginTop: 8, fontSize: 11, color: T.amber, background: T.amberDim, padding: "6px 10px", borderRadius: 6 }}>
                     🔧 Fix: {howToFix}
+                  </div>
+                )}
+
+                {/* Remove button for local posts */}
+                {isLocal && (
+                  <div style={{ marginTop: 8 }}>
+                    <Btn small color={T.red} outline onClick={() => removeLocalPost(localPosts.indexOf(row))}>✕ Remove</Btn>
                   </div>
                 )}
               </div>
@@ -450,9 +601,8 @@ function WeeklyContent({ sheetData, loading, onRefresh }) {
 
       {/* Info note */}
       <div style={{ marginTop: 20, padding: 14, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, color: T.textSoft, lineHeight: 1.6 }}>
-        💡 Data loaded live from <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer" style={{ color: T.cyan }}>Google Sheets</a>. 
-        To move posts between tabs, edit directly in Sheets — changes appear here after refresh. 
-        Backend integration (auto-move from dashboard) coming in Phase 2.
+        💡 Data loaded live from <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer" style={{ color: T.cyan }}>Google Sheets</a>.
+        To move posts between tabs, edit directly in Sheets — changes appear here after refresh.
       </div>
     </div>
   );
@@ -784,7 +934,7 @@ function BotsPlaceholder() {
 export default function App() {
   const [nav, setNav] = useState("twitter");
   const [time, setTime] = useState(new Date());
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   T = isDark ? DARK : LIGHT;
 
@@ -859,11 +1009,11 @@ export default function App() {
             onMouseEnter={e => e.currentTarget.style.borderColor = T.green}
             onMouseLeave={e => e.currentTarget.style.borderColor = T.border}
           >
-            <span style={{ transition: "all .3s", transform: isDark ? "rotate(0deg)" : "rotate(180deg)", display: "inline-block" }}>
-              {isDark ? "☀" : "☾"}
+            <span style={{ transition: "all .3s", transform: isDark ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block" }}>
+              {isDark ? "☾" : "☀"}
             </span>
             <span style={{ fontSize: 10, color: T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>
-              {isDark ? "day" : "nite"}
+              {isDark ? "nite" : "day"}
             </span>
           </button>
           <div style={{
