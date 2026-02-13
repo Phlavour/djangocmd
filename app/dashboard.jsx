@@ -1245,18 +1245,7 @@ function TwitterPanel({ apiKey }) {
 // PLACEHOLDER PANELS
 // ═══════════════════════════════════════════════════════════════
 
-function HealthPanel /() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>♥</div>
-      <div style={{ fontSize: 18, color: T.text, fontWeight: 600, fontFamily: "'Satoshi', sans-serif", marginBottom: 8 }}>Health Panel</div>
-      <div style={{ fontSize: 13, color: T.textSoft, textAlign: "center", maxWidth: 400, lineHeight: 1.6 }}>
-        Training plans, diet tracking, grocery lists & weekly progress monitoring. Coming soon fam.
-      </div>
-      <Badge color={T.amber}>COMING SOON</Badge>
-    </div>
-  );
-}
+// HealthPanel imported from './health'
 
 function BotsPlaceholder() {
   return (
@@ -1448,7 +1437,7 @@ export default function App() {
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
-          DjangoCMD v1.7 · local mode · see you on the timeline, xoxo
+          DjangoCMD v2.0 · health panel live · see you on the timeline, xoxo
         </span>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
           gm fam · {time.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
