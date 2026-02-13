@@ -521,7 +521,6 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   };
 
   // Save ALL current posts to Supabase (initial import from Sheets)
-  const [saving, setSaving] = useState(false);
   const saveAllToSupa = async () => {
     if (!supa || !allPosts) return;
     if (!confirm(`Import ${allPosts.length} posts to Supabase? This will replace any existing data.`)) return;
