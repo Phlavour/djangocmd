@@ -367,7 +367,7 @@ function DailyResearch({ account }) {
 // WEEKLY CONTENT — local state management + Google Sheets import
 // ═══════════════════════════════════════════════════════════════
 
-function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
+function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("default");
   const [newPostText, setNewPostText] = useState("");
@@ -383,16 +383,48 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
   const [brandVoice, setBrandVoice] = useState(() => {
     try { return sessionStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
   });
-  const [goalTarget, setGoalTarget] = useState(() => {
-    try { return parseInt(sessionStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
-  });
-  const [goalCurrent, setGoalCurrent] = useState(() => {
-    try { return parseInt(sessionStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
-  });
+  const [goalTarget, setGoalTarget] = useState(20000);
+  const [goalCurrent, setGoalCurrent] = useState(0);
   const [goalDeadline] = useState("2025-12-31");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
+  const [supaLoaded, setSupaLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
   const TC = TABS_CONFIG_FN();
   const PC = PILLAR_COLORS_FN();
+
+  // Load from Supabase on mount
+  useEffect(() => {
+    if (!supa || supaLoaded) return;
+    (async () => {
+      try {
+        // Load posts
+        const posts = await supa.get("posts", "order=created_at.asc&limit=5000");
+        if (Array.isArray(posts) && posts.length > 0) {
+          setAllPosts(posts.map(p => ({
+            id: p.id, tab: p.tab, category: p.category, structure: p.structure,
+            post: p.post, notes: p.notes, score: p.score, howToFix: p.how_to_fix,
+            day: p.day, postLink: p.post_link, impressions: p.impressions,
+            likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
+            replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
+            newFollows: p.new_follows, urlClicks: p.url_clicks, _supaId: p.id,
+          })));
+        }
+        // Load goal
+        const goals = await supa.get("goal", "account=eq.@django_crypto");
+        if (Array.isArray(goals) && goals[0]) {
+          setGoalTarget(goals[0].target_followers);
+          setGoalCurrent(goals[0].current_followers);
+        }
+        // Load brand voice
+        const bv = await supa.get("settings", "key=eq.brand_voice");
+        if (Array.isArray(bv) && bv[0]?.value) {
+          setBrandVoice(bv[0].value);
+          try { sessionStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
+        }
+        setSupaLoaded(true);
+      } catch (err) { console.error("Supabase load error:", err); setSupaLoaded(true); }
+    })();
+  }, [supa, supaLoaded]);
 
   // Initialize from Sheets
   useEffect(() => {
@@ -441,21 +473,94 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
     isPost = activeTab === "POST", isDraft = activeTab === "DRAFT", isDb = activeTab === "DATABASE";
 
   // Actions
-  const movePost = (id, to) => setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
-  const delPost = (id) => setAllPosts(p => p.filter(x => x.id !== id));
+  const movePost = (id, to) => {
+    setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
+    const post = allPosts?.find(x => x.id === id);
+    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: to });
+  };
+  const delPost = (id) => {
+    const post = allPosts?.find(x => x.id === id);
+    setAllPosts(p => p.filter(x => x.id !== id));
+    if (supa && post?._supaId) supa.del("posts", `id=eq.${post._supaId}`);
+  };
   const deleteAllInTab = (tab) => {
     if (!confirm(`Delete ALL posts in ${tab}? This can't be undone.`)) return;
     setAllPosts(p => p.filter(x => x.tab !== tab));
+    if (supa) supa.del("posts", `tab=eq.${tab}`);
   };
   const saveGoal = (target, current) => {
     setGoalTarget(target); setGoalCurrent(current);
-    try { sessionStorage.setItem("djangocmd_goal_target", target); sessionStorage.setItem("djangocmd_goal_current", current); } catch {}
+    if (supa) supa.upsert("goal", { account: "@django_crypto", target_followers: target, current_followers: current, deadline: goalDeadline });
   };
-  const setDay = (id, day) => setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
+
+  // Save new posts to Supabase
+  const savePostsToSupa = async (posts) => {
+    if (!supa || !posts.length) return;
+    try {
+      const rows = posts.map(p => ({
+        tab: p.tab, category: p.category, structure: p.structure, post: p.post,
+        notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
+        post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
+        engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
+        reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
+        url_clicks: p.urlClicks || "", account: "@django_crypto",
+      }));
+      const saved = await supa.post("posts", rows);
+      if (Array.isArray(saved)) {
+        setAllPosts(prev => {
+          const updated = [...(prev || [])];
+          saved.forEach((s, i) => {
+            const localPost = posts[i];
+            const idx = updated.findIndex(p => p.id === localPost.id);
+            if (idx >= 0) updated[idx] = { ...updated[idx], _supaId: s.id };
+          });
+          return updated;
+        });
+      }
+    } catch (err) { console.error("Save error:", err); }
+  };
+
+  // Save ALL current posts to Supabase (initial import from Sheets)
+  const [saving, setSaving] = useState(false);
+  const saveAllToSupa = async () => {
+    if (!supa || !allPosts) return;
+    if (!confirm(`Import ${allPosts.length} posts to Supabase? This will replace any existing data.`)) return;
+    setSaving(true);
+    try {
+      await supa.del("posts", "id=gt.0");
+      const rows = allPosts.map(p => ({
+        tab: p.tab, category: p.category, structure: p.structure, post: p.post,
+        notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
+        post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
+        engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
+        reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
+        url_clicks: p.urlClicks || "", account: "@django_crypto",
+      }));
+      for (let i = 0; i < rows.length; i += 50) {
+        const saved = await supa.post("posts", rows.slice(i, i + 50));
+        if (Array.isArray(saved)) {
+          setAllPosts(prev => {
+            const updated = [...(prev || [])];
+            saved.forEach((s, j) => { if (updated[i + j]) updated[i + j] = { ...updated[i + j], _supaId: s.id, id: s.id }; });
+            return updated;
+          });
+        }
+      }
+      alert(`✅ ${rows.length} posts saved to Supabase!`);
+    } catch (err) { alert("Error: " + err.message); }
+    setSaving(false);
+  };
+  const setDay = (id, day) => {
+    setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
+    const post = allPosts?.find(x => x.id === id);
+    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { day });
+  };
   const moveToBad = (id) => {
     const reason = prompt("Why is this post bad? (will be saved as feedback)");
-    if (reason === null) return; // cancelled
+    if (reason === null) return;
     setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: "BAD", notes: reason || "", howToFix: "" } : x));
+    const post = allPosts?.find(x => x.id === id);
+    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: "BAD", notes: reason || "", how_to_fix: "" });
   };
 
   const addPost = () => {
@@ -499,6 +604,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey }) {
       const text = ev.target.result;
       setBrandVoice(text);
       try { sessionStorage.setItem("djangocmd_brand_voice", text); } catch {}
+      if (supa) supa.upsert("settings", { key: "brand_voice", value: text });
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -627,6 +733,8 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
       setGenProgress(`✅ ${newPosts.length} posts generated & scored → DRAFT`);
       setActiveTab("DRAFT");
       setSortBy("score-desc");
+      // Auto-save to Supabase
+      if (supa) savePostsToSupa(newPosts);
     } else {
       setGenProgress("❌ No posts generated. Check API key and try again.");
     }
@@ -647,11 +755,16 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
     <div>
       {/* Top */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{allPosts.length} posts · local mode</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{allPosts.length} posts · {supa ? "supabase" : "local mode"}</div>
+          {supa && <Dot color={T.green} pulse />}
+          {saving && <Badge color={T.amber}>saving...</Badge>}
+        </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
             {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
+          {supa && <Btn small color={T.purple} onClick={saveAllToSupa} disabled={saving}>💾 Save All to Supabase</Btn>}
           <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
       </div>
@@ -1441,7 +1554,7 @@ Tone: direct, no fluff, like a coach giving real talk. Use lowercase.`;
 // TWITTER PANEL
 // ═══════════════════════════════════════════════════════════════
 
-function TwitterPanel({ apiKey }) {
+function TwitterPanel({ apiKey, supa }) {
   const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
@@ -1486,7 +1599,7 @@ function TwitterPanel({ apiKey }) {
         </div>
 
         {subTab === "research" && <DailyResearch account={account} />}
-        {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} />}
+        {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} supa={supa} />}
         {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} />}
       </>}
     </div>
@@ -2061,8 +2174,16 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => {
     try { return window.sessionStorage.getItem("claude_key") || ""; } catch { return ""; }
   });
+  const [supaUrl, setSupaUrl] = useState(() => {
+    try { return window.localStorage.getItem("supa_url") || ""; } catch { return ""; }
+  });
+  const [supaKey, setSupaKey] = useState(() => {
+    try { return window.localStorage.getItem("supa_key") || ""; } catch { return ""; }
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [keyInput, setKeyInput] = useState("");
+  const [supaUrlInput, setSupaUrlInput] = useState("");
+  const [supaKeyInput, setSupaKeyInput] = useState("");
 
   T = isDark ? DARK : LIGHT;
 
@@ -2073,9 +2194,23 @@ export default function App() {
 
   const saveKey = () => {
     setApiKey(keyInput);
+    setSupaUrl(supaUrlInput);
+    setSupaKey(supaKeyInput);
     try { window.sessionStorage.setItem("claude_key", keyInput); } catch {}
+    try { window.localStorage.setItem("supa_url", supaUrlInput); window.localStorage.setItem("supa_key", supaKeyInput); } catch {}
     setShowSettings(false);
   };
+
+  // Supabase helper
+  const supa = (supaUrl && supaKey) ? {
+    url: supaUrl,
+    headers: { "apikey": supaKey, "Authorization": `Bearer ${supaKey}`, "Content-Type": "application/json", "Prefer": "return=representation" },
+    async get(table, params = "") { const r = await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { headers: this.headers }); return r.json(); },
+    async post(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
+    async patch(table, params, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "PATCH", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
+    async del(table, params) { await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "DELETE", headers: this.headers }); },
+    async upsert(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: { ...this.headers, "Prefer": "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(data) }); return r.json(); },
+  } : null;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "'Satoshi', 'Segoe UI', sans-serif" }}>
@@ -2133,7 +2268,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <Dot color={T.green} pulse />
-            <span style={{ fontSize: 10, color: T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>sheets connected</span>
+            <span style={{ fontSize: 10, color: T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>{supa ? "supabase" : "sheets"} connected</span>
           </div>
           <button onClick={() => setIsDark(d => !d)} style={{
             background: T.card, border: `1px solid ${T.border}`, borderRadius: 20,
@@ -2151,7 +2286,7 @@ export default function App() {
             </span>
           </button>
           {/* Settings */}
-          <button onClick={() => { setKeyInput(apiKey); setShowSettings(true); }} style={{
+          <button onClick={() => { setKeyInput(apiKey); setSupaUrlInput(supaUrl); setSupaKeyInput(supaKey); setShowSettings(true); }} style={{
             background: apiKey ? T.greenDim : T.card, border: `1px solid ${apiKey ? T.greenMid : T.border}`,
             borderRadius: 20, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 14,
           }}
@@ -2174,7 +2309,7 @@ export default function App() {
 
       {/* CONTENT */}
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
-        {nav === "twitter" && <TwitterPanel apiKey={apiKey} />}
+        {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} />}
         {nav === "health" && <HealthPanel T={T} />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
@@ -2191,6 +2326,17 @@ export default function App() {
             padding: 28, width: 440, maxWidth: "90vw",
           }} onClick={e => e.stopPropagation()}>
             <Heading icon="⚙">Settings</Heading>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>Supabase URL</div>
+              <input value={supaUrlInput} onChange={e => setSupaUrlInput(e.target.value)} placeholder="https://xxxxx.supabase.co"
+                style={{ width: "100%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box", marginBottom: 10 }}
+                onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
+              <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>Supabase Anon Key</div>
+              <input type="password" value={supaKeyInput} onChange={e => setSupaKeyInput(e.target.value)} placeholder="eyJhb..."
+                style={{ width: "100%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box" }}
+                onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
+              {supaUrl && supaKey && <div style={{ marginTop: 6, fontSize: 11, color: T.green, display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.green} pulse /> Supabase connected</div>}
+            </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>Claude API Key</div>
               <div style={{ fontSize: 11, color: T.textSoft, marginBottom: 8, lineHeight: 1.5 }}>
@@ -2227,7 +2373,7 @@ export default function App() {
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
-          DjangoCMD v2.2 · health panel live · see you on the timeline, xoxo
+          DjangoCMD v3.0 · supabase backend · see you on the timeline, xoxo
         </span>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
           gm fam · {time.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
