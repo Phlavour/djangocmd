@@ -381,10 +381,14 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   const [genLoading, setGenLoading] = useState(false);
   const [genProgress, setGenProgress] = useState("");
   const [brandVoice, setBrandVoice] = useState(() => {
-    try { return sessionStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
+    try { return localStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
   });
-  const [goalTarget, setGoalTarget] = useState(20000);
-  const [goalCurrent, setGoalCurrent] = useState(0);
+  const [goalTarget, setGoalTarget] = useState(() => {
+    try { return parseInt(localStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
+  });
+  const [goalCurrent, setGoalCurrent] = useState(() => {
+    try { return parseInt(localStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
+  });
   const [goalDeadline] = useState("2027-01-01");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
   const [supaLoaded, setSupaLoaded] = useState(false);
@@ -414,12 +418,13 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
         if (Array.isArray(goals) && goals[0]) {
           setGoalTarget(goals[0].target_followers);
           setGoalCurrent(goals[0].current_followers);
+          try { localStorage.setItem("djangocmd_goal_target", goals[0].target_followers); localStorage.setItem("djangocmd_goal_current", goals[0].current_followers); } catch {}
         }
         // Load brand voice
         const bv = await supa.get("settings", "key=eq.brand_voice");
         if (Array.isArray(bv) && bv[0]?.value) {
           setBrandVoice(bv[0].value);
-          try { sessionStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
+          try { localStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
         }
         setSupaLoaded(true);
       } catch (err) { console.error("Supabase load error:", err); setSupaLoaded(true); }
@@ -490,6 +495,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   };
   const saveGoal = (target, current) => {
     setGoalTarget(target); setGoalCurrent(current);
+    try { localStorage.setItem("djangocmd_goal_target", target); localStorage.setItem("djangocmd_goal_current", current); } catch {}
     if (supa) supa.upsert("goal", { account: "@django_crypto", target_followers: target, current_followers: current, deadline: goalDeadline });
   };
 
@@ -604,7 +610,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
     reader.onload = (ev) => {
       const text = ev.target.result;
       setBrandVoice(text);
-      try { sessionStorage.setItem("djangocmd_brand_voice", text); } catch {}
+      try { localStorage.setItem("djangocmd_brand_voice", text); } catch {}
       if (supa) supa.upsert("settings", { key: "brand_voice", value: text });
     };
     reader.readAsText(file);
@@ -987,6 +993,7 @@ Scoring: 9-10 exceptional, 7-8 good, 5-6 average, 1-4 weak.` }],
                 {isDb && <>
                   <Btn small color={T.blue} onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
                   <Btn small color={T.green} outline onClick={() => movePost(p.id, "POST")}>◉ → Post</Btn>
+                  <Btn small color={T.red} outline onClick={() => moveToBad(p.id)}>✕ → Bad</Btn>
                   <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
                 {isBad && <>
