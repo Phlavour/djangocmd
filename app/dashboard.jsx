@@ -367,7 +367,7 @@ function DailyResearch({ account }) {
 // WEEKLY CONTENT — local state management + Google Sheets import
 // ═══════════════════════════════════════════════════════════════
 
-function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
+function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("default");
   const [newPostText, setNewPostText] = useState("");
@@ -376,60 +376,13 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa }) {
   const [showAdd, setShowAdd] = useState(false);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiResults, setAiResults] = useState({});
-  const [allPosts, setAllPosts] = useState(null);
   const [showGen, setShowGen] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
   const [genProgress, setGenProgress] = useState("");
-  const [brandVoice, setBrandVoice] = useState(() => {
-    try { return localStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
-  });
-  const [goalTarget, setGoalTarget] = useState(() => {
-    try { return parseInt(localStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
-  });
-  const [goalCurrent, setGoalCurrent] = useState(() => {
-    try { return parseInt(localStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
-  });
-  const [goalDeadline] = useState("2027-01-01");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
-  const [supaLoaded, setSupaLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const TC = TABS_CONFIG_FN();
   const PC = PILLAR_COLORS_FN();
-
-  // Load from Supabase on mount
-  useEffect(() => {
-    if (!supa || supaLoaded) return;
-    (async () => {
-      try {
-        // Load posts
-        const posts = await supa.get("posts", "order=created_at.asc&limit=5000");
-        if (Array.isArray(posts) && posts.length > 0) {
-          setAllPosts(posts.map(p => ({
-            id: p.id, tab: p.tab, category: p.category, structure: p.structure,
-            post: p.post, notes: p.notes, score: p.score, howToFix: p.how_to_fix,
-            day: p.day, postLink: p.post_link, impressions: p.impressions,
-            likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
-            replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
-            newFollows: p.new_follows, urlClicks: p.url_clicks, _supaId: p.id,
-          })));
-        }
-        // Load goal
-        const goals = await supa.get("goal", "account=eq.@django_crypto");
-        if (Array.isArray(goals) && goals[0]) {
-          setGoalTarget(goals[0].target_followers);
-          setGoalCurrent(goals[0].current_followers);
-          try { localStorage.setItem("djangocmd_goal_target", goals[0].target_followers); localStorage.setItem("djangocmd_goal_current", goals[0].current_followers); } catch {}
-        }
-        // Load brand voice
-        const bv = await supa.get("settings", "key=eq.brand_voice");
-        if (Array.isArray(bv) && bv[0]?.value) {
-          setBrandVoice(bv[0].value);
-          try { localStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
-        }
-        setSupaLoaded(true);
-      } catch (err) { console.error("Supabase load error:", err); setSupaLoaded(true); }
-    })();
-  }, [supa, supaLoaded]);
 
   // Initialize from Sheets
   useEffect(() => {
@@ -1503,6 +1456,52 @@ function TwitterPanel({ apiKey, supa }) {
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
 
+  // Persistent state — lives here so tab switches don't lose data
+  const [allPosts, setAllPosts] = useState(null);
+  const [brandVoice, setBrandVoice] = useState(() => {
+    try { return localStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
+  });
+  const [goalTarget, setGoalTarget] = useState(() => {
+    try { return parseInt(localStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
+  });
+  const [goalCurrent, setGoalCurrent] = useState(() => {
+    try { return parseInt(localStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
+  });
+  const [goalDeadline] = useState("2027-01-01");
+  const [supaLoaded, setSupaLoaded] = useState(false);
+
+  // Load from Supabase once
+  useEffect(() => {
+    if (!supa || supaLoaded) return;
+    (async () => {
+      try {
+        const posts = await supa.get("posts", "order=created_at.asc&limit=5000");
+        if (Array.isArray(posts) && posts.length > 0) {
+          setAllPosts(posts.map(p => ({
+            id: p.id, tab: p.tab, category: p.category, structure: p.structure,
+            post: p.post, notes: p.notes, score: p.score, howToFix: p.how_to_fix,
+            day: p.day, postLink: p.post_link, impressions: p.impressions,
+            likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
+            replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
+            newFollows: p.new_follows, urlClicks: p.url_clicks, _supaId: p.id,
+          })));
+        }
+        const goals = await supa.get("goal", "account=eq.@django_crypto");
+        if (Array.isArray(goals) && goals[0]) {
+          setGoalTarget(goals[0].target_followers);
+          setGoalCurrent(goals[0].current_followers);
+          try { localStorage.setItem("djangocmd_goal_target", goals[0].target_followers); localStorage.setItem("djangocmd_goal_current", goals[0].current_followers); } catch {}
+        }
+        const bv = await supa.get("settings", "key=eq.brand_voice");
+        if (Array.isArray(bv) && bv[0]?.value) {
+          setBrandVoice(bv[0].value);
+          try { localStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
+        }
+        setSupaLoaded(true);
+      } catch (err) { console.error("Supabase load:", err); setSupaLoaded(true); }
+    })();
+  }, [supa, supaLoaded]);
+
   return (
     <div>
       {/* Account Selector */}
@@ -1543,7 +1542,13 @@ function TwitterPanel({ apiKey, supa }) {
         </div>
 
         {subTab === "research" && <DailyResearch account={account} />}
-        {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} supa={supa} />}
+        {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} supa={supa}
+          allPosts={allPosts} setAllPosts={setAllPosts}
+          brandVoice={brandVoice} setBrandVoice={setBrandVoice}
+          goalTarget={goalTarget} setGoalTarget={setGoalTarget}
+          goalCurrent={goalCurrent} setGoalCurrent={setGoalCurrent}
+          goalDeadline={goalDeadline} supaLoaded={supaLoaded}
+        />}
         {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} supa={supa} />}
       </>}
     </div>
