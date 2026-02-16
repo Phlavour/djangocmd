@@ -288,414 +288,557 @@ function useSheetData() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DAILY RESEARCH — full panel with Draft-like card management
+// DAILY RESEARCH — Complete research-to-post pipeline
 // ═══════════════════════════════════════════════════════════════
 
-const RESEARCH_TABS = ["INBOX", "READY", "MOVED"];
+const RESEARCH_SK = "djangocmd_research_v2";
 
 function DailyResearch({ account, apiKey, supa, allPosts, setAllPosts }) {
-  const [input, setInput] = useState("");
   const [research, setResearch] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("djangocmd_research") || "[]"); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(RESEARCH_SK) || "[]"); } catch { return []; }
   });
-  const [activeTab, setActiveTab] = useState("INBOX");
-  const [showAdd, setShowAdd] = useState(false);
-  const [newPostText, setNewPostText] = useState("");
-  const [newPostCat, setNewPostCat] = useState("growth");
-  const [newPostStructure, setNewPostStructure] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [editText, setEditText] = useState("");
-  const [sortBy, setSortBy] = useState("default");
+  const [input, setInput] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
   const [aiLoading, setAiLoading] = useState(null);
-  const [genLoading, setGenLoading] = useState(false);
-  const [genProgress, setGenProgress] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState("");
+  const [filterCat, setFilterCat] = useState("all");
+  const [showAddManual, setShowAddManual] = useState(false);
+  const [manualForm, setManualForm] = useState({ originalUrl: "", author: "", originalPost: "", headline: "", description: "" });
 
-  const TC = TABS_CONFIG_FN();
   const PC = PILLAR_COLORS_FN();
+  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
 
-  // Persist research to localStorage
+  // Persist
   useEffect(() => {
-    try { localStorage.setItem("djangocmd_research", JSON.stringify(research)); } catch {}
+    try { localStorage.setItem(RESEARCH_SK, JSON.stringify(research)); } catch {}
   }, [research]);
 
-  // Parse Grok output into individual items
-  const addFromGrok = () => {
+  // Sync to Supabase when items change (future)
+  // useEffect(() => { if (supa) syncToSupabase(); }, [research]);
+
+  // ─── Parse Grok output ───
+  const parseGrokInput = () => {
     if (!input.trim()) return;
-    // Split by numbered items (1. 2. 3.) or double newlines
     const blocks = input.split(/(?=^\d+[\.\)]\s)/m).filter(b => b.trim().length > 10);
     const items = blocks.length > 1 ? blocks : input.split("\n\n").filter(b => b.trim().length > 10);
-    
-    const newItems = items.map((block, i) => ({
-      id: Date.now() + i,
-      headline: block.trim().split("\n")[0].replace(/^\d+[\.\)]\s*/, "").trim(),
-      fullText: block.trim(),
-      category: "",
-      structure: "",
-      post: "",
-      notes: "",
-      score: "",
-      tab: "INBOX",
-      date: new Date().toISOString().slice(0, 10),
-      account,
-    }));
+
+    const newItems = items.map((block, i) => {
+      const lines = block.trim().split("\n");
+      const headlineRaw = lines[0].replace(/^\d+[\.\)]\s*/, "").trim();
+      const bodyLines = lines.slice(1);
+      // Try to extract URL
+      const urlMatch = block.match(/https?:\/\/[^\s\)]+/);
+      // Try to extract author from "Source: Name" or "@handle"
+      const authorMatch = block.match(/(?:Source|Author|By):\s*([^\n\(]+)/i) || block.match(/@(\w+)/);
+
+      return {
+        id: Date.now() + i,
+        date: new Date().toISOString().slice(0, 10),
+        originalUrl: urlMatch ? urlMatch[0] : "",
+        author: authorMatch ? authorMatch[1].trim() : "",
+        originalPost: bodyLines.join("\n").trim(),
+        headline: headlineRaw,
+        description: "",
+        variants: [],
+        status: "inbox", // inbox | processed | moved_draft | moved_bad | deleted
+        account,
+      };
+    });
     setResearch(prev => [...newItems, ...prev]);
     setInput("");
   };
 
-  // Add a single manual post (like Draft's "New Post")
-  const addManualPost = () => {
-    if (!newPostText.trim()) return;
+  // ─── Add manual item ───
+  const addManualItem = () => {
+    if (!manualForm.headline.trim() && !manualForm.originalPost.trim()) return;
     const newItem = {
       id: Date.now(),
-      headline: newPostText.trim().slice(0, 80),
-      fullText: "",
-      category: newPostCat,
-      structure: newPostStructure,
-      post: newPostText.trim(),
-      notes: "",
-      score: "",
-      tab: "READY",
       date: new Date().toISOString().slice(0, 10),
+      originalUrl: manualForm.originalUrl.trim(),
+      author: manualForm.author.trim(),
+      originalPost: manualForm.originalPost.trim(),
+      headline: manualForm.headline.trim() || manualForm.originalPost.trim().slice(0, 80),
+      description: manualForm.description.trim(),
+      variants: [],
+      status: "inbox",
       account,
     };
     setResearch(prev => [newItem, ...prev]);
-    setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
+    setManualForm({ originalUrl: "", author: "", originalPost: "", headline: "", description: "" });
+    setShowAddManual(false);
   };
 
-  // Generate post variants from a research item using Claude
+  // ─── Generate 4 variants via Claude ───
   const generateVariants = async (item) => {
-    if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
     setAiLoading(item.id);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1500,
-          messages: [{ role: "user", content: `You are django_xbt — crypto Twitter creator. Write 3 post variants based on this research item.
+          model: "claude-sonnet-4-20250514", max_tokens: 3000,
+          system: `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
+
+VOICE RULES:
+- always lowercase (never caps except proper nouns)
+- no dots at end of sentences
+- no emojis, no hashtags, no em dashes
+- use ">" for bullet points in lists
+- use "fam" naturally
+- short punchy sentences, mix with longer explanations
+- sound human and authentic, NOT like AI
+- be specific, opinionated, direct
+
+CONTENT PILLARS: growth, market, lifestyle, busting, shitposting
+Each variant must be tagged with a pillar and post structure.
+
+POST STRUCTURES (pick the best fit):
+Hook-Body-Conclusion, Problem-Solution, Listicle, Before-After, Controversy/Hot Take, Story/Narrative, Question-Answer, Myth Busting, Comparison/VS, Single Insight, Framework/System, Observation-Pattern, Contrarian View, Mindset Shift, Mistake-Lesson, Breakdown/Analysis, Prediction/Forecast
+
+SCORING (1-10):
+- 9-10: Would go viral, screenshot-worthy
+- 7-8: Solid engagement, strong take
+- 5-6: Decent but generic
+- 1-4: Weak, skip`,
+          messages: [{ role: "user", content: `Create 4 different post variants based on this research item. Each variant should take a DIFFERENT angle, use a DIFFERENT post structure, and vary in length.
 
 RESEARCH ITEM:
-${item.fullText || item.headline}
+Headline: ${item.headline}
+${item.originalPost ? `Original content: ${item.originalPost.slice(0, 500)}` : ""}
+${item.author ? `Author: ${item.author}` : ""}
+${item.description ? `Context: ${item.description}` : ""}
 
-RULES:
-- always lowercase, no dots at end, no emojis, no hashtags
-- use ">" for list items
-- each variant = different angle/length/structure
-- sound like django, not AI
-- be specific, actionable, authentic
+VARIANT REQUIREMENTS:
+- V1: Short & punchy (under 280 chars) — hot take or observation
+- V2: Medium (300-500 chars) — more context, story, or breakdown
+- V3: Contrarian angle — opposite or unexpected perspective
+- V4: Educational/actionable — teach something from this
 
-V1: SHORT (under 280 chars, punchy hot take or observation)
-V2: MEDIUM (300-500 chars, more context/story)
-V3: CONTRARIAN (different angle from V1/V2)
+Each must feel like a different post, not rephrased versions of the same idea.
 
-Respond ONLY with JSON array:
-[{"post": "text here", "category": "growth|market|lifestyle|busting|shitposting", "structure": "Structure Name"}]` }],
+Respond ONLY with valid JSON array, no markdown:
+[{"post":"text","category":"growth|market|lifestyle|busting|shitposting","structure":"Structure Name","score":7}]` }],
         }),
       });
       const data = await res.json();
       const text = data.content?.[0]?.text || "[]";
-      try {
-        const variants = JSON.parse(text.replace(/```json|```/g, "").trim());
-        const newItems = variants.map((v, i) => ({
-          id: Date.now() + i + 1,
-          headline: "Generated from: " + (item.headline || "").slice(0, 50),
-          fullText: "",
-          category: v.category || "growth",
-          structure: v.structure || "",
-          post: v.post || "",
-          notes: "🤖 variant from research",
-          score: "",
-          tab: "READY",
-          date: new Date().toISOString().slice(0, 10),
-          account,
-        }));
-        setResearch(prev => [...newItems, ...prev]);
-      } catch { alert("Error parsing AI response"); }
+      const clean = text.replace(/```json|```/g, "").trim();
+      const variants = JSON.parse(clean);
+
+      setResearch(prev => prev.map(r => {
+        if (r.id !== item.id) return r;
+        return {
+          ...r,
+          variants: variants.map((v, i) => ({
+            id: `${item.id}-v${i}`,
+            post: v.post || "",
+            category: v.category || "growth",
+            structure: v.structure || "",
+            score: v.score || 0,
+          })),
+          status: "processed",
+        };
+      }));
+      setExpandedId(item.id);
     } catch (err) { alert("API error: " + err.message); }
     setAiLoading(null);
   };
 
-  // Move a READY post to Content DRAFT
-  const moveToDraft = (item) => {
+  // ─── Bulk generate for all inbox items ───
+  const bulkGenerate = async () => {
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+    const inboxItems = research.filter(r => r.status === "inbox" && r.account === account);
+    if (inboxItems.length === 0) { alert("No items in inbox"); return; }
+    setBulkLoading(true);
+    let done = 0;
+    for (const item of inboxItems.slice(0, 10)) {
+      setBulkProgress(`Processing ${++done}/${Math.min(10, inboxItems.length)}: ${item.headline.slice(0, 40)}...`);
+      await generateVariants(item);
+      // Small delay between API calls
+      await new Promise(r => setTimeout(r, 500));
+    }
+    setBulkProgress(`done — ${done} items processed`);
+    setBulkLoading(false);
+  };
+
+  // ─── Move variant to Draft ───
+  const moveVariantToDraft = (item, variant) => {
     if (!allPosts || !setAllPosts) return;
     const maxId = allPosts.length > 0 ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
     const newPost = {
-      id: maxId, tab: "DRAFT", category: item.category || "growth", structure: item.structure || "",
-      post: item.post || item.headline, notes: item.notes || "", score: item.score || "",
+      id: maxId, tab: "DRAFT", category: variant.category || "growth", structure: variant.structure || "",
+      post: variant.post, notes: `from research: ${item.headline.slice(0, 60)}`, score: String(variant.score || ""),
       howToFix: "", day: "", postLink: "", impressions: "", likes: "", engagements: "",
       bookmarks: "", replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(prev => [...(prev || []), newPost]);
-    // Save to Supabase if connected
     if (supa) {
       const row = {
         tab: "DRAFT", category: newPost.category, structure: newPost.structure, post: newPost.post,
-        notes: newPost.notes, score: newPost.score, how_to_fix: "", day: "", account: "@django_crypto",
+        notes: newPost.notes, score: newPost.score, how_to_fix: "", day: "", account: account || "@django_crypto",
       };
       supa.post("posts", [row]).catch(() => {});
     }
-    // Mark as moved
-    setResearch(prev => prev.map(r => r.id === item.id ? { ...r, tab: "MOVED" } : r));
+    // Mark parent item as moved
+    setResearch(prev => prev.map(r => r.id === item.id ? { ...r, status: "moved_draft" } : r));
   };
 
-  // Edit post text inline
-  const saveEdit = (id) => {
-    setResearch(prev => prev.map(r => r.id === id ? { ...r, post: editText, headline: editText.slice(0, 80) } : r));
-    setEditingId(null); setEditText("");
+  // ─── Move item to Bad ───
+  const moveToBad = (item) => {
+    setResearch(prev => prev.map(r => r.id === item.id ? { ...r, status: "moved_bad" } : r));
   };
 
-  // Delete + bulk delete
-  const delItem = (id) => setResearch(prev => prev.filter(r => r.id !== id));
-  const deleteAllInTab = (tab) => {
-    if (!confirm(`Delete ALL items in ${tab}?`)) return;
-    setResearch(prev => prev.filter(r => r.tab !== tab));
+  // ─── Delete item ───
+  const deleteItem = (id) => {
+    setResearch(prev => prev.filter(r => r.id !== id));
   };
 
-  // Bulk generate: process all INBOX items through Claude
-  const bulkGenerate = async () => {
-    if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
-    const inboxItems = research.filter(r => r.tab === "INBOX" && r.account === account);
-    if (inboxItems.length === 0) { alert("No items in INBOX"); return; }
-    setGenLoading(true);
-    const headlines = inboxItems.slice(0, 10).map((item, i) => `${i + 1}. ${(item.fullText || item.headline).slice(0, 200)}`).join("\n\n");
-    setGenProgress(`Processing ${Math.min(10, inboxItems.length)} items...`);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 4000,
-          messages: [{ role: "user", content: `You are django_xbt — crypto Twitter creator. Create 1 post for each research item below.
-
-RESEARCH ITEMS:
-${headlines}
-
-RULES:
-- always lowercase, no dots at end, no emojis, no hashtags
-- use ">" for list items
-- each post = unique angle, different structure
-- sound like django, not AI
-- mix short (150-280 chars) and longer posts (300-600 chars)
-- be specific, opinionated, authentic
-
-Respond ONLY with JSON array:
-[{"idx": 0, "post": "text", "category": "growth|market|lifestyle|busting|shitposting", "structure": "Name"}]` }],
-        }),
-      });
-      const data = await res.json();
-      const text = data.content?.[0]?.text || "[]";
-      const results = JSON.parse(text.replace(/```json|```/g, "").trim());
-      const newItems = results.map((r, i) => ({
-        id: Date.now() + i,
-        headline: inboxItems[r.idx]?.headline || "Generated",
-        fullText: "",
-        category: r.category || "growth",
-        structure: r.structure || "",
-        post: r.post || "",
-        notes: "🤖 bulk generated",
-        score: "",
-        tab: "READY",
-        date: new Date().toISOString().slice(0, 10),
-        account,
-      }));
-      setResearch(prev => [...newItems, ...prev]);
-      setGenProgress(`✅ ${newItems.length} posts generated → READY`);
-      setActiveTab("READY");
-    } catch (err) { setGenProgress(`❌ Error: ${err.message}`); }
-    setGenLoading(false);
+  // ─── Edit variant inline ───
+  const updateVariant = (itemId, variantIdx, field, value) => {
+    setResearch(prev => prev.map(r => {
+      if (r.id !== itemId) return r;
+      const newVariants = [...r.variants];
+      newVariants[variantIdx] = { ...newVariants[variantIdx], [field]: value };
+      return { ...r, variants: newVariants };
+    }));
   };
 
-  // Filter + sort
-  const items = research.filter(r => r.account === account && r.tab === activeTab);
-  let sorted = [...items];
-  if (sortBy === "category") sorted.sort((a, b) => (a.category || "").localeCompare(b.category || ""));
-  else if (sortBy === "date") sorted.sort((a, b) => b.date.localeCompare(a.date));
+  // ─── Update item field ───
+  const updateItem = (id, field, value) => {
+    setResearch(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
 
-  const counts = {};
-  RESEARCH_TABS.forEach(t => { counts[t] = research.filter(r => r.account === account && r.tab === t).length; });
+  // ─── Filtering ───
+  const activeItems = research.filter(r => r.account === account);
+  const inboxItems = activeItems.filter(r => r.status === "inbox");
+  const processedItems = activeItems.filter(r => r.status === "processed");
+  const movedItems = activeItems.filter(r => r.status === "moved_draft" || r.status === "moved_bad");
 
-  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
+  const counts = {
+    inbox: inboxItems.length,
+    processed: processedItems.length,
+    moved: movedItems.length,
+    total: activeItems.length,
+  };
 
-  const tabColors = { INBOX: T.cyan, READY: T.green, MOVED: T.textDim };
+  // What to show
+  const [viewTab, setViewTab] = useState("inbox");
+  const displayItems = viewTab === "inbox" ? inboxItems
+    : viewTab === "processed" ? processedItems
+    : movedItems;
 
-  return (
-    <div>
-      {/* Grok Input */}
-      <Card style={{ marginBottom: 16 }}>
-        <Heading icon="⌨" right={<Badge color={T.textSoft}>Paste Grok output or add manually</Badge>}>Add Research</Heading>
-        <textarea value={input} onChange={e => setInput(e.target.value)}
-          placeholder={"Paste Grok output here...\nNumbered items (1. 2. 3.) will be split automatically.\nOr paste multiple items separated by blank lines."}
-          style={{
-            width: "100%", minHeight: 100, background: T.bg2, border: `1px solid ${T.border}`,
-            borderRadius: 8, padding: 14, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace",
-            resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box",
-          }}
-          onFocus={e => e.target.style.borderColor = T.green}
-          onBlur={e => e.target.style.borderColor = T.border}
-        />
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <Btn onClick={addFromGrok} color={T.cyan}>+ Add to Inbox</Btn>
-          {counts["INBOX"] > 0 && <Btn color={T.green} disabled={genLoading || !apiKey} onClick={bulkGenerate}>
-            {genLoading ? "⏳ Generating..." : `🤖 Generate Posts from Inbox (${counts["INBOX"]})`}
-          </Btn>}
-        </div>
-        {genProgress && <div style={{ marginTop: 8, fontSize: 11, color: genProgress.startsWith("✅") ? T.green : genProgress.startsWith("❌") ? T.red : T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>{genProgress}</div>}
-      </Card>
+  const tabDefs = [
+    { key: "inbox", label: "Inbox", icon: "📥", color: T.cyan, count: counts.inbox },
+    { key: "processed", label: "Processed", icon: "🤖", color: T.green, count: counts.processed },
+    { key: "moved", label: "Moved", icon: "📤", color: T.textDim, count: counts.moved },
+  ];
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, alignItems: "center" }}>
-        {RESEARCH_TABS.map(tab => (
-          <TabBtn key={tab} label={tab === "INBOX" ? "📥 Inbox" : tab === "READY" ? "✅ Ready" : "📤 Moved"}
-            active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy("default"); }}
-            color={tabColors[tab]} count={counts[tab]} />
-        ))}
-        <div style={{ flex: 1 }} />
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
-          <option value="default">Default</option>
-          <option value="category">Category</option>
-          <option value="date">Date</option>
-        </select>
-        {counts[activeTab] > 0 && <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Clear {activeTab}</Btn>}
-      </div>
+  // ─── Variant card component ───
+  const VariantCard = ({ item, variant, idx }) => {
+    const [editing, setEditing] = useState(false);
+    const [editVal, setEditVal] = useState(variant.post);
+    const charCount = (variant.post || "").length;
 
-      {/* Stats bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
-        {RESEARCH_TABS.map(tab => (
-          <div key={tab} style={{
-            background: activeTab === tab ? `${tabColors[tab]}10` : T.surface,
-            border: `1px solid ${activeTab === tab ? `${tabColors[tab]}30` : T.border}`,
-            borderRadius: 8, padding: "10px 12px", textAlign: "center", cursor: "pointer",
-          }} onClick={() => setActiveTab(tab)}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: tabColors[tab], fontFamily: "'Satoshi', sans-serif" }}>{counts[tab]}</div>
-            <div style={{ fontSize: 9, color: T.textSoft, textTransform: "uppercase" }}>{tab}</div>
+    return (
+      <div style={{
+        background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 14,
+        position: "relative", transition: "border-color .12s",
+      }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = (PC[variant.category] || T.green) + "60"}
+        onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+
+        {/* Variant header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.textSoft }}>V{idx + 1}</span>
+            <Badge color={PC[variant.category] || T.textSoft}>{variant.category}</Badge>
+            {variant.structure && <Badge color={T.textDim}>{variant.structure}</Badge>}
           </div>
-        ))}
-      </div>
-
-      {/* Add manual post (READY tab) */}
-      {activeTab === "READY" && (
-        <div style={{ marginBottom: 16 }}>
-          {showAdd ? (
-            <Card>
-              <Heading icon="✎">New Post</Heading>
-              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
-                  <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 2 }}>
-                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
-                  <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...sel, width: "100%" }}>
-                    <option value="">-- select --</option>
-                    {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post fam..."
-                style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
-                onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <Btn color={T.green} onClick={addManualPost}>Add to Ready</Btn>
-                <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
-              </div>
-            </Card>
-          ) : (
-            <div style={{ textAlign: "center" }}><Btn color={T.green} onClick={() => setShowAdd(true)}>+ New Post</Btn></div>
-          )}
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Badge color={variant.score >= 8 ? T.green : variant.score >= 6 ? T.amber : T.red}>
+              {"★"} {variant.score}/10
+            </Badge>
+            <span style={{ fontSize: 10, color: charCount > 280 ? T.amber : T.textDim }}>{charCount}c</span>
+          </div>
         </div>
-      )}
 
-      {/* Items */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {sorted.length === 0 && (
-          <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>
-            {activeTab === "INBOX" ? "No research items. Paste Grok output above." : activeTab === "READY" ? "No posts ready. Generate from Inbox or add manually." : "No moved items yet."}
+        {/* Variant content */}
+        {editing ? (
+          <div>
+            <textarea value={editVal} onChange={e => setEditVal(e.target.value)}
+              style={{ width: "100%", minHeight: 80, background: T.surface, border: `1px solid ${T.green}40`, borderRadius: 6, padding: 10, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <Btn small color={T.green} onClick={() => { updateVariant(item.id, idx, "post", editVal); setEditing(false); }}>Save</Btn>
+              <Btn small outline onClick={() => { setEditVal(variant.post); setEditing(false); }}>Cancel</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, whiteSpace: "pre-wrap", cursor: "pointer" }}
+            onClick={() => { setEditing(true); setEditVal(variant.post); }}>
+            {variant.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>empty variant</span>}
           </div>
         )}
-        {sorted.map(item => (
-          <div key={item.id} style={{
-            background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, transition: "all .12s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = (tabColors[activeTab] || T.green) + "40"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
 
-            {/* Header: content + badges */}
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Editable post text */}
-                {editingId === item.id ? (
-                  <div>
-                    <textarea value={editText} onChange={e => setEditText(e.target.value)}
-                      style={{ width: "100%", minHeight: 70, background: T.bg2, border: `1px solid ${T.green}`, borderRadius: 8, padding: 10, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }} />
-                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                      <Btn small color={T.green} onClick={() => saveEdit(item.id)}>Save</Btn>
-                      <Btn small outline onClick={() => setEditingId(null)}>Cancel</Btn>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", cursor: item.post ? "default" : "pointer" }}
-                    onClick={() => { if (!item.post && activeTab === "INBOX") { setEditingId(item.id); setEditText(item.headline); } }}>
-                    {item.post || item.headline || <span style={{ color: T.textDim, fontStyle: "italic" }}>Click to write post...</span>}
-                  </div>
-                )}
-                {/* Show original research text if different from post */}
-                {item.fullText && item.post && activeTab !== "INBOX" && (
-                  <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, lineHeight: 1.4 }}>
-                    Source: {item.fullText.slice(0, 120)}...
-                  </div>
-                )}
+        {/* Variant actions */}
+        {!editing && item.status === "processed" && (
+          <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>
+            <Btn small color={T.green} onClick={() => moveVariantToDraft(item, variant)}>→ Draft</Btn>
+            <select value={variant.category} onChange={e => updateVariant(item.id, idx, "category", e.target.value)}
+              style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
+              style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
+              <option value="">Structure</option>
+              {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ─── Research item card ───
+  const ResearchCard = ({ item }) => {
+    const isExpanded = expandedId === item.id;
+    const hasVariants = item.variants && item.variants.length > 0;
+    const statusColors = { inbox: T.cyan, processed: T.green, moved_draft: T.textDim, moved_bad: T.red };
+    const statusLabels = { inbox: "inbox", processed: "processed", moved_draft: "→ draft", moved_bad: "→ bad" };
+
+    return (
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
+        overflow: "hidden", transition: "all .12s",
+      }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = (statusColors[item.status] || T.green) + "40"}
+        onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+
+        {/* Main header — always visible */}
+        <div style={{ padding: "14px 16px", cursor: "pointer" }}
+          onClick={() => setExpandedId(isExpanded ? null : item.id)}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.text, lineHeight: 1.5 }}>
+                {item.headline || "untitled research item"}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
-                {item.category && <Badge color={PC[item.category] || T.textSoft}>{item.category}</Badge>}
-                {item.structure && <Badge color={T.textDim}>{item.structure}</Badge>}
-                {item.score && <Badge color={parseFloat(item.score) >= 8.5 ? T.green : parseFloat(item.score) >= 7 ? T.amber : T.textSoft}>⭐ {item.score}</Badge>}
-                <Badge color={T.textDim}>{item.date}</Badge>
+              {item.description && (
+                <div style={{ fontSize: 11, color: T.textSoft, marginTop: 4, lineHeight: 1.5 }}>
+                  {item.description}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {item.author && <span style={{ fontSize: 10, color: T.cyan }}>@{item.author.replace("@", "")}</span>}
+                <span style={{ fontSize: 10, color: T.textDim }}>{item.date}</span>
+                {item.originalUrl && <span style={{ fontSize: 10, color: T.textDim }}>🔗</span>}
+                {hasVariants && <Badge color={T.green}>{item.variants.length} variants</Badge>}
               </div>
             </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
+              <Badge color={statusColors[item.status]}>{statusLabels[item.status]}</Badge>
+              <span style={{ fontSize: 16, color: T.textDim, transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</span>
+            </div>
+          </div>
+        </div>
 
-            {/* Notes */}
-            {item.notes && <div style={{ marginTop: 6, fontSize: 11, color: T.textSoft }}>💡 {item.notes}</div>}
+        {/* Expanded content */}
+        {isExpanded && (
+          <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${T.border}` }}>
 
-            {/* Actions per tab */}
-            <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-              {activeTab === "INBOX" && <>
-                <Btn small color={T.green} disabled={aiLoading === item.id} onClick={() => generateVariants(item)}>
-                  {aiLoading === item.id ? "⏳ generating..." : "🤖 Generate Posts"}
+            {/* Original post content */}
+            {item.originalPost && (
+              <div style={{ marginTop: 12, padding: 12, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 9, color: T.textDim, textTransform: "uppercase", marginBottom: 6 }}>Original Post</div>
+                <div style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>
+                  {item.originalPost}
+                </div>
+              </div>
+            )}
+
+            {/* URL */}
+            {item.originalUrl && (
+              <div style={{ marginTop: 8, fontSize: 11 }}>
+                <a href={item.originalUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ color: T.cyan, textDecoration: "none" }}>
+                  {item.originalUrl.length > 60 ? item.originalUrl.slice(0, 60) + "..." : item.originalUrl}
+                </a>
+              </div>
+            )}
+
+            {/* Variants */}
+            {hasVariants && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 8 }}>
+                  Variants ({item.variants.length})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {item.variants.map((v, idx) => (
+                    <VariantCard key={v.id || idx} item={item} variant={v} idx={idx} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap", alignItems: "center" }}>
+              {item.status === "inbox" && (
+                <Btn color={T.green} small disabled={aiLoading === item.id} onClick={() => generateVariants(item)}>
+                  {aiLoading === item.id ? "generating..." : "🤖 Generate 4 Variants"}
                 </Btn>
-                <Btn small outline onClick={() => { setEditingId(item.id); setEditText(item.post || item.headline); }}>✎ Edit</Btn>
-                <Btn small color={T.red} outline onClick={() => delItem(item.id)}>✕</Btn>
-              </>}
-              {activeTab === "READY" && <>
-                <Btn small color={T.green} onClick={() => moveToDraft(item)}>📤 → Content Draft</Btn>
-                <Btn small outline onClick={() => { setEditingId(item.id); setEditText(item.post || item.headline); }}>✎ Edit</Btn>
-                <select value={item.category || ""} onChange={e => setResearch(prev => prev.map(r => r.id === item.id ? { ...r, category: e.target.value } : r))} style={{ ...sel, fontSize: 11, padding: "4px 8px" }}>
-                  <option value="">Category</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <Btn small color={T.red} outline onClick={() => delItem(item.id)}>✕</Btn>
-              </>}
-              {activeTab === "MOVED" && <>
-                <Badge color={T.green}>✓ In Content Draft</Badge>
-                <Btn small color={T.red} outline onClick={() => delItem(item.id)}>🗑</Btn>
-              </>}
+              )}
+              {item.status === "processed" && (
+                <Btn color={T.green} small disabled={aiLoading === item.id} onClick={() => generateVariants(item)}>
+                  {aiLoading === item.id ? "regenerating..." : "🔄 Regenerate"}
+                </Btn>
+              )}
+              {item.status !== "moved_bad" && item.status !== "moved_draft" && (
+                <Btn color={T.red} small outline onClick={() => moveToBad(item)}>✕ → Bad</Btn>
+              )}
+              <Btn small outline onClick={() => deleteItem(item.id)} style={{ color: T.red }}>🗑 Delete</Btn>
+
+              {/* Inline edit headline */}
+              <div style={{ flex: 1 }} />
+              {item.originalUrl && (
+                <a href={item.originalUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: T.cyan, textDecoration: "none" }}>
+                  Open Source ↗
+                </a>
+              )}
             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════
+  return (
+    <div>
+      {/* ─── Input section ─── */}
+      <Card style={{ marginBottom: 16 }}>
+        <Heading icon="📋" right={
+          <div style={{ display: "flex", gap: 6 }}>
+            <Btn small outline onClick={() => setShowAddManual(!showAddManual)}>
+              {showAddManual ? "Cancel" : "+ Manual"}
+            </Btn>
+          </div>
+        }>Add Research</Heading>
+
+        {showAddManual ? (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Headline *</div>
+                <input value={manualForm.headline} onChange={e => setManualForm(p => ({ ...p, headline: e.target.value }))}
+                  placeholder="your headline for this item"
+                  style={{ width: "100%", padding: "8px 10px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Author</div>
+                <input value={manualForm.author} onChange={e => setManualForm(p => ({ ...p, author: e.target.value }))}
+                  placeholder="@handle or name"
+                  style={{ width: "100%", padding: "8px 10px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box" }} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Original URL</div>
+              <input value={manualForm.originalUrl} onChange={e => setManualForm(p => ({ ...p, originalUrl: e.target.value }))}
+                placeholder="https://x.com/..."
+                style={{ width: "100%", padding: "8px 10px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Original Post Content</div>
+              <textarea value={manualForm.originalPost} onChange={e => setManualForm(p => ({ ...p, originalPost: e.target.value }))}
+                placeholder="paste the original post content here..."
+                style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", marginBottom: 4 }}>Description (your summary)</div>
+              <textarea value={manualForm.description} onChange={e => setManualForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="brief description of what this is about and why it matters..."
+                style={{ width: "100%", minHeight: 50, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <Btn color={T.green} onClick={addManualItem}>+ Add to Inbox</Btn>
+          </div>
+        ) : (
+          <div>
+            <textarea value={input} onChange={e => setInput(e.target.value)}
+              placeholder={"Paste Grok research output here...\nNumbered items (1. 2. 3.) will be split automatically.\nURLs and @authors will be extracted."}
+              style={{
+                width: "100%", minHeight: 100, background: T.bg2, border: `1px solid ${T.border}`,
+                borderRadius: 8, padding: 14, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace",
+                resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box",
+              }}
+              onFocus={e => e.target.style.borderColor = T.cyan}
+              onBlur={e => e.target.style.borderColor = T.border} />
+            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+              <Btn onClick={parseGrokInput} color={T.cyan}>📥 Add to Inbox</Btn>
+              {counts.inbox > 0 && (
+                <Btn color={T.green} disabled={bulkLoading || !apiKey} onClick={bulkGenerate}>
+                  {bulkLoading ? `⏳ ${bulkProgress}` : `🤖 Generate All (${counts.inbox})`}
+                </Btn>
+              )}
+              {bulkProgress && !bulkLoading && (
+                <span style={{ fontSize: 11, color: bulkProgress.startsWith("done") ? T.green : T.textSoft }}>{bulkProgress}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* ─── Tabs + Stats ─── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {tabDefs.map(td => (
+          <TabBtn key={td.key} label={`${td.icon} ${td.label}`} active={viewTab === td.key}
+            onClick={() => setViewTab(td.key)} color={td.color} count={td.count} />
+        ))}
+        <div style={{ flex: 1 }} />
+        {displayItems.length > 0 && (
+          <Btn small color={T.red} outline onClick={() => {
+            if (!confirm(`Delete all ${viewTab} items?`)) return;
+            const statuses = viewTab === "moved" ? ["moved_draft", "moved_bad"] : [viewTab];
+            setResearch(prev => prev.filter(r => !(r.account === account && statuses.includes(r.status))));
+          }}>🗑 Clear</Btn>
+        )}
+      </div>
+
+      {/* ─── Stats bar ─── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+        {tabDefs.map(td => (
+          <div key={td.key} style={{
+            background: viewTab === td.key ? `${td.color}10` : T.surface,
+            border: `1px solid ${viewTab === td.key ? `${td.color}30` : T.border}`,
+            borderRadius: 8, padding: "10px 12px", textAlign: "center", cursor: "pointer",
+          }} onClick={() => setViewTab(td.key)}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: td.color, fontFamily: "'Satoshi', sans-serif" }}>{td.count}</div>
+            <div style={{ fontSize: 9, color: T.textSoft, textTransform: "uppercase" }}>{td.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Footer hint */}
+      {/* ─── Items list ─── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {displayItems.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>
+            {viewTab === "inbox" ? "No research items yet — paste Grok output or add manually above"
+              : viewTab === "processed" ? "No processed items — generate variants from Inbox"
+              : "No moved items yet"}
+          </div>
+        )}
+        {displayItems.map(item => (
+          <ResearchCard key={item.id} item={item} />
+        ))}
+      </div>
+
+      {/* ─── Footer ─── */}
       <div style={{ marginTop: 20, padding: 14, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, color: T.textSoft, lineHeight: 1.6 }}>
-        💡 <strong>Workflow:</strong> Paste Grok research → Inbox · Generate variants → Ready · Review/edit → Move to Content Draft
+        <strong>Workflow:</strong> Paste Grok research → Inbox → Generate 4 variants per item → Review & edit → Best variant → Draft
       </div>
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════
-// WEEKLY CONTENT — local state management + Google Sheets import
-// ═══════════════════════════════════════════════════════════════
 
 function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
