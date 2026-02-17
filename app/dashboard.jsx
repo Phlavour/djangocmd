@@ -1084,14 +1084,24 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
 
   // Actions
   const movePost = (id, to) => {
-    setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: to } : x));
-    const post = allPosts?.find(x => x.id === id);
-    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: to });
+    setAllPosts(p => {
+      const post = p.find(x => x.id === id);
+      if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: to });
+      else if (supa && post) {
+        // Fallback: find by post text match
+        supa.get("posts", `post=eq.${encodeURIComponent(post.post?.slice(0, 100))}&limit=1`).then(rows => {
+          if (rows?.[0]) supa.patch("posts", `id=eq.${rows[0].id}`, { tab: to });
+        }).catch(() => {});
+      }
+      return p.map(x => x.id === id ? { ...x, tab: to } : x);
+    });
   };
   const delPost = (id) => {
-    const post = allPosts?.find(x => x.id === id);
-    setAllPosts(p => p.filter(x => x.id !== id));
-    if (supa && post?._supaId) supa.del("posts", `id=eq.${post._supaId}`);
+    setAllPosts(p => {
+      const post = p.find(x => x.id === id);
+      if (supa && post?._supaId) supa.del("posts", `id=eq.${post._supaId}`);
+      return p.filter(x => x.id !== id);
+    });
   };
   const deleteAllInTab = (tab) => {
     if (!confirm(`Delete ALL posts in ${tab}? This can't be undone.`)) return;
@@ -1165,16 +1175,20 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     setSaving(false);
   };
   const setDay = (id, day) => {
-    setAllPosts(p => p.map(x => x.id === id ? { ...x, day } : x));
-    const post = allPosts?.find(x => x.id === id);
-    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { day });
+    setAllPosts(p => {
+      const post = p.find(x => x.id === id);
+      if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { day });
+      return p.map(x => x.id === id ? { ...x, day } : x);
+    });
   };
   const moveToBad = (id) => {
     const reason = prompt("Why is this post bad? (will be saved as feedback)");
     if (reason === null) return;
-    setAllPosts(p => p.map(x => x.id === id ? { ...x, tab: "BAD", notes: reason || "", howToFix: "" } : x));
-    const post = allPosts?.find(x => x.id === id);
-    if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: "BAD", notes: reason || "", how_to_fix: "" });
+    setAllPosts(p => {
+      const post = p.find(x => x.id === id);
+      if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: "BAD", notes: reason || "", how_to_fix: "" });
+      return p.map(x => x.id === id ? { ...x, tab: "BAD", notes: reason || "", howToFix: "" } : x);
+    });
   };
 
   const addPost = () => {
