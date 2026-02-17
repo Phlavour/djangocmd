@@ -1178,10 +1178,44 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     if (supa) savePostsToSupa([newPost]);
     setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
     // Auto-score manual post
-    if (apiKey) setTimeout(() => askClaude(newPost.post, newPost.id, newPost.category), 300);
+    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 300);
   };
 
-  // AI
+  // AI - auto score (runs automatically, saves score to post badge)
+  const autoScore = async (text, pid, category) => {
+    if (!apiKey || !text) return;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 200,
+          messages: [{ role: "user", content: `Score this django_xbt post 1-10.
+
+Post: "${text}"
+Category: ${category || "unknown"}
+
+CRITERIA: voice authenticity, specificity, engagement potential, framework invisibility, pillar fit.
+9-10: viral. 7-8: solid. 5-6: generic. 1-4: weak/AI.
+
+Respond ONLY in JSON: {"score": 7.5}` }],
+        }),
+      });
+      const data = await res.json();
+      const t = data.content?.[0]?.text || "";
+      try {
+        const parsed = JSON.parse(t.replace(/```json|```/g, "").trim());
+        // Save score directly to the post object
+        setAllPosts(prev => (prev || []).map(p => p.id === pid ? { ...p, score: String(parsed.score) } : p));
+        if (supa) {
+          const post = (allPosts || []).find(p => p.id === pid);
+          if (post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { score: String(parsed.score) });
+        }
+      } catch {}
+    } catch (err) { console.error("AutoScore error:", err); }
+  };
+
+  // AI - explain post (triggered by Claude button, shows explanation)
   const askClaude = async (text, pid, category) => {
     if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
     setAiLoading(pid);
@@ -1191,32 +1225,21 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 400,
-          messages: [{ role: "user", content: `You are django_xbt's content strategist and honest critic. Score this post.
+          messages: [{ role: "user", content: `You are django_xbt's content strategist. Explain this post — why it works (or doesn't), what makes it strong, and one specific suggestion to improve it.
 
 Post: "${text}"
 Category: ${category || "unknown"}
 
-SCORING CRITERIA (same as weekly generation scoring):
-1. Voice authenticity — does it sound like django actually wrote this? (lowercase, punchy, "fam", no dots, personal)
-2. Specificity — is it specific and opinionated, or generic advice anyone could write?
-3. Engagement potential — would this get likes/replies/screenshots on crypto Twitter?
-4. Framework invisibility — if it uses a marketing/trading framework, does it feel natural?
-5. Pillar fit — does it serve its content pillar purpose well?
+Be specific and constructive. Reference what's good about the voice, angle, or hook. If something feels off, say what and why. Keep it concise — 2-4 sentences max.
 
-SCORE SCALE:
-- 9-10: exceptional, screenshot-worthy, would go viral
-- 7-8: solid engagement, strong authentic take
-- 5-6: decent but generic, needs more django personality
-- 1-4: weak, sounds like AI, or misses the voice
-
-Respond ONLY in JSON: {"score": 7.5, "notes": "Brief specific feedback + one concrete improvement suggestion"}` }],
+Respond ONLY in JSON: {"notes": "Your explanation here"}` }],
         }),
       });
       const data = await res.json();
       const t = data.content?.[0]?.text || "";
       try { setAiResults(prev => ({ ...prev, [pid]: JSON.parse(t.replace(/```json|```/g, "").trim()) })); }
-      catch { setAiResults(prev => ({ ...prev, [pid]: { score: "?", notes: t } })); }
-    } catch (err) { setAiResults(prev => ({ ...prev, [pid]: { score: "!", notes: err.message } })); }
+      catch { setAiResults(prev => ({ ...prev, [pid]: { notes: t } })); }
+    } catch (err) { setAiResults(prev => ({ ...prev, [pid]: { notes: err.message } })); }
     finally { setAiLoading(null); }
   };
 
@@ -1274,7 +1297,7 @@ Respond ONLY with JSON: [{"post": "rewritten text", "structure": "Structure Name
         // Auto-score both rewrites sequentially
         for (const np of newPosts) {
           await new Promise(r => setTimeout(r, 500));
-          askClaude(np.post, np.id, np.category);
+          autoScore(np.post, np.id, np.category);
         }
       }
       setRewriteId(null);
@@ -1846,7 +1869,6 @@ RESPOND ONLY with JSON array, one per post in order:
                   <Btn small color={T.purple} disabled={aiLoading === p.id || !p.post} onClick={() => askClaude(p.post, p.id, p.category)}>
                     {aiLoading === p.id ? "⏳..." : "🤖 Claude"}
                   </Btn>
-                  {ai && <Badge color={parseFloat(ai.score) >= 8.5 ? T.green : parseFloat(ai.score) >= 7 ? T.amber : parseFloat(ai.score) >= 5 ? T.blue : T.red}>AI: {ai.score}</Badge>}
                   {isDraft && <Btn small color={T.cyan} outline onClick={() => { setRewriteId(rewriteId === p.id ? null : p.id); setRewriteFeedback(""); }}>
                     {rewriteId === p.id ? "Cancel" : "✎ Rewrite"}
                   </Btn>}
