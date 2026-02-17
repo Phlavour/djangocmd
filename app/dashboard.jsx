@@ -1003,7 +1003,7 @@ Respond ONLY with valid JSON array, no markdown:
 
 function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
-  const [sortBy, setSortBy] = useState("default");
+  const [sortBy, setSortBy] = useState("mine-first");
   const [newPostText, setNewPostText] = useState("");
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
@@ -1016,6 +1016,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
   const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [fixLoading, setFixLoading] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
@@ -1054,7 +1055,19 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   // Filtered + sorted posts
   const tabPosts = allPosts ? allPosts.filter(p => p.tab === activeTab) : [];
   let sorted = [...tabPosts];
-  if (sortBy === "category") sorted.sort((a, b) => a.category.localeCompare(b.category));
+  if (sortBy === "mine-first") {
+    sorted.sort((a, b) => {
+      const aIsManual = a.source === "manual" ? 0 : 1;
+      const bIsManual = b.source === "manual" ? 0 : 1;
+      const aIsRewrite = (a.notes || "").startsWith("rewrite") ? 0 : 1;
+      const bIsRewrite = (b.notes || "").startsWith("rewrite") ? 0 : 1;
+      const aPri = Math.min(aIsManual, aIsRewrite);
+      const bPri = Math.min(bIsManual, bIsRewrite);
+      if (aPri !== bPri) return aPri - bPri;
+      return parseFloat(b.score || 0) - parseFloat(a.score || 0);
+    });
+  }
+  else if (sortBy === "category") sorted.sort((a, b) => (a.category || "").localeCompare(b.category || ""));
   else if (sortBy === "score-desc") sorted.sort((a, b) => parseFloat(b.score || 0) - parseFloat(a.score || 0));
   else if (sortBy === "score-asc") sorted.sort((a, b) => parseFloat(a.score || 0) - parseFloat(b.score || 0));
   else if (sortBy === "impressions") sorted.sort((a, b) => parseInt(b.impressions || 0) - parseInt(a.impressions || 0));
@@ -1304,6 +1317,51 @@ Respond ONLY with JSON: [{"post": "rewritten text", "structure": "Structure Name
       setRewriteFeedback("");
     } catch (err) { alert("Error: " + err.message); }
     setRewriteLoading(false);
+  };
+
+  // Fix post - grammar, style, translate to English, Django voice
+  const fixPost = async (post) => {
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+    setFixLoading(post.id);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 800,
+          messages: [{ role: "user", content: `You are django_xbt. Fix this post.
+
+ORIGINAL POST:
+"${post.post}"
+
+CATEGORY: ${post.category}
+
+INSTRUCTIONS:
+- fix grammar and stylistic errors
+- translate to English if needed — make it sound natural and logical in English
+- use Django's voice: lowercase, no dots at end, no emojis, no hashtags, no em dashes, use ">" for bullets, "fam" naturally
+- only make minor improvements UNLESS you think a better hook or engagement trick would significantly improve it
+- if adding a hook or twist, keep the original message intact
+- keep the same length roughly — don't expand unnecessarily
+- the fixed version should feel like a polished version of the original, not a rewrite
+
+Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you changed (1 sentence)"}` }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (parsed.post) {
+        // Replace the post text directly
+        setAllPosts(prev => (prev || []).map(p => p.id === post.id ? { ...p, post: parsed.post, notes: (p.notes ? p.notes + " | " : "") + "fixed: " + (parsed.changes || "").slice(0, 80) } : p));
+        if (supa && post._supaId) {
+          supa.patch("posts", `id=eq.${post._supaId}`, { post: parsed.post, notes: (post.notes ? post.notes + " | " : "") + "fixed: " + (parsed.changes || "").slice(0, 80) });
+        }
+        // Re-score
+        setTimeout(() => autoScore(parsed.post, post.id, post.category), 300);
+      }
+    } catch (err) { alert("Fix error: " + err.message); }
+    setFixLoading(null);
   };
 
   const saveEdit = (pid, newText) => {
@@ -1591,7 +1649,7 @@ RESPOND ONLY with JSON array, one per post in order:
     ? [{ v: "default", l: "Default" }, { v: "impressions", l: "Impressions ↓" }]
     : isPost
     ? [{ v: "default", l: "Default" }, { v: "day", l: "Day of Week" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }]
-    : [{ v: "default", l: "Default" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }, { v: "score-asc", l: "Score ↑" }];
+    : [{ v: "mine-first", l: "✍ Mine First" }, { v: "default", l: "Default" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }, { v: "score-asc", l: "Score ↑" }];
 
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
 
@@ -1706,7 +1764,7 @@ RESPOND ONLY with JSON array, one per post in order:
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
-            active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy("default"); }}
+            active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy(tab === "DRAFT" ? "mine-first" : "default"); }}
             color={TC[tab].color} count={counts[tab]} />
         ))}
       </div>
@@ -1871,6 +1929,9 @@ RESPOND ONLY with JSON array, one per post in order:
                   </Btn>
                   {isDraft && <Btn small color={T.cyan} outline onClick={() => { setRewriteId(rewriteId === p.id ? null : p.id); setRewriteFeedback(""); }}>
                     {rewriteId === p.id ? "Cancel" : "✎ Rewrite"}
+                  </Btn>}
+                  {isDraft && <Btn small color={T.amber} outline disabled={fixLoading === p.id} onClick={() => fixPost(p)}>
+                    {fixLoading === p.id ? "⏳..." : "🔧 Fix"}
                   </Btn>}
                 </>}
               </div>
