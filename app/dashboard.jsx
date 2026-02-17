@@ -1016,6 +1016,8 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
   const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const TC = TABS_CONFIG_FN();
@@ -1264,11 +1266,26 @@ Respond ONLY with JSON: [{"post": "rewritten text", "structure": "Structure Name
         }));
         setAllPosts(prev => [...newPosts, ...(prev || [])]);
         if (supa) savePostsToSupa(newPosts);
+        // Auto-score both rewrites sequentially
+        for (const np of newPosts) {
+          await new Promise(r => setTimeout(r, 500));
+          askClaude(np.post, np.id, np.category);
+        }
       }
       setRewriteId(null);
       setRewriteFeedback("");
     } catch (err) { alert("Error: " + err.message); }
     setRewriteLoading(false);
+  };
+
+  const saveEdit = (pid, newText) => {
+    setAllPosts(prev => (prev || []).map(p => p.id === pid ? { ...p, post: newText } : p));
+    if (supa) {
+      const post = (allPosts || []).find(p => p.id === pid);
+      if (post) savePostsToSupa([{ ...post, post: newText }]);
+    }
+    setEditingId(null);
+    setEditText("");
   };
 
   // Brand voice upload
@@ -1734,8 +1751,28 @@ RESPOND ONLY with JSON array, one per post in order:
 
               {/* Header: post text left, badges right */}
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                  {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty</span>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {editingId === p.id ? (
+                    <div>
+                      <textarea value={editText} onChange={e => setEditText(e.target.value)}
+                        autoFocus
+                        style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.cyan}`, borderRadius: 6, padding: 10, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }}
+                        onKeyDown={e => { if (e.key === "Escape") { setEditingId(null); setEditText(""); } if (e.key === "Enter" && e.ctrlKey) saveEdit(p.id, editText); }} />
+                      <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                        <Btn small color={T.cyan} onClick={() => saveEdit(p.id, editText)}>Save</Btn>
+                        <Btn small outline onClick={() => { setEditingId(null); setEditText(""); }}>Cancel</Btn>
+                        <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>{editText.length} chars · Ctrl+Enter to save · Esc to cancel</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", cursor: "pointer", borderRadius: 6, padding: "2px 4px", margin: "-2px -4px", transition: "background .15s" }}
+                      onClick={() => { setEditingId(p.id); setEditText(p.post || ""); }}
+                      onMouseEnter={e => e.currentTarget.style.background = `${T.cyan}08`}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      title="Click to edit">
+                      {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty — click to edit</span>}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
                   {p.category && <Badge color={PC[p.category] || PC[p.category.charAt(0).toUpperCase() + p.category.slice(1)] || T.textSoft}>{p.category}</Badge>}
