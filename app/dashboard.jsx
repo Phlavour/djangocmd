@@ -1100,6 +1100,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       const rows = posts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
+        source: p.source || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1130,6 +1131,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       const rows = allPosts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
+        source: p.source || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1168,12 +1170,15 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     const newPost = {
       id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
       post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
+      source: "manual",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
     if (supa) savePostsToSupa([newPost]);
     setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
+    // Auto-score manual post
+    if (apiKey) setTimeout(() => askClaude(newPost.post, newPost.id, newPost.category), 300);
   };
 
   // AI
@@ -1775,6 +1780,7 @@ RESPOND ONLY with JSON array, one per post in order:
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
+                  {p.source === "manual" && <Badge color={T.cyan}>✍ Manual</Badge>}
                   {p.category && <Badge color={PC[p.category] || PC[p.category.charAt(0).toUpperCase() + p.category.slice(1)] || T.textSoft}>{p.category}</Badge>}
                   {p.structure && <Badge color={T.textDim}>{p.structure}</Badge>}
                   {p.score && <Badge color={parseFloat(p.score) >= 8.5 ? T.green : parseFloat(p.score) >= 7 ? T.amber : T.textSoft}>⭐ {p.score}</Badge>}
@@ -2378,6 +2384,7 @@ function TwitterPanel({ apiKey, supa }) {
           setAllPosts(posts.map(p => ({
             id: p.id, tab: p.tab, category: p.category, structure: p.structure,
             post: p.post, notes: p.notes, score: p.score, howToFix: p.how_to_fix,
+            source: p.source || "",
             day: p.day, postLink: p.post_link, impressions: p.impressions,
             likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
             replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
