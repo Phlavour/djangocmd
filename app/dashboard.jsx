@@ -1188,7 +1188,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     if (supa && post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { tab: "BAD", notes: reason || "", how_to_fix: "" });
   };
 
-  const addPost = () => {
+  const addPost = async () => {
     if (!newPostText.trim()) return;
     const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
     const newPost = {
@@ -1199,10 +1199,17 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    if (supa) savePostsToSupa([newPost]);
     setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
-    // Auto-score manual post (wait for Supabase save to complete)
-    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 2000);
+    // Save to Supabase and get real ID
+    let supaId = null;
+    if (supa) {
+      try {
+        const saved = await savePostsToSupa([newPost]);
+        // savePostsToSupa updates state with _supaId internally
+      } catch {}
+    }
+    // Auto-score - use small delay to let state update with _supaId
+    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 500);
   };
 
   // AI - auto score (runs automatically, saves score to post badge)
@@ -1230,26 +1237,19 @@ Respond ONLY in JSON: {"score": 7.5}` }],
       try {
         const parsed = JSON.parse(t.replace(/```json|```/g, "").trim());
         const scoreStr = String(parsed.score);
-        // Save score to local state
-        setAllPosts(prev => (prev || []).map(p => p.id === pid ? { ...p, score: scoreStr } : p));
-        // Save score to Supabase - try _supaId first, then search by post text
-        if (supa) {
-          setAllPosts(prev => {
-            const post = prev.find(p => p.id === pid);
-            if (post?._supaId) {
-              supa.patch("posts", `id=eq.${post._supaId}`, { score: scoreStr });
-            } else if (post?.post) {
-              // Fallback: find by text in Supabase
-              supa.get("posts", `post=eq.${encodeURIComponent(post.post.slice(0, 80))}&limit=1`).then(rows => {
-                if (rows?.[0]?.id) {
-                  supa.patch("posts", `id=eq.${rows[0].id}`, { score: scoreStr });
-                  setAllPosts(p => p.map(x => x.id === pid ? { ...x, _supaId: rows[0].id, id: rows[0].id } : x));
-                }
-              }).catch(() => {});
-            }
-            return prev;
-          });
-        }
+        // Find post by text match (IDs may have changed after Supabase save)
+        setAllPosts(prev => {
+          const idx = prev.findIndex(p => p.post === text);
+          if (idx < 0) return prev;
+          const post = prev[idx];
+          // Save to Supabase
+          if (supa && post._supaId) {
+            supa.patch("posts", `id=eq.${post._supaId}`, { score: scoreStr });
+          }
+          const updated = [...prev];
+          updated[idx] = { ...post, score: scoreStr };
+          return updated;
+        });
       } catch {}
     } catch (err) { console.error("AutoScore error:", err); }
   };
