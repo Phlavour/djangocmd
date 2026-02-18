@@ -1201,8 +1201,8 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     setAllPosts(p => [...(p || []), newPost]);
     if (supa) savePostsToSupa([newPost]);
     setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
-    // Auto-score manual post
-    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 300);
+    // Auto-score manual post (wait for Supabase save to complete)
+    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 2000);
   };
 
   // AI - auto score (runs automatically, saves score to post badge)
@@ -1229,11 +1229,26 @@ Respond ONLY in JSON: {"score": 7.5}` }],
       const t = data.content?.[0]?.text || "";
       try {
         const parsed = JSON.parse(t.replace(/```json|```/g, "").trim());
-        // Save score directly to the post object
-        setAllPosts(prev => (prev || []).map(p => p.id === pid ? { ...p, score: String(parsed.score) } : p));
+        const scoreStr = String(parsed.score);
+        // Save score to local state
+        setAllPosts(prev => (prev || []).map(p => p.id === pid ? { ...p, score: scoreStr } : p));
+        // Save score to Supabase - try _supaId first, then search by post text
         if (supa) {
-          const post = (allPosts || []).find(p => p.id === pid);
-          if (post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { score: String(parsed.score) });
+          setAllPosts(prev => {
+            const post = prev.find(p => p.id === pid);
+            if (post?._supaId) {
+              supa.patch("posts", `id=eq.${post._supaId}`, { score: scoreStr });
+            } else if (post?.post) {
+              // Fallback: find by text in Supabase
+              supa.get("posts", `post=eq.${encodeURIComponent(post.post.slice(0, 80))}&limit=1`).then(rows => {
+                if (rows?.[0]?.id) {
+                  supa.patch("posts", `id=eq.${rows[0].id}`, { score: scoreStr });
+                  setAllPosts(p => p.map(x => x.id === pid ? { ...x, _supaId: rows[0].id, id: rows[0].id } : x));
+                }
+              }).catch(() => {});
+            }
+            return prev;
+          });
         }
       } catch {}
     } catch (err) { console.error("AutoScore error:", err); }
