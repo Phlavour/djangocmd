@@ -1237,9 +1237,10 @@ Respond ONLY in JSON: {"score": 7.5}` }],
       try {
         const parsed = JSON.parse(t.replace(/```json|```/g, "").trim());
         const scoreStr = String(parsed.score);
-        // Find post by text match (IDs may have changed after Supabase save)
+        // Find post by text match (prefer unscored post with same text)
         setAllPosts(prev => {
-          const idx = prev.findIndex(p => p.post === text);
+          let idx = prev.findIndex(p => p.post === text && !p.score);
+          if (idx < 0) idx = prev.findIndex(p => p.post === text);
           if (idx < 0) return prev;
           const post = prev[idx];
           // Save to Supabase
