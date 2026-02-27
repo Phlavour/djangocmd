@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 // ═══════════════════════════════════════════════════════════════
@@ -497,7 +497,7 @@ VOICE RULES:
 - no dots at end of sentences
 - no emojis, no hashtags, no em dashes
 - use ">" for bullet points in lists
-- use "fam" naturally
+- use "fam" sparingly - max 1 in 5 posts, never forced
 - short punchy sentences, mix with longer explanations
 - sound human and authentic, NOT like AI
 - be specific, opinionated, direct
@@ -1005,6 +1005,49 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("mine-first");
   const [newPostText, setNewPostText] = useState("");
+  const [newPostImage, setNewPostImage] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef(null);
+
+  const uploadImage = async (file) => {
+    if (!supa) { alert("Connect Supabase first"); return null; }
+    if (!file) return null;
+    setImageUploading(true);
+    try {
+      const ext = file.name?.split(".").pop() || "png";
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const url = await supa.uploadImage(file, filename);
+      setNewPostImage(url);
+      return url;
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Image upload failed. Make sure 'post-images' bucket exists in Supabase Storage (public).");
+      return null;
+    } finally { setImageUploading(false); }
+  };
+
+  const handleImagePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        uploadImage(item.getAsFile());
+        return;
+      }
+    }
+  };
+
+  const handleImageDrop = (e) => {
+    e.preventDefault();
+    e.currentTarget.style.borderColor = T.border;
+    const file = e.dataTransfer?.files?.[0];
+    if (file?.type.startsWith("image/")) uploadImage(file);
+  };
+
+  const handleImageFile = (file) => {
+    if (file?.type.startsWith("image/")) uploadImage(file);
+  };
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -1110,10 +1153,11 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     if (supa) supa.del("posts", `tab=eq.${tab}`);
   };
   const saveGoal = (target, current) => {
-    setGoalTarget(target); setGoalCurrent(current);
-    try { localStorage.setItem("djangocmd_goal_target", String(target)); localStorage.setItem("djangocmd_goal_current", String(current)); } catch {}
+    const t = Number(target) || 0, c = Number(current) || 0;
+    setGoalTarget(t); setGoalCurrent(c);
+    try { localStorage.setItem("djangocmd_goal_target", String(t)); localStorage.setItem("djangocmd_goal_current", String(c)); } catch {}
     if (supa) {
-      supa.upsert("goal", { account: "@django_crypto", target_followers: target, current_followers: current, deadline: goalDeadline }).catch(err => console.error("Goal save error:", err));
+      supa.upsert("goal", { account: "@django_crypto", target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => console.error("Goal save error:", err));
     }
   };
 
@@ -1124,7 +1168,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       const rows = posts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1155,7 +1199,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       const rows = allPosts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1194,12 +1238,12 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     const newPost = {
       id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
       post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
-      source: "manual",
+      source: "manual", image_url: newPostImage.trim() || "",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setNewPostImage(""); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -1293,7 +1337,7 @@ Respond ONLY in JSON: {"notes": "Your explanation here"}` }],
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
+          model: "claude-sonnet-4-20250514", max_tokens: 600,
           messages: [{ role: "user", content: `You are django_xbt. Rewrite this post based on the feedback below.
 
 ORIGINAL POST:
@@ -1308,36 +1352,33 @@ ${rewriteFeedback}
 VOICE RULES:
 - always lowercase, no dots at end, no emojis, no hashtags, no em dashes
 - use ">" for bullet points
-- use "fam" naturally
+- use "fam" sparingly and naturally (not every post needs it)
 - sound like django, not AI
 - be specific, opinionated, authentic
 
-Keep the same category and general topic but apply the feedback. Write 2 versions:
-V1: closer to original but improved per feedback
-V2: more creative reinterpretation per feedback
+Keep the same category and general topic but apply the feedback. Write an improved version that stays close to the original intent.
 
-Respond ONLY with JSON: [{"post": "rewritten text", "structure": "Structure Name"}, {"post": "second version", "structure": "Structure Name"}]` }],
+Respond ONLY with JSON: {"post": "rewritten text", "structure": "Structure Name"}` }],
         }),
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text || "[]";
-      const versions = JSON.parse(text.replace(/```json|```/g, "").trim());
-      if (versions.length > 0) {
+      const text = data.content?.[0]?.text || "{}";
+      const version = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (version.post) {
         const maxId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
-        const newPosts = versions.map((v, i) => ({
-          id: maxId + i, tab: "DRAFT", category: post.category,
-          structure: v.structure || post.structure, post: v.post || "",
+        const newPost = {
+          id: maxId, tab: "DRAFT", category: post.category,
+          structure: version.structure || post.structure, post: version.post || "",
           notes: `rewrite of #${post.id}: "${rewriteFeedback.slice(0, 60)}"`,
           score: "", howToFix: "", day: "",
           postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
           replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
-        }));
-        setAllPosts(prev => [...newPosts, ...(prev || [])]);
-        if (supa) savePostsToSupa(newPosts);
-        // Auto-score both rewrites sequentially
-        for (const np of newPosts) {
-          await new Promise(r => setTimeout(r, 500));
-          autoScore(np.post, np.id, np.category);
+        };
+        setAllPosts(prev => [newPost, ...(prev || [])]);
+        if (supa) savePostsToSupa([newPost]);
+        // Auto-score rewrite
+        await new Promise(r => setTimeout(r, 1500));
+        autoScore(newPost.post, newPost.id, newPost.category);
         }
       }
       setRewriteId(null);
@@ -1366,7 +1407,7 @@ CATEGORY: ${post.category}
 INSTRUCTIONS:
 - fix grammar and stylistic errors
 - translate to English if needed — make it sound natural and logical in English
-- use Django's voice: lowercase, no dots at end, no emojis, no hashtags, no em dashes, use ">" for bullets, "fam" naturally
+- use Django's voice: lowercase, no dots at end, no emojis, no hashtags, no em dashes, use ">" for bullets, "fam" sparingly - max 1 in 5 posts
 - only make minor improvements UNLESS you think a better hook or engagement trick would significantly improve it
 - if adding a hook or twist, keep the original message intact
 - keep the same length roughly — don't expand unnecessarily
@@ -1573,10 +1614,11 @@ CRITICAL RULES:
 - always lowercase (never caps except proper nouns or intentional emphasis)
 - no dots at end of sentences, no em dashes, no emojis, no hashtags
 - use ">" for bullet points in lists
-- use "fam" naturally, not forced
+- use "fam" sparingly - max 1 in 5 posts, never forced, not forced
 - ROTATE subtopics — each post DIFFERENT subtopic (no repeats)
 - VARY structures — don't use same structure twice in a row
 - LENGTH DISTRIBUTION: exactly 50% of posts MUST be under 280 characters (short, punchy). the other 50% should be 300-700 characters (detailed breakdowns, stories, lists). alternate between short and long
+- FAM USAGE: use "fam" in maximum 20% of posts (about 8 out of 42). most posts should NOT contain "fam". it's a signature, not a crutch
 - sound like django wrote this at 2am, not like AI generated it
 - be specific, opinionated, direct — no generic advice
 - share personal experience when relevant ("i did X" not "you should X")
@@ -1838,9 +1880,25 @@ RESPOND ONLY with JSON array, one per post in order:
                   </select>
                 </div>
               </div>
-              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post fam..."
+              <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                <div
+                  style={{ flex: 1, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: T.textDim, cursor: "pointer", textAlign: "center", fontFamily: "'IBM Plex Mono', monospace" }}
+                  onClick={() => imageInputRef.current?.click()}
+                  onPaste={handleImagePaste}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = T.cyan; }}
+                  onDragLeave={e => { e.currentTarget.style.borderColor = T.border; }}
+                  onDrop={handleImageDrop}
+                  tabIndex={0}
+                >
+                  {imageUploading ? "⏳ uploading..." : newPostImage ? "✓ image attached" : "📎 paste, drop, or click to add image"}
+                </div>
+                <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImageFile(e.target.files?.[0])} />
+                {newPostImage && <Btn small outline onClick={() => setNewPostImage("")}>✕</Btn>}
+              </div>
+              {newPostImage && <img src={newPostImage} alt="preview" style={{ maxWidth: 200, maxHeight: 120, borderRadius: 6, marginTop: 6, objectFit: "cover", border: `1px solid ${T.border}` }} />}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <Btn color={T.green} onClick={addPost}>Add to Draft</Btn>
                 <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
@@ -1885,6 +1943,7 @@ RESPOND ONLY with JSON array, one per post in order:
                       title="Click to edit">
                       {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty — click to edit</span>}
                     </div>
+                    {p.image_url && <img src={p.image_url} alt="" style={{ maxWidth: 160, maxHeight: 100, borderRadius: 6, marginTop: 8, objectFit: "cover", border: `1px solid ${T.border}` }} onError={e => e.target.style.display = "none"} />}
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
@@ -1973,7 +2032,7 @@ RESPOND ONLY with JSON array, one per post in order:
                     onFocus={e => e.target.style.borderColor = T.cyan} onBlur={e => e.target.style.borderColor = T.border} />
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                     <Btn small color={T.cyan} disabled={rewriteLoading || !rewriteFeedback.trim()} onClick={() => rewritePost(p)}>
-                      {rewriteLoading ? "⏳ Rewriting..." : "Generate 2 Rewrites"}
+                      {rewriteLoading ? "⏳ Rewriting..." : "Generate Rewrite"}
                     </Btn>
                     <Btn small outline onClick={() => { setRewriteId(null); setRewriteFeedback(""); }}>Cancel</Btn>
                   </div>
@@ -2494,19 +2553,20 @@ function TwitterPanel({ apiKey, supa }) {
           setAllPosts(posts.map(p => ({
             id: p.id, tab: p.tab, category: p.category, structure: p.structure,
             post: p.post, notes: p.notes, score: p.score, howToFix: p.how_to_fix,
-            source: p.source || "",
+            source: p.source || "", image_url: p.image_url || "",
             day: p.day, postLink: p.post_link, impressions: p.impressions,
             likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
             replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
             newFollows: p.new_follows, urlClicks: p.url_clicks, _supaId: p.id,
           })));
         }
-        // Load Goal from Supabase
+        // Load Goal from Supabase (always overrides localStorage)
         const goals = await supa.get("goal", "account=eq.@django_crypto");
         if (Array.isArray(goals) && goals[0]) {
           const g = goals[0];
-          if (g.target_followers) { setGoalTarget(g.target_followers); try { localStorage.setItem("djangocmd_goal_target", g.target_followers); } catch {} }
-          if (g.current_followers) { setGoalCurrent(g.current_followers); try { localStorage.setItem("djangocmd_goal_current", g.current_followers); } catch {} }
+          if (g.target_followers != null) { setGoalTarget(Number(g.target_followers)); try { localStorage.setItem("djangocmd_goal_target", String(g.target_followers)); } catch {} }
+          if (g.current_followers != null) { setGoalCurrent(Number(g.current_followers)); try { localStorage.setItem("djangocmd_goal_current", String(g.current_followers)); } catch {} }
+          if (g.deadline) { /* deadline is hardcoded for now */ }
         }
         // Load Brand Voice from Supabase
         const bv = await supa.get("settings", "key=eq.brand_voice");
@@ -3191,13 +3251,22 @@ export default function App() {
 
   // Supabase helper
   const supa = (supaUrl && supaKey) ? {
-    url: supaUrl,
+    url: supaUrl, key: supaKey,
     headers: { "apikey": supaKey, "Authorization": `Bearer ${supaKey}`, "Content-Type": "application/json", "Prefer": "return=representation" },
     async get(table, params = "") { const r = await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { headers: this.headers }); return r.json(); },
     async post(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
     async patch(table, params, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "PATCH", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
     async del(table, params) { await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "DELETE", headers: this.headers }); },
     async upsert(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: { ...this.headers, "Prefer": "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(data) }); return r.json(); },
+    async uploadImage(file, filename) {
+      const r = await fetch(`${supaUrl}/storage/v1/object/post-images/${filename}`, {
+        method: "POST",
+        headers: { "apikey": supaKey, "Authorization": `Bearer ${supaKey}`, "Content-Type": file.type || "image/png", "x-upsert": "true" },
+        body: file,
+      });
+      if (!r.ok) throw new Error("Upload failed: " + r.status);
+      return `${supaUrl}/storage/v1/object/public/post-images/${filename}`;
+    },
   } : null;
 
   return (
