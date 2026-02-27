@@ -1379,7 +1379,6 @@ Respond ONLY with JSON: {"post": "rewritten text", "structure": "Structure Name"
         // Auto-score rewrite
         await new Promise(r => setTimeout(r, 1500));
         autoScore(newPost.post, newPost.id, newPost.category);
-        }
       }
       setRewriteId(null);
       setRewriteFeedback("");
