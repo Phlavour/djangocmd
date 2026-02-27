@@ -1001,7 +1001,7 @@ Respond ONLY with valid JSON array, no markdown:
   );
 }
 
-function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded }) {
+function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded, weeklyNotes, setWeeklyNotes, lastAnalysis, setLastAnalysis }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("mine-first");
   const [newPostText, setNewPostText] = useState("");
@@ -1073,6 +1073,8 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [aiResults, setAiResults] = useState({});
   const [showGen, setShowGen] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
+  const [weeklyNotesSaving, setWeeklyNotesSaving] = useState(false);
+  const weeklyNotesTimer = useRef(null);
   const [genProgress, setGenProgress] = useState("");
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
@@ -1180,6 +1182,13 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         supa.post("goal", [{ account: "@django_crypto", target_followers: t, current_followers: c, deadline: goalDeadline }]).catch(() => {});
       });
     }
+  };
+
+  // Save weekly notes
+  const saveWeeklyNotes = (text) => {
+    setWeeklyNotes(text);
+    try { localStorage.setItem("djangocmd_weekly_notes", text); } catch {}
+    if (supa) supa.upsert("settings", { key: "weekly_notes", value: text }).catch(() => {});
   };
 
   // Save new posts to Supabase
@@ -1681,6 +1690,8 @@ ${structList}
 ${batch.advisor}
 
 ${badFeedback ? `═══ POSTS THAT FAILED (avoid these patterns) ═══\n${badFeedback}\n` : ""}
+${weeklyNotes ? `═══ WEEKLY NOTES FROM DJANGO (follow these directions) ═══\n${weeklyNotes}\n` : ""}
+${lastAnalysis ? `═══ LAST WEEK'S AI ANALYSIS (apply these insights) ═══\n${lastAnalysis.slice(0, 1500)}\n` : ""}
 
 ═══ TASK ═══
 Generate exactly ${batch.count} original posts for the "${batch.category}" pillar.
@@ -1816,6 +1827,31 @@ RESPOND ONLY with JSON array, one per post in order:
           <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
       </div>
+
+      {/* Weekly Notes + Generator + GOAL row */}
+      <Card style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14 }}>📋</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Notes</span>
+            <span style={{ fontSize: 10, color: T.textDim }}>feedback & direction for next batch</span>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {weeklyNotesSaving && <span style={{ fontSize: 10, color: T.green }}>✓ saved</span>}
+            <Btn small outline onClick={() => { if (confirm("Clear weekly notes?")) { setWeeklyNotes(""); if (supa) supa.patch("settings", "key=eq.weekly_notes", { value: "" }); } }}>Clear</Btn>
+          </div>
+        </div>
+        <textarea value={weeklyNotes} onChange={e => { setWeeklyNotes(e.target.value); weeklyNotesTimer.current && clearTimeout(weeklyNotesTimer.current); weeklyNotesTimer.current = setTimeout(() => { if (supa) { supa.patch("settings", "key=eq.weekly_notes", { value: e.target.value }).then(() => { setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000); }); } try { localStorage.setItem("djangocmd_weekly_notes", e.target.value); } catch {} }, 1000); }}
+          placeholder="what worked last week? what didn't? what topics to focus on? any specific direction for next batch..."
+          style={{ width: "100%", minHeight: 70, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }}
+          onFocus={e => e.target.style.borderColor = T.amber} onBlur={e => e.target.style.borderColor = T.border} />
+        {lastAnalysis && (
+          <details style={{ marginTop: 8 }}>
+            <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📊 Last AI Analysis (auto-attached to generation)</summary>
+            <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5, marginTop: 6, padding: 8, background: T.bg2, borderRadius: 6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{lastAnalysis}</div>
+          </details>
+        )}
+      </Card>
 
       {/* Generator + GOAL row */}
       <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
@@ -2266,7 +2302,7 @@ const AChartTip = ({ active, payload, label }) => {
   </div>);
 };
 
-function WeeklyAnalytics({ sheetData, loading, apiKey, supa }) {
+function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis }) {
   const [history, setHistory] = useState(() => { try { return JSON.parse(sessionStorage.getItem(ANALYTICS_SK)||"{}"); } catch { return {}; } });
   const [selWeek, setSelWeek] = useState(null);
   const [status, setStatus] = useState("");
@@ -2361,7 +2397,13 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa }) {
     const prompt = "You are Django's (@django_xbt) content strategist.\n\nWEEK: "+curWeek+"\nImpressions: "+tImp.toLocaleString()+" | Posts: "+o.length+" ("+pl.length+" planned, "+sp.length+" spontaneous)\nPlanned avg: "+(pl.length?Math.round(pl.reduce((s,p)=>s+p.impressions,0)/pl.length):0)+" | Spont avg: "+(sp.length?Math.round(sp.reduce((s,p)=>s+p.impressions,0)/sp.length):0)+"\n\nPillars:\n"+Object.entries(ps).map(([k,v])=>k+": "+v.n+"x, avg "+Math.round(v.imp/v.n)+" imp").join("\n")+"\n\nTop 10:\n"+[...o].sort((a,b)=>b.impressions-a.impressions).slice(0,10).map((p,i)=>(i+1)+". ["+p.impressions+"imp "+p.likes+"L] "+p.source+"/"+p.pillar+' "'+p.text.slice(0,100)+'"').join("\n")+"\n\nGive: 1)TL;DR 2)Planned vs Spontaneous 3)Pillar Performance 4)Structure Analysis 5)Scoring Check 6)Top Insight 7)3 Action Items. Direct, lowercase, no fluff.";
     try {
       const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]}) });
-      const data = await r.json(); setReport(data.content?.map(c=>c.text||"").join("")||"no response");
+      const data = await r.json(); const reportText = data.content?.map(c=>c.text||"").join("")||"no response"; setReport(reportText);
+      // Auto-save to lastAnalysis for weekly generation
+      if (setLastAnalysis && reportText && !reportText.startsWith("error")) {
+        setLastAnalysis(reportText);
+        try { localStorage.setItem("djangocmd_last_analysis", reportText); } catch {}
+        if (supa) supa.upsert("settings", { key: "last_analysis", value: reportText }).catch(() => {});
+      }
     } catch(e) { setReport("error: "+e.message); }
     setRepLoad(false);
   };
@@ -2611,6 +2653,12 @@ function TwitterPanel({ apiKey, supa }) {
   const [brandVoice, setBrandVoice] = useState(() => {
     try { return localStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
   });
+  const [weeklyNotes, setWeeklyNotes] = useState(() => {
+    try { return localStorage.getItem("djangocmd_weekly_notes") || ""; } catch { return ""; }
+  });
+  const [lastAnalysis, setLastAnalysis] = useState(() => {
+    try { return localStorage.getItem("djangocmd_last_analysis") || ""; } catch { return ""; }
+  });
   const [goalTarget, setGoalTarget] = useState(() => {
     try { return parseInt(localStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
   });
@@ -2650,6 +2698,18 @@ function TwitterPanel({ apiKey, supa }) {
         if (Array.isArray(bv) && bv[0]?.value) {
           setBrandVoice(bv[0].value);
           try { localStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
+        }
+        // Load Weekly Notes from Supabase
+        const wn = await supa.get("settings", "key=eq.weekly_notes");
+        if (Array.isArray(wn) && wn[0]?.value) {
+          setWeeklyNotes(wn[0].value);
+          try { localStorage.setItem("djangocmd_weekly_notes", wn[0].value); } catch {}
+        }
+        // Load Last Analysis from Supabase
+        const la = await supa.get("settings", "key=eq.last_analysis");
+        if (Array.isArray(la) && la[0]?.value) {
+          setLastAnalysis(la[0].value);
+          try { localStorage.setItem("djangocmd_last_analysis", la[0].value); } catch {}
         }
         // Load Claude API key from Supabase (if not already set locally)
         try {
@@ -2713,8 +2773,10 @@ function TwitterPanel({ apiKey, supa }) {
           goalTarget={goalTarget} setGoalTarget={setGoalTarget}
           goalCurrent={goalCurrent} setGoalCurrent={setGoalCurrent}
           goalDeadline={goalDeadline} supaLoaded={supaLoaded}
+          weeklyNotes={weeklyNotes} setWeeklyNotes={setWeeklyNotes}
+          lastAnalysis={lastAnalysis} setLastAnalysis={setLastAnalysis}
         />}
-        {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} supa={supa} />}
+        {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} supa={supa} setLastAnalysis={setLastAnalysis} />}
       </>}
     </div>
   );
