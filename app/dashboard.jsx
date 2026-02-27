@@ -1157,7 +1157,10 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     setGoalTarget(t); setGoalCurrent(c);
     try { localStorage.setItem("djangocmd_goal_target", String(t)); localStorage.setItem("djangocmd_goal_current", String(c)); } catch {}
     if (supa) {
-      supa.upsert("goal", { account: "@django_crypto", target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => console.error("Goal save error:", err));
+      supa.patch("goal", "account=eq.@django_crypto", { target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => {
+        // If no row exists yet, insert
+        supa.post("goal", [{ account: "@django_crypto", target_followers: t, current_followers: c, deadline: goalDeadline }]).catch(() => {});
+      });
     }
   };
 
