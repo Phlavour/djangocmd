@@ -1048,6 +1048,24 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const handleImageFile = (file) => {
     if (file?.type.startsWith("image/")) uploadImage(file);
   };
+
+  // Upload image for existing post
+  const postImageRef = useRef(null);
+  const [imageTargetId, setImageTargetId] = useState(null);
+
+  const uploadImageForPost = async (file, postId) => {
+    if (!supa || !file) return;
+    try {
+      const ext = file.name?.split(".").pop() || "png";
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const url = await supa.uploadImage(file, filename);
+      setAllPosts(prev => (prev || []).map(p => p.id === postId ? { ...p, image_url: url } : p));
+      const post = (allPosts || []).find(p => p.id === postId);
+      if (post?._supaId) supa.patch("posts", `id=eq.${post._supaId}`, { image_url: url });
+    } catch (err) {
+      alert("Image upload failed. Check 'post-images' bucket in Supabase.");
+    }
+  };
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -1267,8 +1285,8 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 200,
-          messages: [{ role: "user", content: `Score this django_xbt post 1-10.
+          model: "claude-sonnet-4-20250514", max_tokens: 300,
+          messages: [{ role: "user", content: `Score this django_xbt post 1-10 and explain briefly.
 
 Post: "${text}"
 Category: ${category || "unknown"}
@@ -1276,7 +1294,7 @@ Category: ${category || "unknown"}
 CRITERIA: voice authenticity, specificity, engagement potential, framework invisibility, pillar fit.
 9-10: viral. 7-8: solid. 5-6: generic. 1-4: weak/AI.
 
-Respond ONLY in JSON: {"score": 7.5}` }],
+Respond ONLY in JSON: {"score": 7.5, "notes": "subtopic: X · One sentence why this score + one concrete improvement suggestion"}` }],
         }),
       });
       const data = await res.json();
@@ -1284,6 +1302,7 @@ Respond ONLY in JSON: {"score": 7.5}` }],
       try {
         const parsed = JSON.parse(t.replace(/```json|```/g, "").trim());
         const scoreStr = String(parsed.score);
+        const notesStr = parsed.notes || "";
         // Find post by text match (prefer unscored post with same text)
         setAllPosts(prev => {
           let idx = prev.findIndex(p => p.post === text && !p.score);
@@ -1292,10 +1311,10 @@ Respond ONLY in JSON: {"score": 7.5}` }],
           const post = prev[idx];
           // Save to Supabase
           if (supa && post._supaId) {
-            supa.patch("posts", `id=eq.${post._supaId}`, { score: scoreStr });
+            supa.patch("posts", `id=eq.${post._supaId}`, { score: scoreStr, notes: notesStr });
           }
           const updated = [...prev];
-          updated[idx] = { ...post, score: scoreStr };
+          updated[idx] = { ...post, score: scoreStr, notes: notesStr };
           return updated;
         });
       } catch {}
@@ -1303,23 +1322,37 @@ Respond ONLY in JSON: {"score": 7.5}` }],
   };
 
   // AI - explain post (triggered by Claude button, shows explanation)
-  const askClaude = async (text, pid, category) => {
+  const askClaude = async (text, pid, category, imageUrl) => {
     if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
     setAiLoading(pid);
     try {
+      const promptText = `You are django_xbt's content strategist. Explain this post — why it works (or doesn't), what makes it strong, and one specific suggestion to improve it.
+
+Post: "${text}"
+Category: ${category || "unknown"}
+${imageUrl ? "This post includes an attached image. Consider the image context in your analysis — how does it complement the text? Does the visual add engagement value?" : ""}
+
+Be specific and constructive. Reference what's good about the voice, angle, or hook. If something feels off, say what and why. Keep it concise — 2-4 sentences max.
+
+Respond ONLY in JSON: {"notes": "Your explanation here"}`;
+
+      // Build message content — text only or text + image
+      let content;
+      if (imageUrl) {
+        content = [
+          { type: "image", source: { type: "url", url: imageUrl } },
+          { type: "text", text: promptText }
+        ];
+      } else {
+        content = promptText;
+      }
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 400,
-          messages: [{ role: "user", content: `You are django_xbt's content strategist. Explain this post — why it works (or doesn't), what makes it strong, and one specific suggestion to improve it.
-
-Post: "${text}"
-Category: ${category || "unknown"}
-
-Be specific and constructive. Reference what's good about the voice, angle, or hook. If something feels off, say what and why. Keep it concise — 2-4 sentences max.
-
-Respond ONLY in JSON: {"notes": "Your explanation here"}` }],
+          messages: [{ role: "user", content }],
         }),
       });
       const data = await res.json();
@@ -1915,6 +1948,7 @@ RESPOND ONLY with JSON array, one per post in order:
       {/* Posts */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sorted.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No posts in {TC[activeTab]?.label}</div>}
+        <input ref={postImageRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { if (e.target.files?.[0] && imageTargetId) { uploadImageForPost(e.target.files[0], imageTargetId); } e.target.value = ""; }} />
         {sorted.map(p => {
           const ai = aiResults[p.id];
           return (
@@ -2012,7 +2046,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 </>}
 
                 {!isUsed && <>
-                  <Btn small color={T.purple} disabled={aiLoading === p.id || !p.post} onClick={() => askClaude(p.post, p.id, p.category)}>
+                  <Btn small color={T.purple} disabled={aiLoading === p.id || !p.post} onClick={() => askClaude(p.post, p.id, p.category, p.image_url)}>
                     {aiLoading === p.id ? "⏳..." : "🤖 Claude"}
                   </Btn>
                   {isDraft && <Btn small color={T.cyan} outline onClick={() => { setRewriteId(rewriteId === p.id ? null : p.id); setRewriteFeedback(""); }}>
@@ -2021,6 +2055,7 @@ RESPOND ONLY with JSON array, one per post in order:
                   {isDraft && <Btn small color={T.amber} outline disabled={fixLoading === p.id} onClick={() => fixPost(p)}>
                     {fixLoading === p.id ? "⏳..." : "🔧 Fix"}
                   </Btn>}
+                  {(isDraft || isPost) && <Btn small outline onClick={() => { setImageTargetId(p.id); postImageRef.current?.click(); }}>📎</Btn>}
                 </>}
               </div>
 
