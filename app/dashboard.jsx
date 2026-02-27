@@ -1941,8 +1941,8 @@ RESPOND ONLY with JSON array, one per post in order:
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                       title="Click to edit">
                       {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty — click to edit</span>}
+                      {p.image_url && <div style={{ marginTop: 8 }}><img src={p.image_url} alt="" style={{ maxWidth: 160, maxHeight: 100, borderRadius: 6, objectFit: "cover", border: `1px solid ${T.border}` }} onError={e => e.target.style.display = "none"} /></div>}
                     </div>
-                    {p.image_url && <img src={p.image_url} alt="" style={{ maxWidth: 160, maxHeight: 100, borderRadius: 6, marginTop: 8, objectFit: "cover", border: `1px solid ${T.border}` }} onError={e => e.target.style.display = "none"} />}
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
