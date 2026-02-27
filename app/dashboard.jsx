@@ -1274,27 +1274,56 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
       } catch {}
     }
     // Auto-score - use small delay to let state update with _supaId
-    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 500);
+    if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category, newPost.image_url), 500);
   };
 
   // AI - auto score (runs automatically, saves score to post badge)
-  const autoScore = async (text, pid, category) => {
+  const autoScore = async (text, pid, category, imageUrl) => {
     if (!apiKey || !text) return;
     try {
+      // Build message content - text + optional image
+      const promptText = `Score this django_xbt post 1-10 and explain briefly.
+
+Post: "${text}"
+Category: ${category || "unknown"}
+${imageUrl ? "This post includes an attached image (shown above). Consider the image's quality, relevance, humor, and engagement potential in your scoring." : ""}
+
+CRITERIA: voice authenticity, specificity, engagement potential, framework invisibility, pillar fit.
+${imageUrl ? "VISUAL CRITERIA: image relevance to post, meme quality, visual engagement potential, screenshot value." : ""}
+9-10: viral. 7-8: solid. 5-6: generic. 1-4: weak/AI.
+
+Respond ONLY in JSON: {"score": 7.5, "notes": "subtopic: X · One sentence why this score + one concrete improvement suggestion"}`;
+
+      let messageContent;
+      if (imageUrl) {
+        // Fetch image and convert to base64
+        try {
+          const imgRes = await fetch(imageUrl);
+          const blob = await imgRes.blob();
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
+          });
+          const mediaType = blob.type || "image/png";
+          messageContent = [
+            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+            { type: "text", text: promptText }
+          ];
+        } catch {
+          // If image fetch fails, score text only
+          messageContent = promptText;
+        }
+      } else {
+        messageContent = promptText;
+      }
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 300,
-          messages: [{ role: "user", content: `Score this django_xbt post 1-10 and explain briefly.
-
-Post: "${text}"
-Category: ${category || "unknown"}
-
-CRITERIA: voice authenticity, specificity, engagement potential, framework invisibility, pillar fit.
-9-10: viral. 7-8: solid. 5-6: generic. 1-4: weak/AI.
-
-Respond ONLY in JSON: {"score": 7.5, "notes": "subtopic: X · One sentence why this score + one concrete improvement suggestion"}` }],
+          messages: [{ role: "user", content: messageContent }],
         }),
       });
       const data = await res.json();
@@ -1339,10 +1368,21 @@ Respond ONLY in JSON: {"notes": "Your explanation here"}`;
       // Build message content — text only or text + image
       let content;
       if (imageUrl) {
-        content = [
-          { type: "image", source: { type: "url", url: imageUrl } },
-          { type: "text", text: promptText }
-        ];
+        try {
+          const imgRes = await fetch(imageUrl);
+          const blob = await imgRes.blob();
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
+          });
+          content = [
+            { type: "image", source: { type: "base64", media_type: blob.type || "image/png", data: base64 } },
+            { type: "text", text: promptText }
+          ];
+        } catch {
+          content = promptText;
+        }
       } else {
         content = promptText;
       }
