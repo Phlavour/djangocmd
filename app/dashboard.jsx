@@ -1459,7 +1459,13 @@ Respond ONLY with JSON: {"post": "rewritten text", "structure": "Structure Name"
           postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
           replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
         };
-        setAllPosts(prev => [newPost, ...(prev || [])]);
+        setAllPosts(prev => {
+          // Remove original post, add rewrite
+          const filtered = (prev || []).filter(p => p.id !== post.id);
+          return [newPost, ...filtered];
+        });
+        // Delete original from Supabase
+        if (supa && post._supaId) supa.del("posts", `id=eq.${post._supaId}`);
         if (supa) savePostsToSupa([newPost]);
         // Auto-score rewrite
         await new Promise(r => setTimeout(r, 1500));
