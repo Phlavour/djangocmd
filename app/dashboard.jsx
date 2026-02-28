@@ -1001,7 +1001,7 @@ Respond ONLY with valid JSON array, no markdown:
   );
 }
 
-function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded, weeklyNotes, setWeeklyNotes, lastAnalysis, setLastAnalysis }) {
+function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, setAllPosts, account, brandVoice, setBrandVoice, goalTarget, setGoalTarget, goalCurrent, setGoalCurrent, goalDeadline, supaLoaded, weeklyNotes, setWeeklyNotes, lastAnalysis, setLastAnalysis }) {
   const [activeTab, setActiveTab] = useState("DRAFT");
   const [sortBy, setSortBy] = useState("mine-first");
   const [newPostText, setNewPostText] = useState("");
@@ -1115,8 +1115,9 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
 
   const reloadFromSheets = () => { setAllPosts(null); onRefresh(); };
 
-  // Filtered + sorted posts
-  const tabPosts = allPosts ? allPosts.filter(p => p.tab === activeTab) : [];
+  // Filtered + sorted posts — scoped to active account
+  const accountPosts = allPosts ? allPosts.filter(p => (p.account || "@django_crypto") === account) : [];
+  const tabPosts = accountPosts.filter(p => p.tab === activeTab);
   let sorted = [...tabPosts];
   if (sortBy === "mine-first") {
     sorted.sort((a, b) => {
@@ -1140,7 +1141,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   }
 
   const counts = {};
-  STATUS_ORDER.forEach(t => { counts[t] = allPosts ? allPosts.filter(p => p.tab === t).length : 0; });
+  STATUS_ORDER.forEach(t => { counts[t] = accountPosts.filter(p => p.tab === t).length; });
 
   const isUsed = activeTab === "USED", isBad = activeTab === "BAD",
     isPost = activeTab === "POST", isDraft = activeTab === "DRAFT", isDb = activeTab === "DATABASE";
@@ -1175,20 +1176,18 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const saveGoal = (target, current) => {
     const t = Number(target) || 0, c = Number(current) || 0;
     setGoalTarget(t); setGoalCurrent(c);
-    try { localStorage.setItem("djangocmd_goal_target", String(t)); localStorage.setItem("djangocmd_goal_current", String(c)); } catch {}
     if (supa) {
-      supa.patch("goal", "account=eq.@django_crypto", { target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => {
-        // If no row exists yet, insert
-        supa.post("goal", [{ account: "@django_crypto", target_followers: t, current_followers: c, deadline: goalDeadline }]).catch(() => {});
+      supa.patch("goal", `account=eq.${account}`, { target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => {
+        supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]).catch(() => {});
       });
     }
   };
 
-  // Save weekly notes
+  // Save weekly notes per account
   const saveWeeklyNotes = (text) => {
     setWeeklyNotes(text);
-    try { localStorage.setItem("djangocmd_weekly_notes", text); } catch {}
-    if (supa) supa.upsert("settings", { key: "weekly_notes", value: text }).catch(() => {});
+    const acctSlug = account.replace("@", "");
+    if (supa) supa.upsert("settings", { key: `weekly_notes_${acctSlug}`, value: text }).catch(() => {});
   };
 
   // Save new posts to Supabase
@@ -1202,7 +1201,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
-        url_clicks: p.urlClicks || "", account: "@django_crypto",
+        url_clicks: p.urlClicks || "", account: account,
       }));
       const saved = await supa.post("posts", rows);
       if (Array.isArray(saved)) {
@@ -1233,7 +1232,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
-        url_clicks: p.urlClicks || "", account: "@django_crypto",
+        url_clicks: p.urlClicks || "", account: p.account || account,
       }));
       for (let i = 0; i < rows.length; i += 50) {
         const saved = await supa.post("posts", rows.slice(i, i + 50));
@@ -1539,8 +1538,8 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
     reader.onload = (ev) => {
       const text = ev.target.result;
       setBrandVoice(text);
-      try { localStorage.setItem("djangocmd_brand_voice", text); } catch {}
-      if (supa) supa.upsert("settings", { key: "brand_voice", value: text });
+      const acctSlug = account.replace("@", "");
+      if (supa) supa.upsert("settings", { key: `brand_voice_${acctSlug}`, value: text });
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -1553,7 +1552,7 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
     setGenLoading(true);
 
     // Collect BAD tab feedback
-    const badPosts = allPosts ? allPosts.filter(p => p.tab === "BAD") : [];
+    const badPosts = accountPosts.filter(p => p.tab === "BAD");
     const badFeedback = badPosts.slice(0, 10).map(p => `POST: "${p.post.slice(0, 100)}"\nWHY BAD: ${p.notes}`).join("\n---\n");
 
     // Trim brand voice
@@ -1563,7 +1562,18 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
     // CONDENSED ADVISOR KNOWLEDGE BASES
     // ═══════════════════════════════════════
 
-    const EXAMPLE_POSTS = `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
+    const isHenryk = account === "@henryk0x";
+
+    const EXAMPLE_POSTS = isHenryk ? `PRZYKŁADOWE POSTY HENRYKA (studiuj ton, długość, słownictwo — WSZYSTKO PO POLSKU):
+
+[growth] "ile da się zarobić na prowadzeniu portali społecznościowych? najlepszym dowodem będzie twój personalny profil. na podstawowe stanowiska wynagrodzenie to około 1200-1500 USD na miesiąc. bez publiki nawet najlepszy produkt jest mało warty"
+[market] "krypto zmieniło się nieodwracalnie. kapitał jest rozlany. potrzebna jest bardzo duża, bezpośrednia presja zakupowa. tylko nowe narracje, które dostają zastrzyk kapitału spekulacyjnego. hype na narrację trwa zwykle 1-4 tygodnie i koniec"
+[market] "większość ludzi nie traci pieniędzy, bo są głupi. tracą je, bo mają słabą głowę. lęk, nadmiar myśli, uzależnienie od dopaminy, zero kontroli nad emocjami. napraw głowę, zanim dotkniesz kapitału"
+[shitpost] "lista terminów z którymi musisz się zapoznać żeby przetrwać 26: > atl - all time low > scam - crypto > fiat - nie lambo > bottom - jeszcze nie > 9to5 - twoja nowa rutyna"
+[busting] "bracie, 15 godzin temu wołałeś dno crypto. coś się zmieniło? możesz się zdecydować jaki jest twój statement? czy może nie masz pojęcia i po prostu farmujesz uwagę?"
+[lifestyle] "chodzenie na siłownię to kwintesencja kapitalizmu. nikt ci nie da wyniku za darmo. nie ma drogi na skróty. ból to jedyna waluta którą kupujesz wynik"
+[ai] "panuje kompletna ignorancja co do AI. w dwie osoby są w stanie wykonywać zadania które wykonywało 10 osób. myślę że do 2-3 lat stracę całkowicie biznes. nie widzę innego rozwiązania"
+[lifestyle] "w polsce naprawdę mamy się bardzo dobrze. na tle europy, często wręcz świetnie. narzekamy na wszystko. a jednocześnie doganiamy zachód szybciej, niż zachód się rozwija"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
 
 [growth] "next time someone tells you stealing a post is a thing - do yourself a favor and mute this fella. if you want to be average - sure, go for it. but if you are here to play a long term game - you should avoid being like everyone else at all costs"
 [growth] "locked in more than ever. time for a deep clean of inactive accounts that won't make it (quitoooors). i'm putting together a list of true onchain, web3 independent thinkers over the weekend. who wants in? drop your handle below"
@@ -1634,7 +1644,44 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
     // BATCH DEFINITIONS WITH SUBTOPICS
     // ═══════════════════════════════════════
 
-    const batches = [
+    const batches = isHenryk ? [
+      {
+        category: "market", count: 13,
+        subtopics: ["analiza rynku crypto", "tłumaczenie zagranicznych newsów", "mentalność tradera", "dlaczego projekty upadają", "scamy i manipulacje", "no fomo approach", "cierpliwość", "nowe narracje i trendy", "porównanie crypto vs tradycyjne aktywa", "komentarz do wydarzeń rynkowych", "czym różni się ten cykl", "płynność i struktura rynku"],
+        structures: ["Hook → Body → Conclusion", "Breakdown / Analysis", "Contrarian View", "Single Insight", "Observation → Pattern", "Comparison / VS", "Question → Answer"],
+        advisor: `MARKET: tłumacz i komentuj międzynarodowe newsy crypto dla polskiej publiki. bądź racjonalny, bez hype, punktuj scamy. NIE robimy analizy technicznej ani trade setupów - komentujemy newsy, trendy, mentalność.`,
+      },
+      {
+        category: "busting", count: 6,
+        subtopics: ["scamy i fałszywe projekty", "fałszywi prorocy i flip-floperzy", "ludzka głupota w internecie", "AI slop i złe treści", "polityka i absurdy świata"],
+        structures: ["Controversy / Hot Take", "Breakdown / Analysis", "Contrarian View", "Observation → Pattern", "Myth Busting"],
+        advisor: "BUSTING: punktuj głupotę, scamy, fałszywych proroków. bezpośrednio, z dowodami. agresywny ton, ale oparty na faktach. 'doktor rehabilitowany kryptografii' energy.",
+      },
+      {
+        category: "shitposting", count: 6,
+        subtopics: ["reakcje na bieżące wydarzenia", "obserwacje ze świata", "żarty z internetu i kultury", "komentarze do polityki (lekkie)", "absurdy codzienności"],
+        structures: ["Controversy / Hot Take", "Single Insight", "Observation → Pattern", "Comparison / VS", "Myth Busting"],
+        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 2 out of 6 posts MUST use a humor structure (randomly pick). lekki ton, zabawne obserwacje. NIE agresywne jak busting — tu się bawimy.`,
+      },
+      {
+        category: "growth", count: 6,
+        subtopics: ["rozwój profilu na X", "budowanie marki osobistej", "strategie replying", "storytelling i hooki", "zarabianie w web3", "marketing i pozycjonowanie"],
+        structures: ["Problem → Solution", "Story / Narrative", "Listicle", "Framework / System", "Mindset Shift", "Contrarian View"],
+        advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. NIGDY nie nazywaj frameworka.`,
+      },
+      {
+        category: "ai", count: 6,
+        subtopics: ["AI zastępuje pracowników", "praktyczne narzędzia AI", "przyszłość marketingu z AI", "zagrożenia AI dla biznesu", "jak przygotować się na AI", "AI monopolizacja platform"],
+        structures: ["Hook → Body → Conclusion", "Story / Narrative", "Contrarian View", "Single Insight", "Breakdown / Analysis", "Prediction / Forecast"],
+        advisor: "AI: pokazuj praktyczne zastosowania, dyskutuj wpływ na rynek pracy. balansuj ekscytację z realistycznymi obawami. ton preppersa - 'przygotuj się teraz, zanim będzie za późno'.",
+      },
+      {
+        category: "lifestyle", count: 5,
+        subtopics: ["biohacking i sen", "sport i siłownia", "motywacja i mindset", "polska jest piękna", "zdrowie jako priorytet"],
+        structures: ["Story / Narrative", "Single Insight", "Observation → Pattern", "Mindset Shift"],
+        advisor: "LIFESTYLE: osobisty, autentyczny, praktyczny. nie wymuszony optymizm. pokaż pasje, zdrowy tryb życia, dumę z Polski.",
+      },
+    ] : [
       {
         category: "growth", count: 17,
         subtopics: ["growing X account", "X analytics progress", "X algorithm tips", "marketing frameworks", "building personal brand", "importance of visuals", "replying strategies", "storytelling", "making money in web3", "writing/copywriting", "AI and automation", "cold reach and BD", "productivity hacks", "learning tips", "importance of uniqueness"],
@@ -1677,7 +1724,48 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
       const subtopicList = batch.subtopics.map((s, i) => `${i + 1}. ${s}`).join("\n");
       const structList = batch.structures.map((s, i) => `${i + 1}. ${s}`).join("\n");
 
-      const prompt = `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
+      const prompt = isHenryk ? `Jesteś henryk0x — ekspert od marketingu, entuzjasta AI, twórca na polskim X.
+
+TWÓJ BRAND VOICE:
+${bvTrimmed}
+
+${EXAMPLE_POSTS}
+
+═══ KATEGORIA: ${batch.category.toUpperCase()} ═══
+
+SUBTOPIKI (ROTUJ — każdy post inny subtopic):
+${subtopicList}
+
+DOSTĘPNE STRUKTURY POSTÓW (różnicuj):
+${structList}
+
+═══ ADVISOR SYSTEM ═══
+${batch.advisor}
+
+${badFeedback ? `═══ POSTY KTÓRE NIE ZADZIAŁAŁY (unikaj tych wzorców) ═══\n${badFeedback}\n` : ""}
+${weeklyNotes ? `═══ NOTATKI TYGODNIOWE OD HENRYKA (stosuj się) ═══\n${weeklyNotes}\n` : ""}
+${lastAnalysis ? `═══ ANALIZA AI Z OSTATNIEGO TYGODNIA (zastosuj wnioski) ═══\n${lastAnalysis.slice(0, 1500)}\n` : ""}
+
+═══ ZADANIE ═══
+Wygeneruj dokładnie ${batch.count} oryginalnych postów dla filaru "${batch.category}".
+
+KRYTYCZNE ZASADY:
+- ZAWSZE PISZ PO POLSKU (wyjątek: crypto/AI terminy bez polskiego odpowiednika)
+- zawsze małe litery (nigdy caps, chyba że celowo)
+- bez kropek na końcu zdań, bez em dashes, bez emoji, bez hashtagów
+- ">" jako bullet point w listach
+- NIGDY nie używaj "fam" — to fraza Django, nie Henryka
+- sporadycznie używaj "kłaniam się nisko" jako zakończenie (max 1 na 10 postów)
+- ROTUJ subtopiki — każdy post INNY subtopic
+- ZMIENIAJ struktury — nie powtarzaj tej samej dwa razy z rzędu
+- ROZKŁAD DŁUGOŚCI: dokładnie 50% postów MUSI być poniżej 280 znaków (krótkie). reszta 300-700 znaków
+- brzmi jak henryk napisał to o 2 w nocy, nie jak AI to wygenerowało
+- bądź konkretny, stanowczy, bezpośredni — żadnych generycznych porad
+- dziel się osobistym doświadczeniem gdy pasuje
+
+ODPOWIEDZ TYLKO poprawnym JSON:
+[{"post": "treść posta po polsku", "structure": "Nazwa struktury", "subtopic": "użyty subtopic"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`
+      : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 YOUR BRAND VOICE:
 ${bvTrimmed}
@@ -1759,7 +1847,27 @@ RESPOND ONLY with valid JSON array:
             headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
             body: JSON.stringify({
               model: "claude-sonnet-4-20250514", max_tokens: 2000,
-              messages: [{ role: "user", content: `You are django_xbt's content strategist and honest critic. Score these posts.
+              messages: [{ role: "user", content: isHenryk ? `Jesteś strategiem treści henryk0x. Oceń te posty.
+
+KRYTERIA:
+- Czy brzmi jak henryk napisał to? (autentyczność głosu, PO POLSKU)
+- Czy jest konkretny i stanowczy? (nie generyczne porady)
+- Czy zaangażuje polską publiczność na X? (potencjał viralowy)
+- Czy framework jest niewidzialny? (naturalny)
+- Dla shitpostów z humor structures: czy jest naprawdę śmieszny?
+
+SKALA:
+- 9-10: wyjątkowy, do screenshotowania
+- 7-8: solidne zaangażowanie, mocny take
+- 5-6: okej ale mógłby być czyikolwiek postem
+- 1-4: generyczny, brzmi jak AI
+
+POSTY:
+${postsText}
+
+ODPOWIEDZ TYLKO JSON:
+[{"score": 7.5, "feedback": "krótki feedback po polsku + sugestia poprawy"}]`
+              : `You are django_xbt's content strategist and honest critic. Score these posts.
 
 SCORING CRITERIA:
 - Does it sound like django actually wrote this? (voice authenticity)
@@ -1821,7 +1929,7 @@ RESPOND ONLY with JSON array, one per post in order:
       {/* Top bar + GOAL */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{allPosts.length} posts · {supa ? "supabase" : "local mode"}</div>
+          <div style={{ fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{accountPosts.length} posts · {account} · {supa ? "supabase" : "local mode"}</div>
           {supa && <Dot color={T.green} pulse />}
           {saving && <Badge color={T.amber}>saving...</Badge>}
         </div>
@@ -1844,10 +1952,10 @@ RESPOND ONLY with JSON array, one per post in order:
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {weeklyNotesSaving && <span style={{ fontSize: 10, color: T.green }}>✓ saved</span>}
-            <Btn small outline onClick={() => { if (confirm("Clear weekly notes?")) { setWeeklyNotes(""); if (supa) supa.patch("settings", "key=eq.weekly_notes", { value: "" }); } }}>Clear</Btn>
+            <Btn small outline onClick={() => { if (confirm("Clear weekly notes?")) { setWeeklyNotes(""); const acctSlug = account.replace("@", ""); if (supa) supa.patch("settings", `key=eq.weekly_notes_${acctSlug}`, { value: "" }); } }}>Clear</Btn>
           </div>
         </div>
-        <textarea value={weeklyNotes} onChange={e => { setWeeklyNotes(e.target.value); weeklyNotesTimer.current && clearTimeout(weeklyNotesTimer.current); weeklyNotesTimer.current = setTimeout(() => { if (supa) { supa.patch("settings", "key=eq.weekly_notes", { value: e.target.value }).then(() => { setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000); }); } try { localStorage.setItem("djangocmd_weekly_notes", e.target.value); } catch {} }, 1000); }}
+        <textarea value={weeklyNotes} onChange={e => { setWeeklyNotes(e.target.value); weeklyNotesTimer.current && clearTimeout(weeklyNotesTimer.current); weeklyNotesTimer.current = setTimeout(() => { const acctSlug = account.replace("@", ""); if (supa) { supa.upsert("settings", { key: `weekly_notes_${acctSlug}`, value: e.target.value }).then(() => { setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000); }); } }, 1000); }}
           placeholder="what worked last week? what didn't? what topics to focus on? any specific direction for next batch..."
           style={{ width: "100%", minHeight: 70, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }}
           onFocus={e => e.target.style.borderColor = T.amber} onBlur={e => e.target.style.borderColor = T.border} />
@@ -2656,21 +2764,25 @@ function TwitterPanel({ apiKey, supa }) {
 
   // Persistent state — lives here so tab switches don't lose data
   const [allPosts, setAllPosts] = useState(null);
-  const [brandVoice, setBrandVoice] = useState(() => {
-    try { return localStorage.getItem("djangocmd_brand_voice") || ""; } catch { return ""; }
-  });
-  const [weeklyNotes, setWeeklyNotes] = useState(() => {
-    try { return localStorage.getItem("djangocmd_weekly_notes") || ""; } catch { return ""; }
-  });
-  const [lastAnalysis, setLastAnalysis] = useState(() => {
-    try { return localStorage.getItem("djangocmd_last_analysis") || ""; } catch { return ""; }
-  });
-  const [goalTarget, setGoalTarget] = useState(() => {
-    try { return parseInt(localStorage.getItem("djangocmd_goal_target")) || 20000; } catch { return 20000; }
-  });
-  const [goalCurrent, setGoalCurrent] = useState(() => {
-    try { return parseInt(localStorage.getItem("djangocmd_goal_current")) || 0; } catch { return 0; }
-  });
+
+  // Per-account state: brand voice, weekly notes, last analysis, goal
+  const acctKey = (k) => `${k}_${account.replace("@", "")}`;
+  const [brandVoiceMap, setBrandVoiceMap] = useState({});
+  const [weeklyNotesMap, setWeeklyNotesMap] = useState({});
+  const [lastAnalysisMap, setLastAnalysisMap] = useState({});
+  const [goalMap, setGoalMap] = useState({});
+
+  // Derived per-account values
+  const brandVoice = brandVoiceMap[account] || "";
+  const setBrandVoice = (v) => setBrandVoiceMap(prev => ({ ...prev, [account]: v }));
+  const weeklyNotes = weeklyNotesMap[account] || "";
+  const setWeeklyNotes = (v) => setWeeklyNotesMap(prev => ({ ...prev, [account]: v }));
+  const lastAnalysis = lastAnalysisMap[account] || "";
+  const setLastAnalysis = (v) => setLastAnalysisMap(prev => ({ ...prev, [account]: v }));
+  const goalTarget = goalMap[account]?.target || 20000;
+  const goalCurrent = goalMap[account]?.current || 0;
+  const setGoalTarget = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], target: v } }));
+  const setGoalCurrent = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], current: v } }));
   const [goalDeadline] = useState("2027-01-01");
   const [supaLoaded, setSupaLoaded] = useState(false);
 
@@ -2689,43 +2801,38 @@ function TwitterPanel({ apiKey, supa }) {
             likes: p.likes, engagements: p.engagements, bookmarks: p.bookmarks,
             replies: p.replies, reposts: p.reposts, profileVisits: p.profile_visits,
             newFollows: p.new_follows, urlClicks: p.url_clicks, _supaId: p.id,
+            account: p.account || "@django_crypto",
           })));
         }
-        // Load Goal from Supabase (always overrides localStorage)
-        const goals = await supa.get("goal", "account=eq.@django_crypto");
-        if (Array.isArray(goals) && goals[0]) {
-          const g = goals[0];
-          if (g.target_followers != null) { setGoalTarget(Number(g.target_followers)); try { localStorage.setItem("djangocmd_goal_target", String(g.target_followers)); } catch {} }
-          if (g.current_followers != null) { setGoalCurrent(Number(g.current_followers)); try { localStorage.setItem("djangocmd_goal_current", String(g.current_followers)); } catch {} }
-          if (g.deadline) { /* deadline is hardcoded for now */ }
+        // Load per-account data for BOTH accounts
+        for (const acct of ["@django_crypto", "@henryk0x"]) {
+          const acctSlug = acct.replace("@", "");
+          const goals = await supa.get("goal", `account=eq.${acct}`);
+          if (Array.isArray(goals) && goals[0]) {
+            const g = goals[0];
+            setGoalMap(prev => ({ ...prev, [acct]: { target: Number(g.target_followers) || 20000, current: Number(g.current_followers) || 0 } }));
+          }
+          const bv = await supa.get("settings", `key=eq.brand_voice_${acctSlug}`);
+          if (Array.isArray(bv) && bv[0]?.value) setBrandVoiceMap(prev => ({ ...prev, [acct]: bv[0].value }));
+          const wn = await supa.get("settings", `key=eq.weekly_notes_${acctSlug}`);
+          if (Array.isArray(wn) && wn[0]?.value) setWeeklyNotesMap(prev => ({ ...prev, [acct]: wn[0].value }));
+          const la = await supa.get("settings", `key=eq.last_analysis_${acctSlug}`);
+          if (Array.isArray(la) && la[0]?.value) setLastAnalysisMap(prev => ({ ...prev, [acct]: la[0].value }));
         }
-        // Load Brand Voice from Supabase
-        const bv = await supa.get("settings", "key=eq.brand_voice");
-        if (Array.isArray(bv) && bv[0]?.value) {
-          setBrandVoice(bv[0].value);
-          try { localStorage.setItem("djangocmd_brand_voice", bv[0].value); } catch {}
-        }
-        // Load Weekly Notes from Supabase
-        const wn = await supa.get("settings", "key=eq.weekly_notes");
-        if (Array.isArray(wn) && wn[0]?.value) {
-          setWeeklyNotes(wn[0].value);
-          try { localStorage.setItem("djangocmd_weekly_notes", wn[0].value); } catch {}
-        }
-        // Load Last Analysis from Supabase
-        const la = await supa.get("settings", "key=eq.last_analysis");
-        if (Array.isArray(la) && la[0]?.value) {
-          setLastAnalysis(la[0].value);
-          try { localStorage.setItem("djangocmd_last_analysis", la[0].value); } catch {}
-        }
-        // Load Claude API key from Supabase (if not already set locally)
+        // Migrate old non-scoped keys to django_crypto
+        try {
+          const oldBv = await supa.get("settings", "key=eq.brand_voice");
+          if (Array.isArray(oldBv) && oldBv[0]?.value) setBrandVoiceMap(prev => prev["@django_crypto"] ? prev : { ...prev, "@django_crypto": oldBv[0].value });
+          const oldWn = await supa.get("settings", "key=eq.weekly_notes");
+          if (Array.isArray(oldWn) && oldWn[0]?.value) setWeeklyNotesMap(prev => prev["@django_crypto"] ? prev : { ...prev, "@django_crypto": oldWn[0].value });
+          const oldLa = await supa.get("settings", "key=eq.last_analysis");
+          if (Array.isArray(oldLa) && oldLa[0]?.value) setLastAnalysisMap(prev => prev["@django_crypto"] ? prev : { ...prev, "@django_crypto": oldLa[0].value });
+        } catch {}
         try {
           const localKey = localStorage.getItem("djangocmd_claude_key") || "";
           if (!localKey) {
             const ck = await supa.get("settings", "key=eq.claude_api_key");
-            if (Array.isArray(ck) && ck[0]?.value) {
-              try { localStorage.setItem("djangocmd_claude_key", ck[0].value); } catch {}
-              // Note: can't setApiKey here since it's in parent — but localStorage will be read on next reload
-            }
+            if (Array.isArray(ck) && ck[0]?.value) { try { localStorage.setItem("djangocmd_claude_key", ck[0].value); } catch {} }
           }
         } catch {}
         setSupaLoaded(true);
@@ -2742,17 +2849,14 @@ function TwitterPanel({ apiKey, supa }) {
         ))}
       </div>
 
-      {/* Henryk placeholder */}
+      {/* Henryk notice */}
       {account === "@henryk0x" && (
-        <Card style={{ textAlign: "center", padding: 40 }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
-          <div style={{ fontSize: 15, color: T.text, fontWeight: 600, marginBottom: 8 }}>@henryk0x</div>
-          <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>Content pipeline coming soon. Connect a Google Sheet to get started.</div>
-          <Badge color={T.amber}>PLACEHOLDER</Badge>
-        </Card>
+        <div style={{ background: `${T.cyan}15`, border: `1px solid ${T.cyan}30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: T.cyan }}>
+          🇵🇱 Henryk mode — posty po polsku · Market 30% · Busting 15% · Shitposting 15% · Growth 15% · AI 15% · Lifestyle 10%
+        </div>
       )}
 
-      {account === "@django_crypto" && <>
+      <>
         {/* Error banner */}
         {error && (
           <div style={{ background: T.redDim, border: `1px solid ${T.red}40`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: T.red }}>
@@ -2774,7 +2878,7 @@ function TwitterPanel({ apiKey, supa }) {
 
         {subTab === "research" && <DailyResearch account={account} apiKey={apiKey} twitterApiKey={twitterApiKey} supa={supa} allPosts={allPosts} setAllPosts={setAllPosts} />}
         {subTab === "content" && <WeeklyContent sheetData={sheetData} loading={loading} onRefresh={refetch} apiKey={apiKey} supa={supa}
-          allPosts={allPosts} setAllPosts={setAllPosts}
+          allPosts={allPosts} setAllPosts={setAllPosts} account={account}
           brandVoice={brandVoice} setBrandVoice={setBrandVoice}
           goalTarget={goalTarget} setGoalTarget={setGoalTarget}
           goalCurrent={goalCurrent} setGoalCurrent={setGoalCurrent}
@@ -2783,7 +2887,7 @@ function TwitterPanel({ apiKey, supa }) {
           lastAnalysis={lastAnalysis} setLastAnalysis={setLastAnalysis}
         />}
         {subTab === "analytics" && <WeeklyAnalytics sheetData={sheetData} loading={loading} apiKey={apiKey} supa={supa} setLastAnalysis={setLastAnalysis} />}
-      </>}
+      </>
     </div>
   );
 }
