@@ -106,12 +106,13 @@ function parseCSV(text, tabName) {
 
 const PILLAR_COLORS_FN = () => ({
   Growth: T.green, Market: T.blue, Lifestyle: T.purple,
-  Busting: T.amber, Shitpost: T.red, growth: T.green,
+  Busting: T.amber, Shitpost: T.red, AI: T.cyan, growth: T.green,
   market: T.blue, lifestyle: T.purple, busting: T.amber,
-  shitposting: T.red,
+  shitposting: T.red, ai: T.cyan,
 });
 
 const CATEGORIES = ["growth", "market", "lifestyle", "busting", "shitposting"];
+const CATEGORIES_HENRYK = ["market", "busting", "shitposting", "growth", "ai", "lifestyle"];
 
 const STRUCTURES = [
   "Problem → Insight → Action",
@@ -588,7 +589,7 @@ Respond ONLY with valid JSON array, no markdown:
     const newPost = {
       id: maxId, tab: "DRAFT", category: variant.category || "growth", structure: variant.structure || "",
       post: variant.post, notes: `from research: ${item.headline.slice(0, 60)}`, score: String(variant.score || ""),
-      howToFix: "", day: "", postLink: "", impressions: "", likes: "", engagements: "",
+      howToFix: "", day: "", account: account, postLink: "", impressions: "", likes: "", engagements: "",
       bookmarks: "", replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(prev => [...(prev || []), newPost]);
@@ -705,7 +706,7 @@ Respond ONLY with valid JSON array, no markdown:
             <Btn small color={T.green} onClick={() => moveVariantToDraft(item, variant)}>→ Draft</Btn>
             <select value={variant.category} onChange={e => updateVariant(item.id, idx, "category", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {(account === "@henryk0x" ? CATEGORIES_HENRYK : CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
@@ -1267,12 +1268,12 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     const newPost = {
       id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
       post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
-      source: "manual", image_url: newPostImage.trim() || "",
+      source: "manual", image_url: newPostImage.trim() || "", account: account,
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat("growth"); setNewPostStructure(""); setNewPostImage(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat(account === "@henryk0x" ? "market" : "growth"); setNewPostStructure(""); setNewPostImage(""); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -1454,7 +1455,7 @@ Respond ONLY with JSON: {"post": "rewritten text", "structure": "Structure Name"
           id: maxId, tab: "DRAFT", category: post.category,
           structure: version.structure || post.structure, post: version.post || "",
           notes: `rewrite of #${post.id}: "${rewriteFeedback.slice(0, 60)}"`,
-          score: "", howToFix: "", day: "",
+          score: "", howToFix: "", day: "", account: account,
           postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
           replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
         };
@@ -1824,6 +1825,7 @@ RESPOND ONLY with valid JSON array:
               structure: p.structure || "", post: p.post || "",
               notes: humorNote || `subtopic: ${p.subtopic || ""}`,
               score: p.humor_score ? String(p.humor_score) : "", howToFix: "", day: "",
+              account: account,
               postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
               replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
             });
@@ -2094,7 +2096,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
                   <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {(account === "@henryk0x" ? CATEGORIES_HENRYK : CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 2 }}>
@@ -2298,6 +2300,7 @@ const PILLAR_MAP = {
   lifestyle: { label: "Lifestyle", color: () => T.purple, bg: () => T.purpleDim },
   busting: { label: "Myth Busting", color: () => T.amber, bg: () => T.amberDim },
   shitpost: { label: "Shitpost", color: () => T.red, bg: () => T.redDim },
+  ai: { label: "AI", color: () => T.cyan, bg: () => T.cyanDim },
 };
 const STRUCT_LABELS = {
   framework:"Framework", contrarian:"Contrarian", personal:"Personal", thread:"Thread",
