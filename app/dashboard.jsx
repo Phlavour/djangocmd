@@ -106,13 +106,19 @@ function parseCSV(text, tabName) {
 
 const PILLAR_COLORS_FN = () => ({
   Growth: T.green, Market: T.blue, Lifestyle: T.purple,
-  Busting: T.amber, Shitpost: T.red, AI: T.cyan, growth: T.green,
-  market: T.blue, lifestyle: T.purple, busting: T.amber,
-  shitposting: T.red, ai: T.cyan,
+  Busting: T.amber, Shitpost: T.red, AI: T.cyan, Motivation: "#ff6b6b",
+  growth: T.green, market: T.blue, lifestyle: T.purple, busting: T.amber,
+  shitposting: T.red, ai: T.cyan, motivation: "#ff6b6b",
 });
 
 const CATEGORIES = ["growth", "market", "lifestyle", "busting", "shitposting"];
 const CATEGORIES_HENRYK = ["market", "busting", "shitposting", "growth", "ai", "lifestyle"];
+const CATEGORIES_FACELESS = ["market", "motivation", "lifestyle"];
+const CATEGORIES_GHOST = ["growth", "market", "lifestyle"];
+const ACCOUNT_CATEGORIES = {
+  "@django_crypto": CATEGORIES, "@henryk0x": CATEGORIES_HENRYK,
+  "@faceless": CATEGORIES_FACELESS, "@ghost": CATEGORIES_GHOST,
+};
 
 const STRUCTURES = [
   "Problem → Insight → Action",
@@ -146,6 +152,8 @@ const STATUS_ORDER = ["DRAFT", "POST", "USED", "DATABASE", "BAD"];
 const ACCOUNTS = [
   { handle: "@django_crypto", name: "Django", avatar: "/pfp-django.jpg", gradient: ["#00e87b", "#00aa55"] },
   { handle: "@henryk0x", name: "Henryk", avatar: "/pfp-henryk.png", gradient: ["#3d8bfd", "#6644ff"] },
+  { handle: "@faceless", name: "Faceless", avatar: "👤", gradient: ["#ff6b6b", "#ee5a24"] },
+  { handle: "@ghost", name: "Ghost", avatar: "👻", gradient: ["#a29bfe", "#6c5ce7"], hidden: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -706,7 +714,7 @@ Respond ONLY with valid JSON array, no markdown:
             <Btn small color={T.green} onClick={() => moveVariantToDraft(item, variant)}>→ Draft</Btn>
             <select value={variant.category} onChange={e => updateVariant(item.id, idx, "category", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
-              {(account === "@henryk0x" ? CATEGORIES_HENRYK : CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+              {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
@@ -1642,6 +1650,7 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
     // ═══════════════════════════════════════
 
     const isHenryk = account === "@henryk0x";
+    const isFaceless = account === "@faceless";
 
     const EXAMPLE_POSTS = isHenryk ? `PRZYKŁADOWE POSTY HENRYKA (studiuj ton, długość, słownictwo — WSZYSTKO PO POLSKU):
 
@@ -1652,7 +1661,14 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
 [busting] "bracie, 15 godzin temu wołałeś dno crypto. coś się zmieniło? możesz się zdecydować jaki jest twój statement? czy może nie masz pojęcia i po prostu farmujesz uwagę?"
 [lifestyle] "chodzenie na siłownię to kwintesencja kapitalizmu. nikt ci nie da wyniku za darmo. nie ma drogi na skróty. ból to jedyna waluta którą kupujesz wynik"
 [ai] "panuje kompletna ignorancja co do AI. w dwie osoby są w stanie wykonywać zadania które wykonywało 10 osób. myślę że do 2-3 lat stracę całkowicie biznes. nie widzę innego rozwiązania"
-[lifestyle] "w polsce naprawdę mamy się bardzo dobrze. na tle europy, często wręcz świetnie. narzekamy na wszystko. a jednocześnie doganiamy zachód szybciej, niż zachód się rozwija"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
+[lifestyle] "w polsce naprawdę mamy się bardzo dobrze. na tle europy, często wręcz świetnie. narzekamy na wszystko. a jednocześnie doganiamy zachód szybciej, niż zachód się rozwija"` : isFaceless ? `EXAMPLE POSTS (study tone — faceless trading/motivation account, no personal identity):
+
+[market] "everyone's calling the bottom. zoom out. the weekly structure hasn't shifted. patience isn't passive - it's the most aggressive move you can make right now"
+[market] "risk management isn't sexy but it's the only reason you're still in the game. position sizing > prediction accuracy. every single time"
+[motivation] "you don't need another strategy. you need 6 months of discipline with the one you already have. consistency compounds. impatience destroys"
+[motivation] "the gap between where you are and where you want to be is filled with reps you haven't done yet. stop planning. start executing"
+[lifestyle] "morning routine isn't about productivity hacks. it's about starting the day on YOUR terms before the world tells you what to do"
+[lifestyle] "gym taught me more about trading than any course. show up when you don't feel like it. results come from consistency not intensity"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
 
 [growth] "next time someone tells you stealing a post is a thing - do yourself a favor and mute this fella. if you want to be average - sure, go for it. but if you are here to play a long term game - you should avoid being like everyone else at all costs"
 [growth] "locked in more than ever. time for a deep clean of inactive accounts that won't make it (quitoooors). i'm putting together a list of true onchain, web3 independent thinkers over the weekend. who wants in? drop your handle below"
@@ -1760,6 +1776,25 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
         structures: ["Story / Narrative", "Single Insight", "Observation → Pattern", "Mindset Shift"],
         advisor: "LIFESTYLE: osobisty, autentyczny, praktyczny. nie wymuszony optymizm. pokaż pasje, zdrowy tryb życia, dumę z Polski.",
       },
+    ] : isFaceless ? [
+      {
+        category: "market", count: 7,
+        subtopics: ["trade setups and levels", "risk management", "market structure analysis", "trading psychology", "patience and discipline", "chart patterns simplified", "macro outlook"],
+        structures: ["Hook → Body → Conclusion", "Breakdown / Analysis", "Single Insight", "Contrarian View", "Framework / System", "Observation → Pattern", "Prediction / Forecast"],
+        advisor: `${TRADING_ADVISOR}\n\nAPPLY: ALL market posts must embed trading psychology. this is a TRADING-focused account. show genuine understanding. balance conviction with humility. NO personal identity — faceless account.`,
+      },
+      {
+        category: "motivation", count: 7,
+        subtopics: ["discipline over motivation", "consistency compounds", "mindset shifts", "delayed gratification", "execution over planning", "embracing discomfort", "winner mentality"],
+        structures: ["Single Insight", "Mindset Shift", "Contrarian View", "Story / Narrative", "Hook → Body → Conclusion", "Before → After", "Question → Answer"],
+        advisor: "MOTIVATION: no-nonsense, action-oriented. not fluffy inspiration — hard truths about discipline, execution, and consistency. short punchy truths > long motivational speeches. think stoic philosophy meets trading mindset.",
+      },
+      {
+        category: "lifestyle", count: 7,
+        subtopics: ["fitness and gym", "morning routines", "health optimization", "work-life balance", "digital minimalism", "sleep and recovery", "nutrition basics"],
+        structures: ["Single Insight", "Story / Narrative", "Observation → Pattern", "Mindset Shift", "Before → After", "Contrarian View"],
+        advisor: "LIFESTYLE: connect fitness/health to trading/success mindset. gym = discipline training. sleep = edge maintenance. NO personal details — faceless account, universal truths only.",
+      },
     ] : [
       {
         category: "growth", count: 17,
@@ -1837,13 +1872,48 @@ KRYTYCZNE ZASADY:
 - sporadycznie używaj "kłaniam się nisko" jako zakończenie (max 1 na 10 postów)
 - ROTUJ subtopiki — każdy post INNY subtopic
 - ZMIENIAJ struktury — nie powtarzaj tej samej dwa razy z rzędu
-- ROZKŁAD DŁUGOŚCI: dokładnie 50% postów MUSI być poniżej 280 znaków (krótkie). reszta 300-700 znaków
+- ROZKŁAD DŁUGOŚCI: dokładnie 50% postów MUSI być poniżej 280 znaków (krótkie). reszta 300-1000 znaków
 - brzmi jak henryk napisał to o 2 w nocy, nie jak AI to wygenerowało
 - bądź konkretny, stanowczy, bezpośredni — żadnych generycznych porad
 - dziel się osobistym doświadczeniem gdy pasuje
 
 ODPOWIEDZ TYLKO poprawnym JSON:
 [{"post": "treść posta po polsku", "structure": "Nazwa struktury", "subtopic": "użyty subtopic"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`
+      : isFaceless ? `You are a faceless trading/motivation account on Twitter/X. No personal identity — universal truths only.
+
+${brandVoice ? `YOUR BRAND VOICE:\n${bvTrimmed}\n` : ""}
+${EXAMPLE_POSTS}
+
+═══ CATEGORY: ${batch.category.toUpperCase()} ═══
+
+SUBTOPICS (ROTATE across all — each post different subtopic):
+${subtopicList}
+
+AVAILABLE POST STRUCTURES (vary across posts):
+${structList}
+
+═══ ADVISOR SYSTEM ═══
+${batch.advisor}
+
+${badFeedback ? `═══ POSTS THAT FAILED (avoid these patterns) ═══\n${badFeedback}\n` : ""}
+${weeklyNotes ? `═══ WEEKLY NOTES (follow these directions) ═══\n${weeklyNotes}\n` : ""}
+
+═══ TASK ═══
+Generate exactly ${batch.count} original posts for the "${batch.category}" pillar.
+
+CRITICAL RULES:
+- always lowercase (never caps except intentional emphasis)
+- no dots at end of sentences, no em dashes, no emojis, no hashtags
+- ">" for bullet points in lists
+- NO personal identity — no "I did X", no personal stories, no name
+- write universal truths, principles, observations
+- tone: stoic, direct, no-nonsense, slightly dark/edgy
+- LENGTH DISTRIBUTION: exactly 50% under 280 chars (short punchy). other 50% 300-1000 chars
+- sound like a mysterious trader who drops wisdom, not like AI
+- be specific and opinionated — no generic motivation
+
+RESPOND ONLY with valid JSON array:
+[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used"}]`
       : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 YOUR BRAND VOICE:
@@ -1876,7 +1946,7 @@ CRITICAL RULES:
 - use "fam" sparingly - max 1 in 5 posts, never forced, not forced
 - ROTATE subtopics — each post DIFFERENT subtopic (no repeats)
 - VARY structures — don't use same structure twice in a row
-- LENGTH DISTRIBUTION: exactly 50% of posts MUST be under 280 characters (short, punchy). the other 50% should be 300-700 characters (detailed breakdowns, stories, lists). alternate between short and long
+- LENGTH DISTRIBUTION: exactly 50% of posts MUST be under 280 characters (short, punchy). the other 50% should be 300-1000 characters (detailed breakdowns, stories, lists). alternate between short and long
 - FAM USAGE: use "fam" in maximum 20% of posts (about 8 out of 42). most posts should NOT contain "fam". it's a signature, not a crutch
 - sound like django wrote this at 2am, not like AI generated it
 - be specific, opinionated, direct — no generic advice
@@ -1947,6 +2017,21 @@ ${postsText}
 
 ODPOWIEDZ TYLKO JSON:
 [{"score": 7.5, "feedback": "krótki feedback po polsku + sugestia poprawy"}]`
+              : (isFaceless ? `You are scoring posts for a faceless trading/motivation account. Score these posts.
+
+CRITERIA:
+- Does it sound mysterious and authoritative? (not generic motivation)
+- Is it specific enough to be actionable? (not fluffy)
+- NO personal identity leaked? (no "I", no personal stories)
+- Would it get engagement on trading/motivation Twitter?
+- Stoic, edgy tone maintained?
+
+SCORE: 9-10 exceptional, 7-8 solid, 5-6 generic, 1-4 bad
+
+POSTS:
+${postsText}
+
+JSON only: [{"score": 7.5, "feedback": "brief feedback"}]`
               : `You are django_xbt's content strategist and honest critic. Score these posts.
 
 SCORING CRITERIA:
@@ -1966,7 +2051,7 @@ POSTS:
 ${postsText}
 
 RESPOND ONLY with JSON array, one per post in order:
-[{"score": 7.5, "feedback": "brief specific feedback + improvement suggestion"}]` }],
+[{"score": 7.5, "feedback": "brief specific feedback + improvement suggestion"}]`) }],
             }),
           });
           const data2 = await res2.json();
@@ -2177,7 +2262,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
                   <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
-                    {(account === "@henryk0x" ? CATEGORIES_HENRYK : CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                    {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 2 }}>
@@ -2328,7 +2413,7 @@ RESPOND ONLY with JSON array, one per post in order:
                   {isDraft && <Btn small color={T.amber} outline disabled={fixLoading === p.id} onClick={() => fixPost(p)}>
                     {fixLoading === p.id ? "⏳..." : "🔧 Fix"}
                   </Btn>}
-                  {(isDraft || isPost) && <Btn small color={account === "@django_crypto" ? "#3d8bfd" : "#00e87b"} outline disabled={translateLoading === p.id} onClick={() => translatePost(p)}>
+                  {(isDraft || isPost) && (account === "@django_crypto" || account === "@henryk0x") && <Btn small color={account === "@django_crypto" ? "#3d8bfd" : "#00e87b"} outline disabled={translateLoading === p.id} onClick={() => translatePost(p)}>
                     {translateLoading === p.id ? "⏳..." : account === "@django_crypto" ? "🇵🇱 → Henryk" : "🇬🇧 → Django"}
                   </Btn>}
                   {(isDraft || isPost) && <Btn small outline onClick={() => { setImageTargetId(p.id); postImageRef.current?.click(); }}>📎</Btn>}
@@ -2385,6 +2470,7 @@ const PILLAR_MAP = {
   busting: { label: "Myth Busting", color: () => T.amber, bg: () => T.amberDim },
   shitpost: { label: "Shitpost", color: () => T.red, bg: () => T.redDim },
   ai: { label: "AI", color: () => T.cyan, bg: () => T.cyanDim },
+  motivation: { label: "Motivation", color: () => "#ff6b6b", bg: () => "#ff6b6b12" },
 };
 const STRUCT_LABELS = {
   framework:"Framework", contrarian:"Contrarian", personal:"Personal", thread:"Thread",
@@ -2848,6 +2934,9 @@ function TwitterPanel({ apiKey, supa }) {
   const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
+  const [showHidden, setShowHidden] = useState(() => {
+    try { return localStorage.getItem("djangocmd_show_hidden") === "1"; } catch { return false; }
+  });
 
   // Persistent state — lives here so tab switches don't lose data
   const [allPosts, setAllPosts] = useState(null);
@@ -2893,7 +2982,7 @@ function TwitterPanel({ apiKey, supa }) {
           })));
         }
         // Load per-account data for BOTH accounts
-        for (const acct of ["@django_crypto", "@henryk0x"]) {
+        for (const acct of ["@django_crypto", "@henryk0x", "@faceless", "@ghost"]) {
           const acctSlug = acct.replace("@", "");
           const goals = await supa.get("goal", `account=eq.${acct}`);
           if (Array.isArray(goals) && goals[0]) {
@@ -2931,16 +3020,28 @@ function TwitterPanel({ apiKey, supa }) {
   return (
     <div>
       {/* Account Selector */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
-        {ACCOUNTS.map(a => (
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}
+        onDoubleClick={(e) => { if (e.shiftKey) { const next = !showHidden; setShowHidden(next); try { localStorage.setItem("djangocmd_show_hidden", next ? "1" : "0"); } catch {} } }}>
+        {ACCOUNTS.filter(a => !a.hidden || showHidden).map(a => (
           <AccountPill key={a.handle} account={a.handle} active={account === a.handle} onClick={() => setAccount(a.handle)} />
         ))}
+        {showHidden && <span style={{ fontSize: 9, color: T.textDim, marginLeft: 4 }}>👻</span>}
       </div>
 
       {/* Henryk notice */}
       {account === "@henryk0x" && (
         <div style={{ background: `${T.cyan}15`, border: `1px solid ${T.cyan}30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: T.cyan }}>
           🇵🇱 Henryk mode — posty po polsku · Market 30% · Busting 15% · Shitposting 15% · Growth 15% · AI 15% · Lifestyle 10%
+        </div>
+      )}
+      {account === "@faceless" && (
+        <div style={{ background: `#ff6b6b15`, border: `1px solid #ff6b6b30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#ff6b6b" }}>
+          👤 Faceless mode — english · Market (trading) 33% · Motivation 33% · Lifestyle 33% · 21 posts/batch
+        </div>
+      )}
+      {account === "@ghost" && (
+        <div style={{ background: `#a29bfe15`, border: `1px solid #a29bfe30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#a29bfe" }}>
+          👻 Ghost mode — hidden profile
         </div>
       )}
 
@@ -3797,7 +3898,7 @@ export default function App() {
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
-          DjangoCMD v3.2 · TwitterAPI.io integrated · see you on the timeline, xoxo
+          DjangoCMD v3.3 · see you on the timeline, xoxo
         </span>
         <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>
           gm fam · {time.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
