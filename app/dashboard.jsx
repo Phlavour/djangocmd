@@ -1085,8 +1085,73 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [editText, setEditText] = useState("");
   const [showGoalEdit, setShowGoalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [translateLoading, setTranslateLoading] = useState(null);
   const TC = TABS_CONFIG_FN();
   const PC = PILLAR_COLORS_FN();
+
+  // Translate post to other account's language and add as DRAFT
+  const translatePost = async (post) => {
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+    setTranslateLoading(post.id);
+    const targetAccount = account === "@django_crypto" ? "@henryk0x" : "@django_crypto";
+    const isToPolish = targetAccount === "@henryk0x";
+    const targetCats = isToPolish ? CATEGORIES_HENRYK : CATEGORIES;
+    const mappedCategory = targetCats.includes(post.category) ? post.category : targetCats[0];
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 800,
+          messages: [{ role: "user", content: isToPolish
+            ? `Przetłumacz ten post z angielskiego na polski. Dostosuj do głosu @henryk0x:
+- zawsze małe litery, bez kropek na końcu, bez emoji, bez hashtagów
+- ">" jako bullet point
+- NIGDY nie używaj "fam" — to fraza Django
+- ton: casualowy ale merytoryczny, po polsku
+- terminy crypto/AI zostaw po angielsku jeśli nie mają dobrego polskiego odpowiednika
+- nie tłumacz dosłownie — adaptuj naturalnie do polskiego X
+
+POST DO PRZETŁUMACZENIA:
+"${post.post}"
+
+ODPOWIEDZ TYLKO JSON: {"post": "przetłumaczony tekst", "category": "${mappedCategory}"}`
+            : `Translate this post from Polish to English. Adapt to @django_xbt voice:
+- always lowercase, no dots at end, no emoji, no hashtags
+- ">" for bullet points
+- use "fam" sparingly (only if it fits naturally)
+- tone: casual mentor, crypto twitter native
+- keep crypto/AI terms as-is
+- don't translate literally — adapt naturally for English CT
+
+POST TO TRANSLATE:
+"${post.post}"
+
+RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategory}"}` }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (result.post) {
+        const maxId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+        const newPost = {
+          id: maxId, tab: "DRAFT", category: result.category || mappedCategory,
+          structure: post.structure || "", post: result.post,
+          notes: `translated from ${account}`, score: "", howToFix: "", day: "",
+          account: targetAccount, source: "translated", image_url: post.image_url || "",
+          postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
+          replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
+        };
+        setAllPosts(prev => [...(prev || []), newPost]);
+        if (supa) savePostsToSupa([newPost]);
+        // Auto-score the translated post
+        if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category, newPost.image_url), 500);
+      }
+    } catch (err) { alert("Translation error: " + err.message); }
+    setTranslateLoading(null);
+  };
 
   // Initialize from Sheets
   useEffect(() => {
@@ -1202,7 +1267,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
-        url_clicks: p.urlClicks || "", account: account,
+        url_clicks: p.urlClicks || "", account: p.account || account,
       }));
       const saved = await supa.post("posts", rows);
       if (Array.isArray(saved)) {
@@ -2246,6 +2311,9 @@ RESPOND ONLY with JSON array, one per post in order:
                   </Btn>}
                   {isDraft && <Btn small color={T.amber} outline disabled={fixLoading === p.id} onClick={() => fixPost(p)}>
                     {fixLoading === p.id ? "⏳..." : "🔧 Fix"}
+                  </Btn>}
+                  {(isDraft || isPost) && <Btn small color={account === "@django_crypto" ? "#3d8bfd" : "#00e87b"} outline disabled={translateLoading === p.id} onClick={() => translatePost(p)}>
+                    {translateLoading === p.id ? "⏳..." : account === "@django_crypto" ? "🇵🇱 → Henryk" : "🇬🇧 → Django"}
                   </Btn>}
                   {(isDraft || isPost) && <Btn small outline onClick={() => { setImageTargetId(p.id); postImageRef.current?.click(); }}>📎</Btn>}
                 </>}
