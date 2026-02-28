@@ -3021,7 +3021,10 @@ function TwitterPanel({ apiKey, supa }) {
     <div>
       {/* Account Selector */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}
-        onDoubleClick={(e) => { if (e.shiftKey) { const next = !showHidden; setShowHidden(next); try { localStorage.setItem("djangocmd_show_hidden", next ? "1" : "0"); } catch {} } }}>
+        onDoubleClick={(e) => { if (e.shiftKey) {
+          if (showHidden) { setShowHidden(false); setAccount("@django_crypto"); try { localStorage.setItem("djangocmd_show_hidden", "0"); } catch {} }
+          else { const pw = prompt("🔒 access denied — enter password:"); if (pw === "unchain") { setShowHidden(true); try { localStorage.setItem("djangocmd_show_hidden", "1"); } catch {} } else if (pw !== null) { alert("❌ wrong password"); } }
+        } }}>
         {ACCOUNTS.filter(a => !a.hidden || showHidden).map(a => (
           <AccountPill key={a.handle} account={a.handle} active={account === a.handle} onClick={() => setAccount(a.handle)} />
         ))}
