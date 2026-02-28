@@ -1239,13 +1239,24 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
     setAllPosts(p => p.filter(x => x.tab !== tab));
     if (supa) supa.del("posts", `tab=eq.${tab}`);
   };
-  const saveGoal = (target, current) => {
+  const saveGoal = async (target, current) => {
     const t = Number(target) || 0, c = Number(current) || 0;
     setGoalTarget(t); setGoalCurrent(c);
     if (supa) {
-      supa.patch("goal", `account=eq.${account}`, { target_followers: t, current_followers: c, deadline: goalDeadline }).catch(err => {
-        supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]).catch(() => {});
-      });
+      try {
+        console.log(`🎯 Saving goal for ${account}: target=${t}, current=${c}`);
+        const result = await supa.patch("goal", `account=eq.${account}`, { target_followers: t, current_followers: c, deadline: goalDeadline });
+        console.log(`🎯 Goal patch result:`, result);
+        // patch returns empty array if no rows matched — need to insert
+        if (!result || (Array.isArray(result) && result.length === 0)) {
+          console.log(`🎯 No existing goal row, inserting new...`);
+          const ins = await supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]);
+          console.log(`🎯 Goal insert result:`, ins);
+        }
+      } catch (err) {
+        console.error(`🎯 Goal save error:`, err);
+        try { await supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]); } catch {}
+      }
     }
   };
 
@@ -1269,7 +1280,9 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
         url_clicks: p.urlClicks || "", account: p.account || account,
       }));
+      console.log(`💾 Saving ${rows.length} posts to Supabase (account: ${rows[0]?.account})...`);
       const saved = await supa.post("posts", rows);
+      console.log(`💾 Supabase response:`, Array.isArray(saved) ? `${saved.length} rows` : saved);
       if (Array.isArray(saved)) {
         setAllPosts(prev => {
           const updated = [...(prev || [])];
@@ -1974,7 +1987,10 @@ RESPOND ONLY with JSON array, one per post in order:
       setGenProgress(`done — ${newPosts.length} posts generated & scored → DRAFT`);
       setActiveTab("DRAFT");
       setSortBy("score-desc");
-      if (supa) savePostsToSupa(newPosts);
+      if (supa) {
+        try { await savePostsToSupa(newPosts); console.log(`✅ ${newPosts.length} posts saved to Supabase`); }
+        catch (err) { console.error("❌ Failed to save posts:", err); setGenProgress(`⚠ ${newPosts.length} posts generated but Supabase save failed`); }
+      }
     } else {
       setGenProgress("no posts generated — check API key and try again");
     }
@@ -2863,6 +2879,7 @@ function TwitterPanel({ apiKey, supa }) {
     (async () => {
       try {
         const posts = await supa.get("posts", "order=created_at.asc&limit=5000");
+        console.log(`📦 Loaded ${Array.isArray(posts) ? posts.length : 0} posts from Supabase`);
         if (Array.isArray(posts) && posts.length > 0) {
           setAllPosts(posts.map(p => ({
             id: p.id, tab: p.tab, category: p.category, structure: p.structure,
@@ -3577,7 +3594,17 @@ export default function App() {
     async post(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
     async patch(table, params, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "PATCH", headers: this.headers, body: JSON.stringify(data) }); return r.json(); },
     async del(table, params) { await fetch(`${supaUrl}/rest/v1/${table}?${params}`, { method: "DELETE", headers: this.headers }); },
-    async upsert(table, data) { const r = await fetch(`${supaUrl}/rest/v1/${table}`, { method: "POST", headers: { ...this.headers, "Prefer": "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(data) }); return r.json(); },
+    async upsert(table, data) {
+      // Try patch first (update existing), if no match insert new
+      const key = data.key;
+      if (key) {
+        const existing = await this.get(table, `key=eq.${encodeURIComponent(key)}&limit=1`);
+        if (Array.isArray(existing) && existing.length > 0) {
+          return this.patch(table, `key=eq.${encodeURIComponent(key)}`, data);
+        }
+      }
+      return this.post(table, [data]);
+    },
     async uploadImage(file, filename) {
       const r = await fetch(`${supaUrl}/storage/v1/object/post-images/${filename}`, {
         method: "POST",
