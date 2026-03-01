@@ -139,6 +139,17 @@ const STRUCTURES = [
   "Thread opener",
 ];
 
+const HOOKS = {
+  H: { name: "Helpful", color: "#22c55e", desc: "Show how you'll help the reader. Promise value upfront.", examples: ["how to stand out on ct when everyone posts the same thing", "here's what actually works for growing a small account", "the fastest way to get noticed without mass-replying"] },
+  E1: { name: "Emotion", color: "#f59e0b", desc: "Trigger pleasure or pain. Fear, frustration, excitement, relief.", examples: ["watching your impressions flatline while others blow up hurts", "that feeling when your post finally breaks 1k impressions", "nothing worse than grinding for months with zero results"] },
+  A: { name: "Ask", color: "#3b82f6", desc: "Ask an intriguing question they're already thinking about.", examples: ["is it just me or has engagement dropped significantly?", "why do the same 50 accounts always end up on every list?", "ever wonder why some accounts grow 10x faster with less content?"] },
+  D: { name: "Do's/Don'ts", color: "#ef4444", desc: "Clear and direct. Tell them what to do or stop doing.", examples: ["stop replying 'great post' under every tweet", "if you're copying someone else's content - you're doing it wrong", "don't chase big accounts - find your own lane first"] },
+  L: { name: "Lists", color: "#8b5cf6", desc: "Signal organized, scannable value. Numbers in headlines.", examples: ["5 things i learned from growing 6 accounts from 0", "3 signs your content strategy is broken", "8 things you can do instead of writing infofi slop"] },
+  I: { name: "Inspire", color: "#ec4899", desc: "Paint the picture of where they want to be. Aspirational.", examples: ["imagine waking up to 10 inbound dms from projects", "the goal isn't followers - it's freedom", "one year ago i was doing dishes in a hotel"] },
+  N: { name: "Numbers", color: "#06b6d4", desc: "Specific numbers for credibility and curiosity.", examples: ["i replied 2,200 times today", "jumped from 100k to 1.5m impressions in 2 weeks", "95% of traders lose money. here's why"] },
+  E2: { name: "Empathy", color: "#a78bfa", desc: "Earn trust. Show you understand their struggle.", examples: ["i know exactly what's going through your heads right now", "probably not the greatest morning of all mornings, no?", "we've all been there - staring at a red portfolio at 3am"] },
+};
+
 const TABS_CONFIG_FN = () => ({
   DRAFT: { color: T.blue, icon: "✎", label: "Draft" },
   POST: { color: T.green, icon: "◉", label: "Post" },
@@ -1077,6 +1088,7 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   };
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
+  const [newPostHook, setNewPostHook] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiResults, setAiResults] = useState({});
@@ -1374,13 +1386,13 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
     const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
     const newPost = {
       id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
-      post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "",
-      source: "manual", image_url: newPostImage.trim() || "", account: account,
+      post: newPostText.trim(), notes: newPostHook ? `hook: ${newPostHook}` : "", score: "", howToFix: "", day: "",
+      source: "manual", image_url: newPostImage.trim() || "", account: account, hook_type: newPostHook || "",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat(account === "@henryk0x" ? "market" : "growth"); setNewPostStructure(""); setNewPostImage(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat(account === "@henryk0x" ? "market" : "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -2172,7 +2184,7 @@ RESPOND ONLY with JSON array, one per post in order:
           { key: "hot_topics", label: "🔥 Hot Topics", placeholder: "newsy, drama, trendy na CT, co się dzieje w crypto/X...", color: T.red },
           { key: "personal", label: "👤 Personal", placeholder: "co robisz w tym tygodniu? milestones? podróże? coś osobistego do share'owania...", color: T.blue },
           { key: "avoid", label: "🚫 Avoid", placeholder: "patterns do unikania, tematy które nie zadziałały, style do ominięcia...", color: T.amber },
-          { key: "ai_notes", label: "🤖 AI Instructions", placeholder: "specjalne instrukcje: 'więcej shitpostów', 'fokus na market', 'try more controversial takes'...", color: T.green },
+          { key: "ai_notes", label: "🤖 Notes for Claude", placeholder: "instrukcje dla AI: 'więcej shitpostów', 'fokus na market', 'pisz krócej', 'try more controversial takes', 'don't use fam so much'...", color: T.green },
           { key: "seasonal", label: "📅 Seasonal", placeholder: "palenie (ile dni), hiszpański, groundhopping, podróże, zdrowie...", color: T.purple },
         ].map(f => (
           <div key={f.key} style={{ marginBottom: 8 }}>
@@ -2359,6 +2371,38 @@ RESPOND ONLY with JSON array, one per post in order:
                     {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 6, textTransform: "uppercase" }}>Hook Type (HEADLINE)</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {Object.entries(HOOKS).map(([k, h]) => {
+                    const active = newPostHook === k;
+                    return <div key={k} style={{ position: "relative", display: "inline-flex" }}>
+                      <button onClick={() => setNewPostHook(active ? "" : k)} style={{
+                        background: active ? h.color+"20" : "transparent", color: active ? h.color : T.textSoft,
+                        border: `1px solid ${active ? h.color : T.border}`, borderRadius: 6, padding: "4px 10px",
+                        fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Mono'",
+                        display: "flex", alignItems: "center", gap: 4,
+                      }}>
+                        <span>{k.replace("E1","E").replace("E2","E")}</span>
+                        <span style={{ fontWeight: 400, fontSize: 10 }}>{h.name}</span>
+                        <span className="hook-info" style={{
+                          width: 14, height: 14, borderRadius: "50%", background: active ? h.color+"30" : T.border+"60",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 9, color: active ? h.color : T.textDim, cursor: "help", fontWeight: 700, marginLeft: 2,
+                        }} title={`${h.desc}\n\nExamples:\n• ${h.examples.join("\n• ")}`}>i</span>
+                      </button>
+                    </div>;
+                  })}
+                </div>
+                {newPostHook && HOOKS[newPostHook] && (
+                  <div style={{ marginTop: 6, padding: 8, background: HOOKS[newPostHook].color+"10", borderRadius: 6, border: `1px solid ${HOOKS[newPostHook].color}30` }}>
+                    <div style={{ fontSize: 10, color: HOOKS[newPostHook].color, fontWeight: 600, marginBottom: 4 }}>{HOOKS[newPostHook].desc}</div>
+                    {HOOKS[newPostHook].examples.map((ex, i) => (
+                      <div key={i} style={{ fontSize: 10, color: T.textSoft, fontStyle: "italic", marginBottom: 2 }}>"{ex}"</div>
+                    ))}
+                  </div>
+                )}
               </div>
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
