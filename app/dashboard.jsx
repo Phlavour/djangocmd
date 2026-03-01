@@ -2533,21 +2533,38 @@ function anum(v) { return parseInt(v||"0",10)||0; }
 
 // Text matching for CSV ↔ Supabase
 function normText(text, len) {
-  return (text||"").toLowerCase().replace(/https?:\/\/\S+/g,"").replace(/[^\w\s]/g,"").replace(/\s+/g," ").trim().slice(0, len||60);
+  return (text||"").toLowerCase().replace(/https?:\/\/\S+/g,"").replace(/[^\w\s]/g,"").replace(/\s+/g," ").trim().slice(0, len||120);
+}
+function getWords(text) {
+  return normText(text, 200).split(" ").filter(w => w.length > 2);
 }
 function findMatch(csvText, spPosts) {
-  const n = normText(csvText); if (!n || n.length < 10) return null;
+  const n = normText(csvText, 200); if (!n || n.length < 10) return null;
+  const csvWords = getWords(csvText);
+  if (csvWords.length < 3) return null;
   let best = null, bestS = 0;
   for (const sp of spPosts) {
-    const sn = normText(sp.post); if (!sn || sn.length < 10) continue;
-    const short = n.length < sn.length ? n : sn, long = n.length < sn.length ? sn : n;
-    if (long.startsWith(short) || short.startsWith(long.slice(0, short.length))) {
-      const s = short.length / Math.max(long.length, 1);
-      if (s > bestS && s > 0.5) { bestS = s; best = sp; }
+    const sn = normText(sp.post, 200); if (!sn || sn.length < 10) continue;
+    // Method 1: prefix match (first 80 chars)
+    const prefix = Math.min(n.length, sn.length, 80);
+    if (prefix >= 15) {
+      let m = 0; for (let i = 0; i < prefix; i++) { if (n[i] === sn[i]) m++; }
+      const ov = m/prefix;
+      if (ov > bestS && ov > 0.7) { bestS = ov; best = sp; }
     }
-    const cl = Math.min(n.length, sn.length, 50);
-    if (cl >= 15) { let m = 0; for (let i = 0; i < cl; i++) { if (n[i] === sn[i]) m++; }
-      const ov = m/cl; if (ov > bestS && ov > 0.75) { bestS = ov; best = sp; } }
+    // Method 2: word overlap (more robust against minor edits)
+    const spWords = getWords(sp.post);
+    if (spWords.length >= 3) {
+      const set = new Set(spWords);
+      const matches = csvWords.filter(w => set.has(w)).length;
+      const overlap = matches / Math.max(Math.min(csvWords.length, spWords.length), 1);
+      if (overlap > bestS && overlap > 0.6) { bestS = overlap; best = sp; }
+    }
+    // Method 3: startsWith (handles truncated CSV text)
+    if (n.length >= 20 && sn.length >= 20) {
+      const short30 = n.slice(0, 30), long30 = sn.slice(0, 30);
+      if (short30 === long30 && 1 > bestS) { bestS = 1; best = sp; }
+    }
   }
   return best;
 }
