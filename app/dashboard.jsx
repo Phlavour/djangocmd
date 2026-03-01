@@ -1973,7 +1973,7 @@ RESPOND ONLY with valid JSON array:
               structure: p.structure || "", post: p.post || "",
               notes: humorNote || `subtopic: ${p.subtopic || ""}`,
               score: p.humor_score ? String(p.humor_score) : "", howToFix: "", day: "",
-              account: account,
+              account: account, source: "ai",
               postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
               replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
             });
@@ -2556,7 +2556,7 @@ function findMatch(csvText, spPosts) {
 async function fetchMatchPosts(supa) {
   if (!supa?.url || !supa?.key) return [];
   try {
-    const r = await fetch(supa.url+"/rest/v1/posts?select=post,category,structure,score,tab&or=(tab.eq.USED,tab.eq.DATABASE,tab.eq.POST)&order=created_at.desc&limit=500",
+    const r = await fetch(supa.url+"/rest/v1/posts?select=id,post,category,structure,score,source,tab&or=(tab.eq.USED,tab.eq.DATABASE,tab.eq.POST)&order=created_at.desc&limit=500",
       { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } });
     return r.ok ? await r.json() : [];
   } catch(e) { console.error("Supabase:", e); return []; }
@@ -2589,8 +2589,13 @@ const StructTag = ({ structure }) => {
   return (s||structure) ? <span style={{ fontSize: 10, color: T.textSoft, padding: "2px 6px", background: T.surfaceAlt, borderRadius: 4 }}>{s||structure}</span> : null;
 };
 const SrcTag = ({ source }) => {
-  const isAI = source === "planned";
-  return <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: isAI?T.green:T.cyan, padding: "2px 6px", borderRadius: 4, background: isAI?T.greenDim:T.cyanDim, textTransform: "uppercase" }}>{isAI?"AI":"MANUAL"}</span>;
+  const s = (source||"").toLowerCase();
+  const isAI = s === "ai" || s.startsWith("prompt");
+  const isManual = s === "manual";
+  const label = isAI ? "AI" : isManual ? "MANUAL" : "ORGANIC";
+  const color = isAI ? T.green : isManual ? T.cyan : T.amber;
+  const bg = isAI ? T.greenDim : isManual ? T.cyanDim : T.amberDim;
+  return <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color, padding: "2px 6px", borderRadius: 4, background: bg, textTransform: "uppercase" }}>{label}</span>;
 };
 const AChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -2656,7 +2661,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
     if (!rows.length) { setStatus("error: empty CSV"); setBusy(false); return; }
     const originals = rows.filter(r => {
       const t = r["Post text"]||r["Tweet text"]||"";
-      return !t.startsWith("@") && anum(r["Impressions"]||r["impressions"]) > 0;
+      return !t.startsWith("@") && t.length > 5;
     }).map(r => {
       const d = parseXDate(r["Date"]||"");
       return {
@@ -2666,7 +2671,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
         likes: anum(r["Likes"]||r["likes"]), engagements: anum(r["Engagements"]||r["engagements"]),
         bookmarks: anum(r["Bookmarks"]||r["bookmarks"]), reposts: anum(r["Reposts"]||r["Retweets"]||r["reposts"]),
         replies: anum(r["Replies"]||r["replies"]), new_follows: anum(r["New follows"]),
-        pillar: null, structure: null, ai_score: null, source: "spontaneous",
+        pillar: null, structure: null, ai_score: null, source: "organic",
         account: account || "@django_crypto",
       };
     });
@@ -2678,7 +2683,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       if (sp.length > 0) {
         for (const o of originals) {
           const m = findMatch(o.post_text, sp);
-          if (m) { o.pillar=normPillar(m.category); o.structure=(m.structure||"").toLowerCase(); o.ai_score=parseFloat(m.score)||null; o.source="planned"; o.matched_supa_id=m.id||null; matched++; }
+          if (m) { o.pillar=normPillar(m.category); o.structure=(m.structure||"").toLowerCase(); o.ai_score=parseFloat(m.score)||null; o.source=(m.source==="manual"?"manual":"ai"); o.matched_supa_id=m.id||null; matched++; }
           else unmatched.push(o);
         }
       } else originals.forEach(o => unmatched.push(o));
@@ -2687,7 +2692,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       setStatus(matched+" matched · classifying "+unmatched.length+" manual...");
       const asOld = unmatched.map(u => ({id:u.post_id, text:u.post_text}));
       const cls = await aiClassifyPosts(asOld, apiKey);
-      for (const cp of cls) { const o = originals.find(x=>x.post_id===cp.id); if (o && o.source==="spontaneous") { o.pillar=normPillar(cp.pillar); o.structure=(cp.structure||"").toLowerCase(); o.ai_score=cp.aiScore||null; } }
+      for (const cp of cls) { const o = originals.find(x=>x.post_id===cp.id); if (o && o.source==="organic") { o.pillar=normPillar(cp.pillar); o.structure=(cp.structure||"").toLowerCase(); o.ai_score=cp.aiScore||null; } }
     }
     if (supa?.url && supa?.key) {
       setStatus("saving "+originals.length+" posts to supabase...");
@@ -2711,7 +2716,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
     setBusy(false);
-    setStatus("✓ "+originals.length+" posts · "+matched+" AI · "+(originals.length-matched)+" manual · "+(rows.length-originals.length)+" replies filtered");
+    setStatus("✓ "+originals.length+" posts · "+matched+" from dashboard · "+(originals.length-matched)+" organic · "+(rows.length-originals.length)+" replies filtered");
   }, [supa, apiKey, account]);
 
   // Upload Overview CSV
@@ -2761,7 +2766,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
     const sp = await fetchMatchPosts(supa); let matched = 0;
     const updated = filteredPosts.map(o => {
       const m = findMatch(o.post_text, sp);
-      if (m) { matched++; return {...o, pillar:normPillar(m.category), structure:(m.structure||"").toLowerCase(), ai_score:parseFloat(m.score)||o.ai_score, source:"planned", matched_supa_id:m.id||null}; }
+      if (m) { matched++; return {...o, pillar:normPillar(m.category), structure:(m.structure||"").toLowerCase(), ai_score:parseFloat(m.score)||o.ai_score, source:(m.source==="manual"?"manual":"ai"), matched_supa_id:m.id||null}; }
       return {...o, source: o.source || "spontaneous"};
     });
     for (const u of updated) {
@@ -2780,8 +2785,9 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
   };
 
   // ─── Computed ───
-  const aiPosts = filteredPosts.filter(p=>p.source==="planned");
-  const manualPosts = filteredPosts.filter(p=>p.source==="spontaneous");
+  const aiPosts = filteredPosts.filter(p=>p.source==="ai"||((p.source||"").startsWith("prompt")));
+  const manualPosts = filteredPosts.filter(p=>p.source==="manual");
+  const organicPosts = filteredPosts.filter(p=>p.source!=="ai"&&p.source!=="manual"&&!((p.source||"").startsWith("prompt")));
   const totalImp = filteredDaily.reduce((s,d)=>s+(d.impressions||0),0) || filteredPosts.reduce((s,p)=>s+(p.impressions||0),0);
   const totalEng = filteredDaily.reduce((s,d)=>s+(d.engagements||0),0) || filteredPosts.reduce((s,p)=>s+(p.engagements||0),0);
   const totalLikes = filteredDaily.reduce((s,d)=>s+(d.likes||0),0) || filteredPosts.reduce((s,p)=>s+(p.likes||0),0);
@@ -2790,6 +2796,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
   const engRate = totalImp>0?((totalEng/totalImp)*100).toFixed(2):"0";
   const aiAvg = aiPosts.length?Math.round(aiPosts.reduce((s,p)=>s+(p.impressions||0),0)/aiPosts.length):0;
   const manualAvg = manualPosts.length?Math.round(manualPosts.reduce((s,p)=>s+(p.impressions||0),0)/manualPosts.length):0;
+  const organicAvg = organicPosts.length?Math.round(organicPosts.reduce((s,p)=>s+(p.impressions||0),0)/organicPosts.length):0;
 
   // Pillar performance
   const pillarData = {};
@@ -2797,7 +2804,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
     const k = normPillar(p.pillar) || p.pillar;
     if(!pillarData[k]) pillarData[k]={posts:0,imp:0,likes:0,eng:0,topImp:0,ai:0,manual:0};
     const d=pillarData[k]; d.posts++; d.imp+=(p.impressions||0); d.likes+=(p.likes||0); d.eng+=(p.engagements||0);
-    d.topImp=Math.max(d.topImp,(p.impressions||0)); if(p.source==="planned") d.ai++; else d.manual++;
+    d.topImp=Math.max(d.topImp,(p.impressions||0)); if(p.source==="ai") d.ai++; else d.manual++;
   });
   const pillarChart = Object.entries(pillarData).map(([k,v])=>({
     name:PILLAR_MAP[k]?.label||k, key:k, posts:v.posts, avgImp:Math.round(v.imp/v.posts),
@@ -2871,7 +2878,7 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
 
 PERIOD: ${rangeLabel} (${filteredDaily.length} days, ${o.length} original posts)
 Total Impressions: ${tImp.toLocaleString()} | Likes: ${totalLikes.toLocaleString()} | Eng Rate: ${engRate}% | Net Follows: +${totalFollows-totalUnfollows}
-AI-generated: ${aiPosts.length} posts (avg ${aiAvg} imp) | Manual: ${manualPosts.length} posts (avg ${manualAvg} imp)
+AI-generated: ${aiPosts.length} posts (avg ${aiAvg} imp) | Manual: ${manualPosts.length} posts (avg ${manualAvg} imp) | Organic: ${organicPosts.length} posts (avg ${organicAvg} imp)
 
 Pillars:
 ${Object.entries(ps).map(([k,v])=>k+": "+v.n+" posts, avg "+Math.round(v.imp/v.n)+" imp, "+((v.eng/Math.max(v.imp,1))*100).toFixed(1)+"% eng").join("\n")}
@@ -2883,10 +2890,10 @@ Structures:
 ${structChart.slice(0,8).map(s=>s.name+": "+s.posts+" posts, avg "+s.avgImp+" imp").join("\n")}
 
 Top 5 posts:
-${topPosts.slice(0,5).map((p,i)=>(i+1)+". ["+p.impressions+"imp "+p.likes+"L] "+(p.source==="planned"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,100))+"\"").join("\n")}
+${topPosts.slice(0,5).map((p,i)=>(i+1)+". ["+p.impressions+"imp "+p.likes+"L] "+(p.source==="ai"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,100))+"\"").join("\n")}
 
 Bottom 3:
-${[...o].sort((a,b)=>(a.impressions||0)-(b.impressions||0)).slice(0,3).map((p,i)=>(i+1)+". ["+p.impressions+"imp] "+(p.source==="planned"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,80))+"\"").join("\n")}
+${[...o].sort((a,b)=>(a.impressions||0)-(b.impressions||0)).slice(0,3).map((p,i)=>(i+1)+". ["+p.impressions+"imp] "+(p.source==="ai"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,80))+"\"").join("\n")}
 ${scoringSection}
 
 Give a comprehensive report:
@@ -2964,46 +2971,64 @@ Direct, lowercase django strategist voice. No fluff.`;
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Eng Rate</div><div style={{ fontSize: 24, fontWeight: 700, color: T.amber, fontFamily: "'IBM Plex Mono'" }}>{engRate}%</div></div>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Likes</div><div style={{ fontSize: 24, fontWeight: 700, color: T.blue, fontFamily: "'IBM Plex Mono'" }}>{totalLikes.toLocaleString()}</div></div>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Follows</div><div style={{ fontSize: 24, fontWeight: 700, color: T.purple, fontFamily: "'IBM Plex Mono'" }}>+{totalFollows-totalUnfollows}</div><div style={{ fontSize: 10, color: T.textDim }}>+{totalFollows} / -{totalUnfollows}</div></div>
-            <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Posts</div><div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{filteredPosts.length}</div><div style={{ fontSize: 10, color: T.textDim }}>{aiPosts.length} AI · {manualPosts.length} manual</div></div>
+            <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Posts</div><div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{filteredPosts.length}</div><div style={{ fontSize: 10, color: T.textDim }}>{aiPosts.length} AI · {manualPosts.length} manual · {organicPosts.length} organic</div></div>
           </div>
         </Card>
 
-        {/* ═══ AI vs MANUAL ═══ */}
-        {aiPosts.length > 0 && manualPosts.length > 0 && <Card style={{ marginBottom: 16, padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 10 }}>⚡ AI Generated vs Manual</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ padding: 12, background: T.greenDim, borderRadius: 10, border: "1px solid "+T.greenMid }}>
-              <div style={{ fontSize: 10, color: T.green, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>AI GENERATED ({aiPosts.length})</div>
+        {/* ═══ AI vs MANUAL vs ORGANIC ═══ */}
+        {filteredPosts.length > 0 && (aiPosts.length + manualPosts.length + organicPosts.length > 0) && <Card style={{ marginBottom: 16, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 10 }}>⚡ Post Source Breakdown</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            {aiPosts.length > 0 && <div style={{ padding: 12, background: T.greenDim, borderRadius: 10, border: "1px solid "+T.greenMid }}>
+              <div style={{ fontSize: 10, color: T.green, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>AI ({aiPosts.length})</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{aiAvg.toLocaleString()}</div>
               <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
-            </div>
-            <div style={{ padding: 12, background: T.cyanDim, borderRadius: 10, border: "1px solid "+T.cyan+"30" }}>
+            </div>}
+            {manualPosts.length > 0 && <div style={{ padding: 12, background: T.cyanDim, borderRadius: 10, border: "1px solid "+T.cyan+"30" }}>
               <div style={{ fontSize: 10, color: T.cyan, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>MANUAL ({manualPosts.length})</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{manualAvg.toLocaleString()}</div>
               <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
-            </div>
+            </div>}
+            {organicPosts.length > 0 && <div style={{ padding: 12, background: T.amberDim, borderRadius: 10, border: "1px solid "+T.amber+"30" }}>
+              <div style={{ fontSize: 10, color: T.amber, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>ORGANIC ({organicPosts.length})</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{organicAvg.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
+            </div>}
           </div>
-          <div style={{ fontSize: 11, color: T.textSoft, marginTop: 8, textAlign: "center" }}>
-            {aiAvg>manualAvg?"AI outperforms by "+Math.round(((aiAvg-manualAvg)/Math.max(manualAvg,1))*100)+"%":"manual outperforms by "+Math.round(((manualAvg-aiAvg)/Math.max(aiAvg,1))*100)+"%"}
-          </div>
+          <div style={{ fontSize: 10, color: T.textDim, marginTop: 8, textAlign: "center" }}>AI = generated by Claude · Manual = written in dashboard · Organic = posted directly on X</div>
         </Card>}
 
         {/* ═══ PILLAR PERFORMANCE ═══ */}
         {pillarChart.length > 0 && <>
-          <Card style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Pillar Performance — Avg Impressions</div>
-            <ResponsiveContainer width="100%" height={Math.max(140,pillarChart.length*44)}>
-              <BarChart data={pillarChart} layout="vertical" barSize={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: T.textSoft }} axisLine={false} width={80} />
-                <Tooltip content={<AChartTip />} />
-                <Bar dataKey="avgImp" radius={[0,6,6,0]} name="Avg Impressions">
-                  {pillarChart.map((e,i) => <Cell key={i} fill={PILLAR_MAP[e.key]?.color()||T.textDim} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            {/* Pie chart — pillar distribution % */}
+            <Card style={{ padding: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Content Distribution</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pillarChart} dataKey="posts" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35} paddingAngle={2} label={({name,percent})=>name+" "+Math.round(percent*100)+"%"} labelLine={false} style={{ fontSize: 10 }}>
+                    {pillarChart.map((e,i) => <Cell key={i} fill={PILLAR_MAP[e.key]?.color()||T.textDim} />)}
+                  </Pie>
+                  <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:10,fontSize:11}}><div style={{color:PILLAR_MAP[d?.key]?.color()||T.text,fontWeight:600}}>{d?.name}</div><div style={{color:T.textSoft}}>{d?.posts} posts ({Math.round((d?.posts/filteredPosts.length)*100)}%)</div></div>;}} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
+            {/* Bar chart — avg impressions */}
+            <Card style={{ padding: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Avg Impressions per Pillar</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={pillarChart} layout="vertical" barSize={18}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: T.textSoft }} axisLine={false} width={80} />
+                  <Tooltip content={<AChartTip />} />
+                  <Bar dataKey="avgImp" radius={[0,6,6,0]} name="Avg Impressions">
+                    {pillarChart.map((e,i) => <Cell key={i} fill={PILLAR_MAP[e.key]?.color()||T.textDim} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             {pillarChart.map(p => <Card key={p.key} style={{ padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
