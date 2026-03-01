@@ -1084,6 +1084,27 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [genLoading, setGenLoading] = useState(false);
   const [weeklyNotesSaving, setWeeklyNotesSaving] = useState(false);
   const weeklyNotesTimer = useRef(null);
+  const [wctx, setWctx] = useState({ hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" });
+  const [wctxHistory, setWctxHistory] = useState([]);
+
+  // Load weekly context history
+  useEffect(() => {
+    if (!supa?.url || !supa?.key) return;
+    fetch(supa.url+"/rest/v1/weekly_context?account=eq."+encodeURIComponent(account)+"&order=week_start.desc&limit=10",
+      { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } })
+      .then(r => r.ok ? r.json() : []).then(setWctxHistory).catch(() => {});
+  }, [supa?.url, supa?.key, account]);
+
+  // Parse existing weeklyNotes into wctx fields on load
+  useEffect(() => {
+    if (!weeklyNotes) return;
+    const parsed = {};
+    weeklyNotes.split("\n").forEach(line => {
+      const m = line.match(/^\[([A-Z_]+)\]\s*(.*)/);
+      if (m) parsed[m[1].toLowerCase()] = (parsed[m[1].toLowerCase()] ? parsed[m[1].toLowerCase()] + "\n" : "") + m[2];
+    });
+    if (Object.keys(parsed).length > 0) setWctx(prev => ({ ...prev, ...parsed }));
+  }, []); // only on mount
   const [genProgress, setGenProgress] = useState("");
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
@@ -1896,10 +1917,16 @@ ${structList}
 ${batch.advisor}
 
 ${badFeedback ? `═══ POSTS THAT FAILED (avoid these patterns) ═══\n${badFeedback}\n` : ""}
-${weeklyNotes ? `═══ WEEKLY NOTES (follow these directions) ═══\n${weeklyNotes}\n` : ""}
+${weeklyNotes ? `═══ WEEKLY CONTEXT (use for relevant, timely posts) ═══\n${weeklyNotes}\n` : ""}
 
 ═══ TASK ═══
 Generate exactly ${batch.count} original posts for the "${batch.category}" pillar.
+
+HEADLINE HOOK SYSTEM — EVERY post MUST use one of these hook types for its FIRST LINE:
+H=Helpful ("here's how to...") | E=Emotion (pain/pleasure) | A=Ask (intriguing question)
+D=Do's/Don'ts ("stop doing X") | L=Lists ("5 things...") | I=Inspire (desired outcome)
+N=Numbers (specific data) | E=Empathy (acknowledge struggle)
+RULES: first line = hook, max 15 words, create curiosity. Vary types across posts.
 
 CRITICAL RULES:
 - always lowercase (never caps except intentional emphasis)
@@ -1913,7 +1940,7 @@ CRITICAL RULES:
 - be specific and opinionated — no generic motivation
 
 RESPOND ONLY with valid JSON array:
-[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used"}]`
+[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"}]`
       : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 YOUR BRAND VOICE:
@@ -1933,11 +1960,18 @@ ${structList}
 ${batch.advisor}
 
 ${badFeedback ? `═══ POSTS THAT FAILED (avoid these patterns) ═══\n${badFeedback}\n` : ""}
-${weeklyNotes ? `═══ WEEKLY NOTES FROM DJANGO (follow these directions) ═══\n${weeklyNotes}\n` : ""}
+${weeklyNotes ? `═══ WEEKLY CONTEXT FROM DJANGO (use this to make posts relevant and personal) ═══\n${weeklyNotes}\nIMPORTANT: Use hot topics for shitposting/busting. Use personal context for lifestyle/growth stories. Follow AI instructions. Respect avoid list.\n` : ""}
 ${lastAnalysis ? `═══ LAST WEEK'S AI ANALYSIS (apply these insights) ═══\n${lastAnalysis.slice(0, 1500)}\n` : ""}
 
 ═══ TASK ═══
 Generate exactly ${batch.count} original posts for the "${batch.category}" pillar.
+
+HEADLINE HOOK SYSTEM — EVERY post MUST use one of these hook types for its FIRST LINE:
+H=Helpful ("here's how to...") | E=Emotion (pain/pleasure — "nothing worse than...")
+A=Ask ("is it just me or...", "why do...") | D=Do's/Don'ts ("stop doing X", "if you're X - you're wrong")
+L=Lists ("5 things...", "3 signs...") | I=Inspire ("imagine...", "the goal isn't X")
+N=Numbers ("i replied 2,200 times", "100 days ago...") | E=Empathy ("i know what you're going through")
+RULES: first line = hook, max 15 words, must stop the scroll. Vary types — don't repeat same hook type twice in a row.
 
 CRITICAL RULES:
 - always lowercase (never caps except proper nouns or intentional emphasis)
@@ -1954,7 +1988,7 @@ CRITICAL RULES:
 - if using a framework/advisor, it must be INVISIBLE — never name it
 
 RESPOND ONLY with valid JSON array:
-[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`;
+[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`;
 
       try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1971,9 +2005,9 @@ RESPOND ONLY with valid JSON array:
             newPosts.push({
               id: idCounter++, tab: "DRAFT", category: batch.category,
               structure: p.structure || "", post: p.post || "",
-              notes: humorNote || `subtopic: ${p.subtopic || ""}`,
+              notes: humorNote || `subtopic: ${p.subtopic || ""}${p.hook_type ? " · hook: "+p.hook_type : ""}`,
               score: p.humor_score ? String(p.humor_score) : "", howToFix: "", day: "",
-              account: account, source: "ai",
+              account: account, source: "ai", hook_type: p.hook_type || "",
               postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
               replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
             });
@@ -2115,18 +2149,66 @@ RESPOND ONLY with JSON array, one per post in order:
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 14 }}>📋</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Notes</span>
-            <span style={{ fontSize: 10, color: T.textDim }}>feedback & direction for next batch</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Context</span>
+            <span style={{ fontSize: 10, color: T.textDim }}>feed AI with context for better posts</span>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {weeklyNotesSaving && <span style={{ fontSize: 10, color: T.green }}>✓ saved</span>}
-            <Btn small outline onClick={() => { if (confirm("Clear weekly notes?")) { setWeeklyNotes(""); const acctSlug = account.replace("@", ""); if (supa) supa.patch("settings", `key=eq.weekly_notes_${acctSlug}`, { value: "" }); } }}>Clear</Btn>
+            <Btn small color={T.green} outline onClick={async () => {
+              if (!supa) return;
+              const ctx = { account, week_start: new Date().toISOString().slice(0,10), hot_topics: wctx.hot_topics||"", personal: wctx.personal||"", avoid: wctx.avoid||"", ai_notes: wctx.ai_notes||"", seasonal: wctx.seasonal||"", updated_at: new Date().toISOString() };
+              try {
+                await fetch(supa.url+"/rest/v1/weekly_context", { method: "POST", headers: { apikey: supa.key, Authorization: "Bearer "+supa.key, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(ctx) });
+                setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000);
+                // refresh history
+                const r = await fetch(supa.url+"/rest/v1/weekly_context?account=eq."+encodeURIComponent(account)+"&order=week_start.desc&limit=10", { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } });
+                if (r.ok) setWctxHistory(await r.json());
+              } catch {}
+            }}>💾 Save Week</Btn>
+            <Btn small outline onClick={() => { if (confirm("Clear all context fields?")) { setWctx({hot_topics:"",personal:"",avoid:"",ai_notes:"",seasonal:""}); setWeeklyNotes(""); const s=account.replace("@",""); if(supa) supa.patch("settings",`key=eq.weekly_notes_${s}`,{value:""}); } }}>Clear</Btn>
           </div>
         </div>
-        <textarea value={weeklyNotes} onChange={e => { setWeeklyNotes(e.target.value); weeklyNotesTimer.current && clearTimeout(weeklyNotesTimer.current); weeklyNotesTimer.current = setTimeout(() => { const acctSlug = account.replace("@", ""); if (supa) { supa.upsert("settings", { key: `weekly_notes_${acctSlug}`, value: e.target.value }).then(() => { setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000); }); } }, 1000); }}
-          placeholder="what worked last week? what didn't? what topics to focus on? any specific direction for next batch..."
-          style={{ width: "100%", minHeight: 70, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.6, outline: "none", boxSizing: "border-box" }}
-          onFocus={e => e.target.style.borderColor = T.amber} onBlur={e => e.target.style.borderColor = T.border} />
+        {[
+          { key: "hot_topics", label: "🔥 Hot Topics", placeholder: "newsy, drama, trendy na CT, co się dzieje w crypto/X...", color: T.red },
+          { key: "personal", label: "👤 Personal", placeholder: "co robisz w tym tygodniu? milestones? podróże? coś osobistego do share'owania...", color: T.blue },
+          { key: "avoid", label: "🚫 Avoid", placeholder: "patterns do unikania, tematy które nie zadziałały, style do ominięcia...", color: T.amber },
+          { key: "ai_notes", label: "🤖 AI Instructions", placeholder: "specjalne instrukcje: 'więcej shitpostów', 'fokus na market', 'try more controversial takes'...", color: T.green },
+          { key: "seasonal", label: "📅 Seasonal", placeholder: "palenie (ile dni), hiszpański, groundhopping, podróże, zdrowie...", color: T.purple },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: f.color, marginBottom: 3, letterSpacing: .5 }}>{f.label}</div>
+            <textarea value={wctx[f.key]||""} onChange={e => {
+              const nv = { ...wctx, [f.key]: e.target.value }; setWctx(nv);
+              // Also build combined weeklyNotes for generation prompt
+              const combined = Object.entries(nv).filter(([,v])=>v.trim()).map(([k,v])=>`[${k.toUpperCase()}] ${v}`).join("\n");
+              setWeeklyNotes(combined);
+              // Auto-save to settings
+              weeklyNotesTimer.current && clearTimeout(weeklyNotesTimer.current);
+              weeklyNotesTimer.current = setTimeout(() => { const s=account.replace("@",""); if(supa) supa.upsert("settings",{key:`weekly_notes_${s}`,value:combined}).then(()=>{setWeeklyNotesSaving(true);setTimeout(()=>setWeeklyNotesSaving(false),2000);}); }, 1000);
+            }}
+              placeholder={f.placeholder}
+              style={{ width: "100%", minHeight: 44, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
+              onFocus={e => e.target.style.borderColor = f.color} onBlur={e => e.target.style.borderColor = T.border} />
+          </div>
+        ))}
+        {wctxHistory.length > 0 && (
+          <details style={{ marginTop: 6 }}>
+            <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📜 Previous weeks ({wctxHistory.length})</summary>
+            <div style={{ marginTop: 6 }}>
+              {wctxHistory.map(h => (
+                <div key={h.id} style={{ padding: 8, background: T.bg2, borderRadius: 6, marginBottom: 6, fontSize: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, color: T.text }}>{h.week_start}</span>
+                    <button onClick={() => { setWctx({ hot_topics: h.hot_topics||"", personal: h.personal||"", avoid: h.avoid||"", ai_notes: h.ai_notes||"", seasonal: h.seasonal||"" }); }} style={{ fontSize: 9, color: T.blue, background: "none", border: "none", cursor: "pointer" }}>load</button>
+                  </div>
+                  {h.hot_topics && <div style={{ color: T.textSoft }}><span style={{color:T.red}}>🔥</span> {h.hot_topics.slice(0,80)}...</div>}
+                  {h.personal && <div style={{ color: T.textSoft }}><span style={{color:T.blue}}>👤</span> {h.personal.slice(0,80)}...</div>}
+                  {h.seasonal && <div style={{ color: T.textSoft }}><span style={{color:T.purple}}>📅</span> {h.seasonal.slice(0,80)}...</div>}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
         {lastAnalysis && (
           <details style={{ marginTop: 8 }}>
             <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📊 Last AI Analysis (auto-attached to generation)</summary>
