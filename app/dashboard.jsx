@@ -2467,11 +2467,21 @@ const PILLAR_MAP = {
   growth: { label: "Growth", color: () => T.green, bg: () => T.greenDim },
   market: { label: "Market", color: () => T.blue, bg: () => T.blueDim },
   lifestyle: { label: "Lifestyle", color: () => T.purple, bg: () => T.purpleDim },
-  busting: { label: "Myth Busting", color: () => T.amber, bg: () => T.amberDim },
+  busting: { label: "Busting", color: () => T.amber, bg: () => T.amberDim },
   shitpost: { label: "Shitpost", color: () => T.red, bg: () => T.redDim },
+  shitposting: { label: "Shitpost", color: () => T.red, bg: () => T.redDim },
+  "myth busting": { label: "Busting", color: () => T.amber, bg: () => T.amberDim },
   ai: { label: "AI", color: () => T.cyan, bg: () => T.cyanDim },
   motivation: { label: "Motivation", color: () => "#ff6b6b", bg: () => "#ff6b6b12" },
 };
+// Normalize pillar names
+function normPillar(p) {
+  if (!p) return null;
+  const k = p.toLowerCase().trim();
+  if (k === "myth busting" || k === "myth_busting") return "busting";
+  if (k === "shitposting") return "shitpost";
+  return k;
+}
 const STRUCT_LABELS = {
   framework:"Framework", contrarian:"Contrarian", personal:"Personal", thread:"Thread",
   observation:"Observation", question:"Question", callout:"Callout",
@@ -2578,9 +2588,10 @@ const StructTag = ({ structure }) => {
   const k = (structure||"").toLowerCase(); const s = STRUCT_LABELS[k];
   return (s||structure) ? <span style={{ fontSize: 10, color: T.textSoft, padding: "2px 6px", background: T.surfaceAlt, borderRadius: 4 }}>{s||structure}</span> : null;
 };
-const SrcTag = ({ source }) => (
-  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: source==="planned"?T.green:T.cyan, padding: "2px 6px", borderRadius: 4, background: source==="planned"?T.greenDim:T.cyanDim, textTransform: "uppercase" }}>{source}</span>
-);
+const SrcTag = ({ source }) => {
+  const isAI = source === "planned";
+  return <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: isAI?T.green:T.cyan, padding: "2px 6px", borderRadius: 4, background: isAI?T.greenDim:T.cyanDim, textTransform: "uppercase" }}>{isAI?"AI":"MANUAL"}</span>;
+};
 const AChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (<div style={{ background: T.card, border: "1px solid "+T.border, borderRadius: 8, padding: 10, fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,.1)" }}>
@@ -2594,15 +2605,14 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState("");
   const [repLoad, setRepLoad] = useState(false);
-  const [view, setView] = useState("overview");
 
-  // ─── Supabase-persisted data ───
-  const [dailyData, setDailyData] = useState([]); // from analytics_daily
-  const [postData, setPostData] = useState([]);   // from analytics_posts
+  // Supabase-persisted data
+  const [dailyData, setDailyData] = useState([]);
+  const [postData, setPostData] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
-  // ─── Date range filter ───
-  const [range, setRange] = useState("14d"); // 7d | 14d | 30d | all | custom
+  // Date range filter
+  const [range, setRange] = useState("14d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
@@ -2617,42 +2627,33 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       fetch(supa.url+"/rest/v1/analytics_posts?account=eq."+encodeURIComponent(acct)+"&order=date.desc&limit=500",
         { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } }).then(r=>r.ok?r.json():[]).catch(()=>[]),
     ]).then(([d, p]) => {
-      console.log("📊 Analytics loaded:", d.length, "daily rows,", p.length, "post rows");
+      console.log("📊 Analytics loaded:", d.length, "daily,", p.length, "posts");
       setDailyData(d); setPostData(p); setLoaded(true);
     });
   }, [supa?.url, supa?.key, account]);
 
-  // ─── Date filtering ───
+  // Date filtering
   const filterByRange = (items, dateField) => {
     if (!items.length) return items;
     const now = new Date();
     let from, to;
     if (range === "custom" && customFrom) {
       from = new Date(customFrom); to = customTo ? new Date(customTo) : now;
-    } else if (range === "all") {
-      return items;
-    } else {
-      const days = parseInt(range) || 14;
-      from = new Date(now); from.setDate(from.getDate() - days); to = now;
-    }
-    return items.filter(item => {
-      const d = new Date(item[dateField]);
-      return d >= from && d <= to;
-    });
+    } else if (range === "all") { return items; }
+    else { const days = parseInt(range) || 14; from = new Date(now); from.setDate(from.getDate() - days); to = now; }
+    return items.filter(item => { const d = new Date(item[dateField]); return d >= from && d <= to; });
   };
 
   const filteredDaily = filterByRange(dailyData, "date").sort((a,b) => new Date(a.date) - new Date(b.date));
   const filteredPosts = filterByRange(postData, "date").sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // ─── Upload Content CSV ───
+  // Upload Content CSV
   const uploadContent = useCallback(async (e) => {
     const file = e.target.files[0]; if (!file) return; e.target.value = "";
     setBusy(true); setStatus("parsing content CSV...");
     const text = await file.text();
     const rows = parseAnalyticsCSV(text);
     if (!rows.length) { setStatus("error: empty CSV"); setBusy(false); return; }
-
-    // Filter originals (not replies, has impressions)
     const originals = rows.filter(r => {
       const t = r["Post text"]||r["Tweet text"]||"";
       return !t.startsWith("@") && anum(r["Impressions"]||r["impressions"]) > 0;
@@ -2669,33 +2670,27 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
         account: account || "@django_crypto",
       };
     });
-
-    // Match with Supabase posts
-    let matched = 0; const unmatched = [];
+    let matched = 0;
+    const unmatched = [];
     if (supa?.url && supa?.key) {
       setStatus("matching "+originals.length+" posts with supabase...");
       const sp = await fetchMatchPosts(supa);
       if (sp.length > 0) {
         for (const o of originals) {
           const m = findMatch(o.post_text, sp);
-          if (m) { o.pillar=(m.category||"").toLowerCase(); o.structure=(m.structure||"").toLowerCase(); o.ai_score=parseFloat(m.score)||null; o.source="planned"; o.matched_supa_id=m.id||null; matched++; }
+          if (m) { o.pillar=normPillar(m.category); o.structure=(m.structure||"").toLowerCase(); o.ai_score=parseFloat(m.score)||null; o.source="planned"; o.matched_supa_id=m.id||null; matched++; }
           else unmatched.push(o);
         }
       } else originals.forEach(o => unmatched.push(o));
     } else originals.forEach(o => unmatched.push(o));
-
-    // AI classify unmatched
     if (unmatched.length > 0 && apiKey) {
-      setStatus(matched+" matched · classifying "+unmatched.length+" spontaneous...");
+      setStatus(matched+" matched · classifying "+unmatched.length+" manual...");
       const asOld = unmatched.map(u => ({id:u.post_id, text:u.post_text}));
       const cls = await aiClassifyPosts(asOld, apiKey);
-      for (const cp of cls) { const o = originals.find(x=>x.post_id===cp.id); if (o && o.source==="spontaneous") { o.pillar=cp.pillar||null; o.structure=cp.structure||null; o.ai_score=cp.aiScore||null; } }
+      for (const cp of cls) { const o = originals.find(x=>x.post_id===cp.id); if (o && o.source==="spontaneous") { o.pillar=normPillar(cp.pillar); o.structure=(cp.structure||"").toLowerCase(); o.ai_score=cp.aiScore||null; } }
     }
-
-    // Upsert to Supabase analytics_posts
     if (supa?.url && supa?.key) {
       setStatus("saving "+originals.length+" posts to supabase...");
-      // Batch upsert — use post_id + account as conflict
       for (const o of originals) {
         try {
           const existing = await fetch(supa.url+"/rest/v1/analytics_posts?account=eq."+encodeURIComponent(o.account)+"&post_id=eq."+encodeURIComponent(o.post_id)+"&limit=1",
@@ -2710,40 +2705,31 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
         } catch(err) { console.error("analytics_posts upsert:", err); }
       }
     }
-
-    // Refresh local state
     setPostData(prev => {
       const map = new Map(prev.map(p => [p.post_id, p]));
       originals.forEach(o => map.set(o.post_id, o));
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
-
     setBusy(false);
-    setStatus("✓ content: "+originals.length+" posts · "+matched+" matched · "+(originals.length-matched)+" spontaneous · "+(rows.length-originals.length)+" replies filtered");
+    setStatus("✓ "+originals.length+" posts · "+matched+" AI · "+(originals.length-matched)+" manual · "+(rows.length-originals.length)+" replies filtered");
   }, [supa, apiKey, account]);
 
-  // ─── Upload Overview CSV ───
+  // Upload Overview CSV
   const uploadOverview = useCallback(async (e) => {
     const file = e.target.files[0]; if (!file) return; e.target.value = "";
     setBusy(true); setStatus("parsing overview CSV...");
     const text = await file.text();
     const rows = parseAnalyticsCSV(text);
     if (!rows.length) { setStatus("error: empty CSV"); setBusy(false); return; }
-
     const acct = account || "@django_crypto";
     const dailyRows = rows.map(r => {
       const d = parseXDate(r["Date"]||"");
-      return {
-        account: acct, date: d ? d.toISOString().slice(0,10) : "",
-        impressions: anum(r["Impressions"]), likes: anum(r["Likes"]),
-        engagements: anum(r["Engagements"]), bookmarks: anum(r["Bookmarks"]),
-        new_follows: anum(r["New follows"]), unfollows: anum(r["Unfollows"]),
-        replies: anum(r["Replies"]), reposts: anum(r["Reposts"]),
-        profile_visits: anum(r["Profile visits"]),
+      return { account: acct, date: d ? d.toISOString().slice(0,10) : "",
+        impressions: anum(r["Impressions"]), likes: anum(r["Likes"]), engagements: anum(r["Engagements"]),
+        bookmarks: anum(r["Bookmarks"]), new_follows: anum(r["New follows"]), unfollows: anum(r["Unfollows"]),
+        replies: anum(r["Replies"]), reposts: anum(r["Reposts"]), profile_visits: anum(r["Profile visits"]),
       };
     }).filter(r => r.date);
-
-    // Upsert to Supabase
     if (supa?.url && supa?.key) {
       setStatus("saving "+dailyRows.length+" daily rows...");
       for (const d of dailyRows) {
@@ -2760,28 +2746,24 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
         } catch(err) { console.error("analytics_daily upsert:", err); }
       }
     }
-
-    // Refresh local state
     setDailyData(prev => {
       const map = new Map(prev.map(d => [d.date, d]));
       dailyRows.forEach(d => map.set(d.date, d));
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
-
     setBusy(false);
-    setStatus("✓ overview: "+dailyRows.length+" days saved to supabase");
+    setStatus("✓ overview: "+dailyRows.length+" days saved");
   }, [supa, account]);
 
-  // ─── Re-match ───
+  // Re-match
   const reMatch = async () => {
     if (!filteredPosts.length || !supa?.url) return; setBusy(true); setStatus("re-matching...");
     const sp = await fetchMatchPosts(supa); let matched = 0;
     const updated = filteredPosts.map(o => {
       const m = findMatch(o.post_text, sp);
-      if (m) { matched++; return {...o, pillar:(m.category||"").toLowerCase(), structure:(m.structure||"").toLowerCase(), ai_score:parseFloat(m.score)||o.ai_score, source:"planned", matched_supa_id:m.id||null}; }
+      if (m) { matched++; return {...o, pillar:normPillar(m.category), structure:(m.structure||"").toLowerCase(), ai_score:parseFloat(m.score)||o.ai_score, source:"planned", matched_supa_id:m.id||null}; }
       return {...o, source: o.source || "spontaneous"};
     });
-    // Update Supabase
     for (const u of updated) {
       if (u.post_id) try {
         await fetch(supa.url+"/rest/v1/analytics_posts?account=eq."+encodeURIComponent(u.account||account)+"&post_id=eq."+encodeURIComponent(u.post_id),
@@ -2794,39 +2776,138 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       updated.forEach(u => map.set(u.post_id, u));
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
-    setStatus("✓ re-matched: "+matched+" planned, "+(updated.length-matched)+" spontaneous"); setBusy(false);
+    setStatus("✓ "+matched+" AI, "+(updated.length-matched)+" manual"); setBusy(false);
   };
 
-  // ─── Generate Report ───
+  // ─── Computed ───
+  const aiPosts = filteredPosts.filter(p=>p.source==="planned");
+  const manualPosts = filteredPosts.filter(p=>p.source==="spontaneous");
+  const totalImp = filteredDaily.reduce((s,d)=>s+(d.impressions||0),0) || filteredPosts.reduce((s,p)=>s+(p.impressions||0),0);
+  const totalEng = filteredDaily.reduce((s,d)=>s+(d.engagements||0),0) || filteredPosts.reduce((s,p)=>s+(p.engagements||0),0);
+  const totalLikes = filteredDaily.reduce((s,d)=>s+(d.likes||0),0) || filteredPosts.reduce((s,p)=>s+(p.likes||0),0);
+  const totalFollows = filteredDaily.reduce((s,d)=>s+(d.new_follows||0),0);
+  const totalUnfollows = filteredDaily.reduce((s,d)=>s+(d.unfollows||0),0);
+  const engRate = totalImp>0?((totalEng/totalImp)*100).toFixed(2):"0";
+  const aiAvg = aiPosts.length?Math.round(aiPosts.reduce((s,p)=>s+(p.impressions||0),0)/aiPosts.length):0;
+  const manualAvg = manualPosts.length?Math.round(manualPosts.reduce((s,p)=>s+(p.impressions||0),0)/manualPosts.length):0;
+
+  // Pillar performance
+  const pillarData = {};
+  filteredPosts.filter(p=>p.pillar).forEach(p => {
+    const k = normPillar(p.pillar) || p.pillar;
+    if(!pillarData[k]) pillarData[k]={posts:0,imp:0,likes:0,eng:0,topImp:0,ai:0,manual:0};
+    const d=pillarData[k]; d.posts++; d.imp+=(p.impressions||0); d.likes+=(p.likes||0); d.eng+=(p.engagements||0);
+    d.topImp=Math.max(d.topImp,(p.impressions||0)); if(p.source==="planned") d.ai++; else d.manual++;
+  });
+  const pillarChart = Object.entries(pillarData).map(([k,v])=>({
+    name:PILLAR_MAP[k]?.label||k, key:k, posts:v.posts, avgImp:Math.round(v.imp/v.posts),
+    avgLikes:Math.round(v.likes/v.posts), engRate:v.imp>0?((v.eng/v.imp)*100).toFixed(1):"0",
+    topImp:v.topImp, totalImp:v.imp, ai:v.ai, manual:v.manual,
+  })).sort((a,b)=>b.avgImp-a.avgImp);
+
+  // Structure performance
+  const structData = {};
+  filteredPosts.filter(p=>p.structure).forEach(p => {
+    const k=p.structure; if(!structData[k]) structData[k]={posts:0,imp:0,eng:0,likes:0};
+    structData[k].posts++; structData[k].imp+=(p.impressions||0); structData[k].eng+=(p.engagements||0); structData[k].likes+=(p.likes||0);
+  });
+  const structChart = Object.entries(structData).map(([k,v])=>({
+    name:STRUCT_LABELS[k.toLowerCase()]||k, posts:v.posts, avgImp:Math.round(v.imp/v.posts),
+    engRate:v.imp>0?((v.eng/v.imp)*100).toFixed(1):"0", avgLikes:Math.round(v.likes/v.posts),
+  })).sort((a,b)=>b.avgImp-a.avgImp);
+
+  // Day of week performance
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const dowData = {};
+  filteredPosts.forEach(p => {
+    if (!p.date) return;
+    const d = new Date(p.date); const day = DOW[d.getDay()];
+    if(!dowData[day]) dowData[day]={posts:0,imp:0,eng:0};
+    dowData[day].posts++; dowData[day].imp+=(p.impressions||0); dowData[day].eng+=(p.engagements||0);
+  });
+  const dowChart = DOW.map(d => ({
+    name: d, posts: dowData[d]?.posts||0,
+    avgImp: dowData[d]?.posts ? Math.round(dowData[d].imp/dowData[d].posts) : 0,
+    engRate: dowData[d]?.imp ? ((dowData[d].eng/dowData[d].imp)*100).toFixed(1) : "0",
+  })).filter(d => d.posts > 0);
+
+  // Hour performance (from daily data — we check which days had most engagement)
+  // We can approximate from post dates but X CSV doesn't give hours per post
+  // So we show day-of-week only for now
+
+  const topPosts = [...filteredPosts].sort((a,b)=>(b.impressions||0)-(a.impressions||0));
+  const hasData = loaded && (dailyData.length > 0 || postData.length > 0);
+  const isEmpty = loaded && dailyData.length === 0 && postData.length === 0;
+  const rangeLabel = range==="custom"?(customFrom||"?")+" → "+(customTo||"now"):range==="all"?"all time":"last "+range.replace("d"," days");
+
+  const rangeStyle = (val) => ({
+    background: range===val?T.greenDim:"transparent", color: range===val?T.green:T.textSoft,
+    border: "1px solid "+(range===val?T.greenMid:T.border), borderRadius: 6, padding: "4px 10px",
+    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
+  });
+
+  // AI scoring data for report
+  const scoredPosts = filteredPosts.filter(p=>p.ai_score);
+  const maxImp = Math.max(...filteredPosts.map(p=>p.impressions||0),1);
+
+  // Generate Report
   const genReport = async () => {
     if (!apiKey) return; setRepLoad(true); setReport("");
-    const o = filteredPosts; const d = filteredDaily;
-    const tImp = d.reduce((s,x)=>s+(x.impressions||0),0) || o.reduce((s,x)=>s+(x.impressions||0),0);
-    const tLikes = d.reduce((s,x)=>s+(x.likes||0),0) || o.reduce((s,x)=>s+(x.likes||0),0);
-    const tFol = d.reduce((s,x)=>s+(x.new_follows||0),0);
-    const tUnf = d.reduce((s,x)=>s+(x.unfollows||0),0);
-    const pl = o.filter(p=>p.source==="planned"), sp = o.filter(p=>p.source==="spontaneous");
-    const ps = {}; o.filter(p=>p.pillar).forEach(p => { if(!ps[p.pillar]) ps[p.pillar]={n:0,imp:0,eng:0}; ps[p.pillar].n++; ps[p.pillar].imp+=(p.impressions||0); ps[p.pillar].eng+=(p.engagements||0); });
-    const rangeLabel = range==="custom"?(customFrom+" to "+(customTo||"now")):range==="all"?"all time":"last "+range;
-    const prompt = `You are Django's (@django_xbt) content strategist. Analyze this period and give actionable insights.
+    const o = filteredPosts;
+    const tImp = totalImp;
+    const ps = {}; o.filter(p=>p.pillar).forEach(p => { const k=normPillar(p.pillar)||p.pillar; if(!ps[k]) ps[k]={n:0,imp:0,eng:0}; ps[k].n++; ps[k].imp+=(p.impressions||0); ps[k].eng+=(p.engagements||0); });
 
-PERIOD: ${rangeLabel} (${d.length} days, ${o.length} original posts)
-Total Impressions: ${tImp.toLocaleString()} | Likes: ${tLikes.toLocaleString()} | Net Follows: +${tFol-tUnf}
-Planned: ${pl.length} posts (avg ${pl.length?Math.round(pl.reduce((s,p)=>s+(p.impressions||0),0)/pl.length):0} imp) | Spontaneous: ${sp.length} posts (avg ${sp.length?Math.round(sp.reduce((s,p)=>s+(p.impressions||0),0)/sp.length):0} imp)
+    // Build scoring accuracy section for prompt
+    let scoringSection = "";
+    if (scoredPosts.length > 0) {
+      scoringSection = "\n\nAI SCORING ACCURACY (your predictions vs reality):\n" +
+        scoredPosts.sort((a,b)=>(b.impressions||0)-(a.impressions||0)).map(p =>
+          `- AI:${p.ai_score}/10 → ${p.impressions}imp "${(p.post_text||"").slice(0,60)}"`
+        ).join("\n") +
+        "\nBest post had " + maxImp + " imp. Analyze: were your high scores actually high performers? Where were you wrong and why?";
+    }
+
+    const prompt = `You are Django's (@django_xbt) content strategist. Analyze this period.
+
+PERIOD: ${rangeLabel} (${filteredDaily.length} days, ${o.length} original posts)
+Total Impressions: ${tImp.toLocaleString()} | Likes: ${totalLikes.toLocaleString()} | Eng Rate: ${engRate}% | Net Follows: +${totalFollows-totalUnfollows}
+AI-generated: ${aiPosts.length} posts (avg ${aiAvg} imp) | Manual: ${manualPosts.length} posts (avg ${manualAvg} imp)
 
 Pillars:
-${Object.entries(ps).map(([k,v])=>k+": "+v.n+"x, avg "+Math.round(v.imp/v.n)+" imp, "+((v.eng/Math.max(v.imp,1))*100).toFixed(1)+"% eng").join("\n")}
+${Object.entries(ps).map(([k,v])=>k+": "+v.n+" posts, avg "+Math.round(v.imp/v.n)+" imp, "+((v.eng/Math.max(v.imp,1))*100).toFixed(1)+"% eng").join("\n")}
 
-Top 10 posts:
-${[...o].sort((a,b)=>(b.impressions||0)-(a.impressions||0)).slice(0,10).map((p,i)=>(i+1)+". ["+p.impressions+"imp "+p.likes+"L "+(p.engagements||0)+"eng] "+p.source+"/"+p.pillar+' "'+p.post_text.slice(0,100)+'"').join("\n")}
+Day of week:
+${dowChart.map(d=>d.name+": "+d.posts+" posts, avg "+d.avgImp+" imp").join("\n")}
 
-Bottom 5:
-${[...o].sort((a,b)=>(a.impressions||0)-(b.impressions||0)).slice(0,5).map((p,i)=>(i+1)+". ["+p.impressions+"imp] "+p.source+"/"+p.pillar+' "'+p.post_text.slice(0,80)+'"').join("\n")}
+Structures:
+${structChart.slice(0,8).map(s=>s.name+": "+s.posts+" posts, avg "+s.avgImp+" imp").join("\n")}
 
-Give: 1)TL;DR (2-3 sentences) 2)Planned vs Spontaneous analysis 3)Pillar Performance ranking 4)Top 3 winners + why 5)Bottom 3 + why 6)3 specific Action Items for next period. Direct, lowercase, no fluff. Write as django's strategist.`;
+Top 5 posts:
+${topPosts.slice(0,5).map((p,i)=>(i+1)+". ["+p.impressions+"imp "+p.likes+"L] "+(p.source==="planned"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,100))+"\"").join("\n")}
+
+Bottom 3:
+${[...o].sort((a,b)=>(a.impressions||0)-(b.impressions||0)).slice(0,3).map((p,i)=>(i+1)+". ["+p.impressions+"imp] "+(p.source==="planned"?"AI":"manual")+"/"+(normPillar(p.pillar)||"?")+" \""+((p.post_text||"").slice(0,80))+"\"").join("\n")}
+${scoringSection}
+
+Give a comprehensive report:
+1) TL;DR (2-3 sentences)
+2) AI vs Manual — which performs better and why
+3) Pillar Performance — rank them, what's working
+4) Best Day of Week — when to post
+5) Structure Analysis — which formats work
+6) Top 3 Winners — why they worked
+7) Bottom 3 — why they failed
+${scoredPosts.length > 0 ? "8) AI Scoring Accuracy — how accurate were your score predictions" : ""}
+9) 3 specific Action Items for next period
+
+Direct, lowercase django strategist voice. No fluff.`;
+
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1200,messages:[{role:"user",content:prompt}]}) });
-      const data = await r.json(); const reportText = data.content?.map(c=>c.text||"").join("")||"no response"; setReport(reportText);
+      const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]}) });
+      const data = await r.json();
+      const reportText = data.content?.map(c=>c.text||"").join("")||"no response";
+      setReport(reportText);
       if (setLastAnalysis && reportText && !reportText.startsWith("error")) {
         setLastAnalysis(reportText);
         try { localStorage.setItem("djangocmd_last_analysis", reportText); } catch {}
@@ -2835,55 +2916,6 @@ Give: 1)TL;DR (2-3 sentences) 2)Planned vs Spontaneous analysis 3)Pillar Perform
     } catch(e) { setReport("error: "+e.message); }
     setRepLoad(false);
   };
-
-  // ─── Computed analytics ───
-  const topPosts = [...filteredPosts].sort((a,b)=>(b.impressions||0)-(a.impressions||0));
-  const hasClass = filteredPosts.some(p=>p.pillar);
-  const hasScores = filteredPosts.some(p=>p.ai_score);
-  const planned = filteredPosts.filter(p=>p.source==="planned");
-  const spont = filteredPosts.filter(p=>p.source==="spontaneous");
-  const totalImp = filteredDaily.reduce((s,d)=>s+(d.impressions||0),0) || filteredPosts.reduce((s,p)=>s+(p.impressions||0),0);
-  const totalEng = filteredDaily.reduce((s,d)=>s+(d.engagements||0),0) || filteredPosts.reduce((s,p)=>s+(p.engagements||0),0);
-  const totalLikes = filteredDaily.reduce((s,d)=>s+(d.likes||0),0);
-  const totalFollows = filteredDaily.reduce((s,d)=>s+(d.new_follows||0),0);
-  const totalUnfollows = filteredDaily.reduce((s,d)=>s+(d.unfollows||0),0);
-  const engRate = totalImp>0?((totalEng/totalImp)*100).toFixed(2):"0";
-  const plAvg = planned.length?Math.round(planned.reduce((s,p)=>s+(p.impressions||0),0)/planned.length):0;
-  const spAvg = spont.length?Math.round(spont.reduce((s,p)=>s+(p.impressions||0),0)/spont.length):0;
-
-  const pillarData = {};
-  filteredPosts.filter(p=>p.pillar).forEach(p => { const k=p.pillar; if(!pillarData[k]) pillarData[k]={posts:0,imp:0,likes:0,eng:0,topImp:0,pl:0,sp:0}; const d=pillarData[k]; d.posts++; d.imp+=(p.impressions||0); d.likes+=(p.likes||0); d.eng+=(p.engagements||0); d.topImp=Math.max(d.topImp,(p.impressions||0)); if(p.source==="planned") d.pl++; else d.sp++; });
-  const pillarChart = Object.entries(pillarData).map(([k,v])=>({ name:PILLAR_MAP[k]?.label||k, key:k, posts:v.posts, avgImp:Math.round(v.imp/v.posts), avgLikes:Math.round(v.likes/v.posts), engRate:v.imp>0?((v.eng/v.imp)*100).toFixed(1):"0", topImp:v.topImp, pl:v.pl, sp:v.sp })).sort((a,b)=>b.avgImp-a.avgImp);
-
-  const structData = {};
-  filteredPosts.filter(p=>p.structure).forEach(p => { const k=p.structure; if(!structData[k]) structData[k]={posts:0,imp:0,eng:0}; structData[k].posts++; structData[k].imp+=(p.impressions||0); structData[k].eng+=(p.engagements||0); });
-  const structChart = Object.entries(structData).map(([k,v])=>({ name:STRUCT_LABELS[k.toLowerCase()]||k, posts:v.posts, avgImp:Math.round(v.imp/v.posts), engRate:v.imp>0?((v.eng/v.imp)*100).toFixed(1):"0" })).sort((a,b)=>b.avgImp-a.avgImp);
-
-  const maxImp = Math.max(...filteredPosts.map(p=>p.impressions||0),1);
-  const scoreComp = filteredPosts.filter(p=>p.ai_score).map(p => ({ text:(p.post_text||"").slice(0,45)+"...", full:p.post_text||"", ai:p.ai_score, real:Math.max(1,Math.min(10,Math.round(((p.impressions||0)/maxImp)*10))), diff:p.ai_score-Math.max(1,Math.min(10,Math.round(((p.impressions||0)/maxImp)*10))), imp:p.impressions||0, pillar:p.pillar, src:p.source })).sort((a,b)=>b.imp-a.imp);
-  const avgDiff = scoreComp.length?(scoreComp.reduce((s,c)=>s+Math.abs(c.diff),0)/scoreComp.length).toFixed(1):null;
-
-  // Daily chart data
-  const dailyChart = filteredDaily.map(d => ({
-    date: (d.date||"").slice(5), // "02-16"
-    fullDate: d.date,
-    impressions: d.impressions||0,
-    likes: d.likes||0,
-    engagements: d.engagements||0,
-    follows: (d.new_follows||0)-(d.unfollows||0),
-  }));
-
-  const hasData = loaded && (dailyData.length > 0 || postData.length > 0);
-  const isEmpty = loaded && dailyData.length === 0 && postData.length === 0;
-
-  // ─── Range label helper ───
-  const rangeLabel = range==="custom"?(customFrom||"?")+" → "+(customTo||"now"):range==="all"?"all time":"last "+range.replace("d"," days");
-
-  const rangeStyle = (val) => ({
-    background: range===val?T.greenDim:"transparent", color: range===val?T.green:T.textSoft,
-    border: "1px solid "+(range===val?T.greenMid:T.border), borderRadius: 6, padding: "4px 10px",
-    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
-  });
 
   return (
     <div>
@@ -2902,7 +2934,6 @@ Give: 1)TL;DR (2-3 sentences) 2)Planned vs Spontaneous analysis 3)Pillar Perform
           <div style={{ flex: 1 }} />
           {loaded && <span style={{ fontSize: 10, color: T.textDim, fontFamily: "'IBM Plex Mono'" }}>{dailyData.length}d · {postData.length}p in db</span>}
         </div>
-        {/* Date range selector */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 10, color: T.textDim, marginRight: 4 }}>RANGE:</span>
           {["7d","14d","30d","all"].map(v => (
@@ -2910,18 +2941,15 @@ Give: 1)TL;DR (2-3 sentences) 2)Planned vs Spontaneous analysis 3)Pillar Perform
           ))}
           <button onClick={()=>setRange("custom")} style={rangeStyle("custom")}>CUSTOM</button>
           {range === "custom" && <>
-            <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
-              style={{ background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} />
+            <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{ background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} />
             <span style={{ color: T.textDim, fontSize: 10 }}>→</span>
-            <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}
-              style={{ background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} />
+            <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{ background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontFamily: "'IBM Plex Mono'" }} />
           </>}
-          <span style={{ fontSize: 10, color: T.textSoft, marginLeft: 8 }}>showing: {filteredDaily.length}d · {filteredPosts.length} posts</span>
+          <span style={{ fontSize: 10, color: T.textSoft, marginLeft: 8 }}>{filteredDaily.length}d · {filteredPosts.length} posts</span>
         </div>
         {status && <div style={{ fontSize: 10, marginTop: 8, fontFamily: "'IBM Plex Mono', monospace", color: status.startsWith("✓")?T.green:status.startsWith("error")?T.red:T.textSoft }}>{status}</div>}
       </Card>
 
-      {/* Empty state */}
       {isEmpty && <div style={{ textAlign: "center", padding: 60, color: T.textDim }}>
         <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>📈</div>
         <div style={{ fontSize: 13 }}>upload X analytics CSVs to start</div>
@@ -2929,191 +2957,126 @@ Give: 1)TL;DR (2-3 sentences) 2)Planned vs Spontaneous analysis 3)Pillar Perform
       </div>}
 
       {hasData && (<>
-        {/* ─── Quick Stats ─── */}
+        {/* ═══ QUICK STATS ═══ */}
         <Card style={{ marginBottom: 16, padding: 14 }}>
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Impressions</div><div style={{ fontSize: 24, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono'" }}>{totalImp.toLocaleString()}</div><div style={{ fontSize: 10, color: T.textDim }}>{rangeLabel}</div></div>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Eng Rate</div><div style={{ fontSize: 24, fontWeight: 700, color: T.amber, fontFamily: "'IBM Plex Mono'" }}>{engRate}%</div></div>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Likes</div><div style={{ fontSize: 24, fontWeight: 700, color: T.blue, fontFamily: "'IBM Plex Mono'" }}>{totalLikes.toLocaleString()}</div></div>
             <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Follows</div><div style={{ fontSize: 24, fontWeight: 700, color: T.purple, fontFamily: "'IBM Plex Mono'" }}>+{totalFollows-totalUnfollows}</div><div style={{ fontSize: 10, color: T.textDim }}>+{totalFollows} / -{totalUnfollows}</div></div>
-            <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Posts</div><div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{filteredPosts.length}</div><div style={{ fontSize: 10, color: T.textDim }}>{planned.length} planned · {spont.length} spont</div></div>
-            {hasScores && <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>AI Accuracy</div><div style={{ fontSize: 24, fontWeight: 700, color: parseFloat(avgDiff)<2?T.green:T.amber, fontFamily: "'IBM Plex Mono'" }}>±{avgDiff}</div></div>}
+            <div><div style={{ fontSize: 10, color: T.textSoft, textTransform: "uppercase", letterSpacing: .5 }}>Posts</div><div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{filteredPosts.length}</div><div style={{ fontSize: 10, color: T.textDim }}>{aiPosts.length} AI · {manualPosts.length} manual</div></div>
           </div>
         </Card>
 
-        {/* ─── View Tabs ─── */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          {[{id:"overview",l:"📈 Daily Trend"},{id:"pillars",l:"📊 Pillars"},{id:"scoring",l:"🎯 AI Scoring"},{id:"posts",l:"📝 Top Posts"},{id:"summary",l:"📋 Report"}].map(t => (
-            <Btn key={t.id} small color={view===t.id?T.green:T.textSoft} outline={view!==t.id} onClick={()=>setView(t.id)} style={view===t.id?{background:T.greenDim,borderColor:T.greenMid}:undefined}>{t.l}</Btn>
-          ))}
-        </div>
-
-        {/* ═══ DAILY TREND ═══ */}
-        {view==="overview" && (<>
-          {dailyChart.length > 0 ? (<>
-            <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Daily Impressions</div>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={dailyChart}>
-                  <defs><linearGradient id="impGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={T.green} stopOpacity={0.3}/><stop offset="95%" stopColor={T.green} stopOpacity={0}/></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.textSoft }} axisLine={{ stroke: T.border }} />
-                  <YAxis tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} tickFormatter={v=>v>=1000?(v/1000).toFixed(0)+"k":v} />
-                  <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:10,fontSize:11}}><div style={{color:T.textSoft,marginBottom:4}}>{d?.fullDate}</div><div style={{color:T.green}}>Impressions: <strong>{d?.impressions?.toLocaleString()}</strong></div><div style={{color:T.blue}}>Likes: <strong>{d?.likes}</strong></div><div style={{color:T.amber}}>Engagements: <strong>{d?.engagements}</strong></div><div style={{color:T.purple}}>Net follows: <strong>{d?.follows>=0?"+":""}{d?.follows}</strong></div></div>;}} />
-                  <Area type="monotone" dataKey="impressions" stroke={T.green} strokeWidth={2} fill="url(#impGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Daily Likes & Follows</div>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={dailyChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.textSoft }} axisLine={{ stroke: T.border }} />
-                  <YAxis tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<AChartTip />} />
-                  <Bar dataKey="likes" fill={T.blue} radius={[3,3,0,0]} name="Likes" />
-                  <Bar dataKey="follows" fill={T.purple} radius={[3,3,0,0]} name="Net Follows" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            {/* Planned vs Spontaneous */}
-            {planned.length > 0 && spont.length > 0 && <Card style={{ marginBottom: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 10 }}>⚡ Planned vs Spontaneous</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={{ padding: 12, background: T.greenDim, borderRadius: 10, border: "1px solid "+T.greenMid }}>
-                  <div style={{ fontSize: 10, color: T.green, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>PLANNED ({planned.length})</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{plAvg.toLocaleString()}</div>
-                  <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
-                </div>
-                <div style={{ padding: 12, background: T.cyanDim, borderRadius: 10, border: "1px solid "+T.cyan+"30" }}>
-                  <div style={{ fontSize: 10, color: T.cyan, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>SPONTANEOUS ({spont.length})</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{spAvg.toLocaleString()}</div>
-                  <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: T.textSoft, marginTop: 8, textAlign: "center" }}>
-                {plAvg>spAvg?"planned outperform by "+Math.round(((plAvg-spAvg)/Math.max(spAvg,1))*100)+"%":"spontaneous outperform by "+Math.round(((spAvg-plAvg)/Math.max(plAvg,1))*100)+"%"}
-              </div>
-            </Card>}
-          </>) : <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim }}>📊 Upload Overview CSV to see daily trends</div></Card>}
-        </>)}
-
-        {/* ═══ PILLARS ═══ */}
-        {view==="pillars" && (<>
-          {!hasClass ? <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim }}>📄 Upload Content CSV — posts auto-match with supabase</div></Card> : (<>
-            <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Pillar Performance — Avg Impressions</div>
-              <ResponsiveContainer width="100%" height={Math.max(160,pillarChart.length*44)}>
-                <BarChart data={pillarChart} layout="vertical" barSize={18}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: T.textSoft }} axisLine={false} width={90} />
-                  <Tooltip content={<AChartTip />} />
-                  <Bar dataKey="avgImp" radius={[0,6,6,0]} name="Avg Impressions">
-                    {pillarChart.map((e,i) => <Cell key={i} fill={PILLAR_MAP[e.key]?.color()||T.textDim} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 12 }}>
-              {pillarChart.map(p => <Card key={p.key} style={{ padding: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><PillTag pillar={p.key} /><span style={{ fontSize: 10, color: T.textDim }}>{p.pl}P·{p.sp}S</span></div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: PILLAR_MAP[p.key]?.color()||T.text, fontFamily: "'IBM Plex Mono'", marginBottom: 2 }}>{p.avgImp.toLocaleString()}</div>
-                <div style={{ fontSize: 10, color: T.textSoft }}>avg imp · {p.engRate}% eng · {p.posts} posts</div>
-              </Card>)}
+        {/* ═══ AI vs MANUAL ═══ */}
+        {aiPosts.length > 0 && manualPosts.length > 0 && <Card style={{ marginBottom: 16, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 10 }}>⚡ AI Generated vs Manual</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ padding: 12, background: T.greenDim, borderRadius: 10, border: "1px solid "+T.greenMid }}>
+              <div style={{ fontSize: 10, color: T.green, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>AI GENERATED ({aiPosts.length})</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{aiAvg.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
             </div>
-            {structChart.length > 0 && <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Post Structure Performance</div>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={structChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: T.textSoft }} axisLine={{ stroke: T.border }} />
-                  <YAxis tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<AChartTip />} />
-                  <Bar dataKey="avgImp" fill={T.blue} radius={[4,4,0,0]} name="Avg Impressions" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>}
-          </>)}
-        </>)}
+            <div style={{ padding: 12, background: T.cyanDim, borderRadius: 10, border: "1px solid "+T.cyan+"30" }}>
+              <div style={{ fontSize: 10, color: T.cyan, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>MANUAL ({manualPosts.length})</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: T.text, fontFamily: "'IBM Plex Mono'" }}>{manualAvg.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: T.textSoft }}>avg impressions</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: T.textSoft, marginTop: 8, textAlign: "center" }}>
+            {aiAvg>manualAvg?"AI outperforms by "+Math.round(((aiAvg-manualAvg)/Math.max(manualAvg,1))*100)+"%":"manual outperforms by "+Math.round(((manualAvg-aiAvg)/Math.max(aiAvg,1))*100)+"%"}
+          </div>
+        </Card>}
 
-        {/* ═══ AI SCORING ═══ */}
-        {view==="scoring" && (<>
-          {!hasScores ? <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim }}>🎯 No AI scores yet — match content CSV with supabase posts that have scores</div></Card> : (<>
-            <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>AI Predicted vs Real Performance</div>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={scoreComp}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-                  <XAxis dataKey="text" tick={{ fontSize: 9, fill: T.textDim }} angle={-15} textAnchor="end" height={55} />
-                  <YAxis domain={[0,10]} tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
-                  <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:10,fontSize:11,maxWidth:280}}><div style={{color:T.text,marginBottom:4}}>{d?.full?.slice(0,100)}</div><div style={{color:T.purple}}>AI: {d?.ai}/10</div><div style={{color:T.green}}>Real: {d?.real}/10</div><div style={{color:T.textDim}}>{d?.imp?.toLocaleString()} imp · {d?.src}</div></div>;}} />
-                  <Bar dataKey="ai" fill={T.purple} radius={[3,3,0,0]} name="AI Score" />
-                  <Bar dataKey="real" fill={T.green} radius={[3,3,0,0]} name="Real Score" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            {scoreComp.map((sc,i) => { const ad=Math.abs(sc.diff); const acc=ad<=1?"spot on":ad<=2?"close":"off"; const ac=ad<=1?T.green:ad<=2?T.amber:T.red;
-              return <Card key={i} style={{ marginBottom: 6, padding: 12 }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ minWidth: 44, textAlign: "center" }}><div style={{ fontSize: 9, color: T.textDim }}>AI</div><div style={{ fontSize: 18, fontWeight: 700, color: T.purple, fontFamily: "'IBM Plex Mono'" }}>{sc.ai}</div></div>
-                  <div style={{ color: T.textDim }}>→</div>
-                  <div style={{ minWidth: 44, textAlign: "center" }}><div style={{ fontSize: 9, color: T.textDim }}>Real</div><div style={{ fontSize: 18, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono'" }}>{sc.real}</div></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: T.text, lineHeight: 1.4, marginBottom: 3 }}>{sc.full.slice(0,100)}</div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 10, color: T.textDim }}>{sc.imp.toLocaleString()} imp</span>
-                      <PillTag pillar={sc.pillar} /><SrcTag source={sc.src} />
-                      <span style={{ fontSize: 10, fontWeight: 600, color: ac, padding: "1px 5px", background: ad<=1?T.greenDim:ad<=2?T.amberDim:T.redDim, borderRadius: 4 }}>{acc}</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>; })}
-          </>)}
-        </>)}
+        {/* ═══ PILLAR PERFORMANCE ═══ */}
+        {pillarChart.length > 0 && <>
+          <Card style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Pillar Performance — Avg Impressions</div>
+            <ResponsiveContainer width="100%" height={Math.max(140,pillarChart.length*44)}>
+              <BarChart data={pillarChart} layout="vertical" barSize={18}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: T.textSoft }} axisLine={false} width={80} />
+                <Tooltip content={<AChartTip />} />
+                <Bar dataKey="avgImp" radius={[0,6,6,0]} name="Avg Impressions">
+                  {pillarChart.map((e,i) => <Cell key={i} fill={PILLAR_MAP[e.key]?.color()||T.textDim} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+            {pillarChart.map(p => <Card key={p.key} style={{ padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <PillTag pillar={p.key} />
+                <span style={{ fontSize: 10, color: T.textDim }}>{p.ai}ai·{p.manual}m</span>
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: PILLAR_MAP[p.key]?.color()||T.text, fontFamily: "'IBM Plex Mono'", marginBottom: 2 }}>{p.avgImp.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: T.textSoft }}>{p.posts} posts · {p.engRate}% eng · {p.totalImp.toLocaleString()} total imp</div>
+            </Card>)}
+          </div>
+        </>}
+
+        {/* ═══ BEST DAY OF WEEK ═══ */}
+        {dowChart.length > 0 && <Card style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Performance by Day of Week</div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={dowChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.textSoft }} axisLine={{ stroke: T.border }} />
+              <YAxis tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
+              <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:10,fontSize:11}}><div style={{color:T.textSoft,marginBottom:4}}>{d?.name}</div><div style={{color:T.green}}>Avg: <strong>{d?.avgImp?.toLocaleString()}</strong> imp</div><div style={{color:T.blue}}>{d?.posts} posts</div><div style={{color:T.amber}}>{d?.engRate}% eng</div></div>;}} />
+              <Bar dataKey="avgImp" fill={T.purple} radius={[4,4,0,0]} name="Avg Impressions" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>}
+
+        {/* ═══ STRUCTURE PERFORMANCE ═══ */}
+        {structChart.length > 0 && <Card style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Post Structure Performance</div>
+          <ResponsiveContainer width="100%" height={Math.max(140,structChart.length*36)}>
+            <BarChart data={structChart} layout="vertical" barSize={16}>
+              <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: T.textDim }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: T.textSoft }} axisLine={false} width={100} />
+              <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:8,padding:10,fontSize:11}}><div style={{color:T.textSoft,marginBottom:4}}>{d?.name}</div><div style={{color:T.green}}>Avg: <strong>{d?.avgImp?.toLocaleString()}</strong> imp</div><div style={{color:T.blue}}>{d?.posts} posts · {d?.engRate}% eng</div></div>;}} />
+              <Bar dataKey="avgImp" fill={T.blue} radius={[0,4,4,0]} name="Avg Impressions" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>}
 
         {/* ═══ TOP POSTS ═══ */}
-        {view==="posts" && (<>
-          {filteredPosts.length === 0 ? <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim }}>📄 Upload Content CSV to see posts</div></Card> :
-            topPosts.slice(0,15).map((p,i) => <Card key={p.post_id||i} hover style={{ marginBottom: 6, padding: 12, cursor: p.post_link?"pointer":"default" }} onClick={()=>p.post_link&&window.open(p.post_link,"_blank")}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: i===0?T.green:i<3?T.blue:T.textDim, fontFamily: "'IBM Plex Mono'", minWidth: 26 }}>#{i+1}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 6 }}>{(p.post_text||"").length>160?(p.post_text||"").slice(0,160)+"...":(p.post_text||"")}</div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: T.green, fontFamily: "'IBM Plex Mono'" }}>{(p.impressions||0).toLocaleString()} imp</span>
-                    <span style={{ fontSize: 10, color: T.blue }}>♥ {p.likes||0}</span>
-                    <span style={{ fontSize: 10, color: T.purple }}>{p.engagements||0} eng</span>
-                    <span style={{ fontSize: 10, color: T.textDim }}>{p.bookmarks||0} 🔖</span>
-                    {p.ai_score && <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: p.ai_score>=7?T.greenDim:p.ai_score>=5?T.amberDim:T.redDim, color: p.ai_score>=7?T.green:p.ai_score>=5?T.amber:T.red }}>AI:{p.ai_score}/10</span>}
-                    <PillTag pillar={p.pillar} />
-                    <StructTag structure={p.structure} />
-                    <SrcTag source={p.source} />
-                    <span style={{ fontSize: 9, color: T.textDim }}>{p.date}</span>
-                  </div>
+        {filteredPosts.length > 0 && <>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Top Posts</div>
+          {topPosts.slice(0,15).map((p,i) => <Card key={p.post_id||i} hover style={{ marginBottom: 6, padding: 12, cursor: p.post_link?"pointer":"default" }} onClick={()=>p.post_link&&window.open(p.post_link,"_blank")}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: i===0?T.green:i<3?T.blue:T.textDim, fontFamily: "'IBM Plex Mono'", minWidth: 26 }}>#{i+1}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 6 }}>{(p.post_text||"").length>160?(p.post_text||"").slice(0,160)+"...":(p.post_text||"")}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.green, fontFamily: "'IBM Plex Mono'" }}>{(p.impressions||0).toLocaleString()} imp</span>
+                  <span style={{ fontSize: 10, color: T.blue }}>♥ {p.likes||0}</span>
+                  <span style={{ fontSize: 10, color: T.purple }}>{p.engagements||0} eng</span>
+                  <span style={{ fontSize: 10, color: T.textDim }}>{p.bookmarks||0} 🔖</span>
+                  {p.ai_score && <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: p.ai_score>=7?T.greenDim:p.ai_score>=5?T.amberDim:T.redDim, color: p.ai_score>=7?T.green:p.ai_score>=5?T.amber:T.red }}>AI:{p.ai_score}/10</span>}
+                  <PillTag pillar={normPillar(p.pillar)||p.pillar} />
+                  <StructTag structure={p.structure} />
+                  <SrcTag source={p.source} />
+                  <span style={{ fontSize: 9, color: T.textDim }}>{p.date}</span>
                 </div>
               </div>
-            </Card>)}
-        </>)}
-
-        {/* ═══ REPORT ═══ */}
-        {view==="summary" && (<>
-          <Card style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: report?14:0 }}>
-              <Btn small color={T.green} onClick={genReport} disabled={repLoad||!filteredPosts.length}>{repLoad?"⏳ analyzing...":"🤖 Generate Report"}</Btn>
-              <span style={{ fontSize: 10, color: T.textDim }}>{rangeLabel} · {filteredPosts.length} posts · {filteredDaily.length} days</span>
-              {!apiKey && <span style={{ fontSize: 10, color: T.red }}>set Claude API key in ⚙ settings</span>}
             </div>
-            {report && <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7, color: T.text, padding: 14, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border, marginTop: 10 }}>{report}</div>}
-          </Card>
-          {hasClass && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-            <Card style={{ padding: 12 }}><div style={{ fontSize: 10, color: T.textSoft }}>BEST PILLAR</div><div style={{ fontSize: 14, fontWeight: 600 }}>{pillarChart[0]?.name||"—"}</div><div style={{ fontSize: 10, color: T.textDim }}>{pillarChart[0]?.avgImp?.toLocaleString()||0} avg imp</div></Card>
-            <Card style={{ padding: 12 }}><div style={{ fontSize: 10, color: T.textSoft }}>BEST STRUCTURE</div><div style={{ fontSize: 14, fontWeight: 600 }}>{structChart[0]?.name||"—"}</div><div style={{ fontSize: 10, color: T.textDim }}>{structChart[0]?.avgImp?.toLocaleString()||0} avg imp</div></Card>
-            <Card style={{ padding: 12 }}><div style={{ fontSize: 10, color: T.textSoft }}>PLANNED vs SPONT</div><div style={{ fontSize: 14, fontWeight: 600, color: plAvg>spAvg?T.green:T.cyan }}>{plAvg>spAvg?"Planned wins":"Spontaneous wins"}</div><div style={{ fontSize: 10, color: T.textDim }}>{plAvg.toLocaleString()} vs {spAvg.toLocaleString()}</div></Card>
-            {hasScores && <Card style={{ padding: 12 }}><div style={{ fontSize: 10, color: T.textSoft }}>AI ACCURACY</div><div style={{ fontSize: 18, fontWeight: 700, color: parseFloat(avgDiff)<2?T.green:T.amber, fontFamily: "'IBM Plex Mono'" }}>±{avgDiff}</div></Card>}
-          </div>}
-        </>)}
+          </Card>)}
+        </>}
+
+        {/* ═══ AI REPORT ═══ */}
+        <Card style={{ marginTop: 16, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: report?14:0 }}>
+            <Btn small color={T.green} onClick={genReport} disabled={repLoad||!filteredPosts.length}>{repLoad?"⏳ analyzing...":"🤖 Generate Report"}</Btn>
+            <span style={{ fontSize: 10, color: T.textDim }}>{rangeLabel} · {filteredPosts.length} posts</span>
+            {!apiKey && <span style={{ fontSize: 10, color: T.red }}>set Claude API key in ⚙ settings</span>}
+          </div>
+          {report && <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7, color: T.text, padding: 14, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border, marginTop: 10 }}>{report}</div>}
+        </Card>
       </>)}
     </div>
   );
