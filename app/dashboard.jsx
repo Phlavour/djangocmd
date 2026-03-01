@@ -2245,9 +2245,14 @@ RESPOND ONLY with JSON array, one per post in order:
         ))}
       </div>
 
-      {/* Delete All */}
+      {/* Delete All + Move All */}
       {counts[activeTab] > 0 && (
-        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          {activeTab === "POST" && <Btn small color={T.green} outline onClick={() => {
+            if (!confirm("Move ALL "+counts.POST+" posts from POST to USED?")) return;
+            setAllPosts(p => p.map(x => x.tab === "POST" && x.account === account ? { ...x, tab: "USED" } : x));
+            if (supa) supa.patch("posts", "tab=eq.POST&account=eq."+encodeURIComponent(account), { tab: "USED" });
+          }}>✓ Move All POST → USED ({counts.POST})</Btn>}
           <Btn small color={T.red} outline onClick={() => deleteAllInTab(activeTab)}>🗑 Delete All {activeTab} ({counts[activeTab]})</Btn>
         </div>
       )}
@@ -2492,12 +2497,15 @@ const STRUCT_LABELS = {
 // CSV Date parser (handles X export format: "Thu, Feb 12, 2026")
 function parseXDate(raw) {
   if (!raw) return null;
-  const c = raw.replace(/^["']|["']$/g, "").trim();
-  const m1 = c.match(/^[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4})$/);
+  const c = raw.replace(/^["']|["']$/g, "").replace(/\n/g, " ").trim();
+  // "Fri, Feb 27, 2026" or "Sun, Mar 1, 2026"
+  const m1 = c.match(/[A-Z][a-z]{2},?\s+([A-Z][a-z]{2})\s+(\d{1,2}),?\s+(\d{4})/);
   if (m1) { const d = new Date(m1[1]+" "+m1[2]+", "+m1[3]); if (!isNaN(d)) return d; }
-  const m2 = c.match(/^([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4})$/);
+  // "Feb 27, 2026"
+  const m2 = c.match(/([A-Z][a-z]{2})\s+(\d{1,2}),?\s+(\d{4})/);
   if (m2) { const d = new Date(m2[1]+" "+m2[2]+", "+m2[3]); if (!isNaN(d)) return d; }
-  const m3 = c.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  // "2026-02-27"
+  const m3 = c.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (m3) return new Date(parseInt(m3[1]), parseInt(m3[2])-1, parseInt(m3[3]));
   const d = new Date(c); return isNaN(d) ? null : d;
 }
@@ -2585,7 +2593,7 @@ async function aiClassifyPosts(posts, apiKey) {
   const texts = posts.map((p,i) => "["+i+'] "'+p.text.slice(0,150)+'"').join("\n");
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000,
         messages: [{ role: "user", content: "Classify these @django_xbt posts.\nFor each: pillar (growth|market|lifestyle|busting|shitpost), structure (framework|contrarian|personal|thread|observation|question|callout), score (1-10).\n\nPosts:\n"+texts+'\n\nJSON array only: [{"idx":0,"pillar":"growth","structure":"framework","score":7}]' }] }),
     });
@@ -2622,11 +2630,81 @@ const AChartTip = ({ active, payload, label }) => {
   </div>);
 };
 
+function WeeklyNotes({ supa, account, noteText, setNoteText, savedNotes, setSavedNotes }) {
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [expanded, setExpanded] = useState(null);
+
+  // Load notes on mount
+  useEffect(() => {
+    if (!supa?.url || !supa?.key) return;
+    fetch(supa.url+"/rest/v1/weekly_notes?account=eq."+encodeURIComponent(account||"@django_crypto")+"&order=date.desc&limit=20",
+      { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } })
+      .then(r => r.ok ? r.json() : []).then(setSavedNotes).catch(() => {});
+  }, [supa?.url, supa?.key, account]);
+
+  const deleteNote = async (id) => {
+    if (!confirm("Delete this note?")) return;
+    try {
+      await fetch(supa.url+"/rest/v1/weekly_notes?id=eq."+id, { method: "DELETE", headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } });
+      setSavedNotes(prev => prev.filter(n => n.id !== id));
+    } catch {}
+  };
+
+  const saveEdit = async (id) => {
+    try {
+      await fetch(supa.url+"/rest/v1/weekly_notes?id=eq."+id, { method: "PATCH", headers: { apikey: supa.key, Authorization: "Bearer "+supa.key, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ notes: editText }) });
+      setSavedNotes(prev => prev.map(n => n.id === id ? { ...n, notes: editText } : n));
+      setEditId(null);
+    } catch {}
+  };
+
+  if (!savedNotes.length) return null;
+
+  return (
+    <Card style={{ marginTop: 12, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: T.textDim, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>📝 Weekly Notes History</div>
+      {savedNotes.map(n => (
+        <div key={n.id} style={{ marginBottom: 10, padding: 12, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{n.date}</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>{n.range}</span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setExpanded(expanded === n.id ? null : n.id)} style={{ fontSize: 10, color: T.blue, background: "none", border: "none", cursor: "pointer", fontFamily: "'IBM Plex Mono'" }}>{expanded === n.id ? "collapse" : "expand"}</button>
+              <button onClick={() => { setEditId(n.id); setEditText(n.notes || ""); }} style={{ fontSize: 10, color: T.amber, background: "none", border: "none", cursor: "pointer" }}>edit</button>
+              <button onClick={() => deleteNote(n.id)} style={{ fontSize: 10, color: T.red, background: "none", border: "none", cursor: "pointer" }}>delete</button>
+            </div>
+          </div>
+          {expanded === n.id && <>
+            {n.report && <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.textSoft, marginBottom: 8, maxHeight: 300, overflow: "auto" }}>{n.report}</div>}
+            {editId === n.id ? (
+              <div>
+                <textarea value={editText} onChange={e => setEditText(e.target.value)} style={{ width: "100%", minHeight: 80, background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: 8, fontSize: 11, fontFamily: "'IBM Plex Mono'", resize: "vertical" }} placeholder="your notes for this week..." />
+                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                  <Btn small color={T.green} onClick={() => saveEdit(n.id)}>save</Btn>
+                  <Btn small color={T.textDim} outline onClick={() => setEditId(null)}>cancel</Btn>
+                </div>
+              </div>
+            ) : (
+              n.notes && <div style={{ fontSize: 11, color: T.text, padding: 8, background: T.card, borderRadius: 6, border: "1px solid "+T.border, whiteSpace: "pre-wrap" }}>{n.notes}</div>
+            )}
+          </>}
+          {!expanded && n.notes && <div style={{ fontSize: 10, color: T.textSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.notes.slice(0, 80)}{n.notes.length > 80 ? "..." : ""}</div>}
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, account }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState("");
   const [repLoad, setRepLoad] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [savedNotes, setSavedNotes] = useState([]);
 
   // Supabase-persisted data
   const [dailyData, setDailyData] = useState([]);
@@ -2657,13 +2735,21 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
   // Date filtering
   const filterByRange = (items, dateField) => {
     if (!items.length) return items;
+    if (range === "all") return items;
     const now = new Date();
     let from, to;
     if (range === "custom" && customFrom) {
       from = new Date(customFrom); to = customTo ? new Date(customTo) : now;
-    } else if (range === "all") { return items; }
-    else { const days = parseInt(range) || 14; from = new Date(now); from.setDate(from.getDate() - days); to = now; }
-    return items.filter(item => { const d = new Date(item[dateField]); return d >= from && d <= to; });
+    } else {
+      const days = parseInt(range) || 14; from = new Date(now); from.setDate(from.getDate() - days); to = now;
+    }
+    return items.filter(item => {
+      const dv = item[dateField];
+      if (!dv) return true; // include posts with no date
+      const d = new Date(dv);
+      if (isNaN(d)) return true; // include unparseable dates
+      return d >= from && d <= to;
+    });
   };
 
   const filteredDaily = filterByRange(dailyData, "date").sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -2733,7 +2819,10 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
     setBusy(false);
-    setStatus("✓ "+originals.length+" posts · "+matched+" from dashboard · "+(originals.length-matched)+" organic · "+(rows.length-originals.length)+" replies filtered");
+    const aiCount = originals.filter(o=>o.source==="ai").length;
+    const manCount = originals.filter(o=>o.source==="manual").length;
+    const orgCount = originals.length - aiCount - manCount;
+    setStatus("✓ "+originals.length+" posts · "+aiCount+" AI · "+manCount+" manual · "+orgCount+" organic · "+(rows.length-originals.length)+" replies filtered");
   }, [supa, apiKey, account]);
 
   // Upload Overview CSV
@@ -2798,7 +2887,10 @@ function WeeklyAnalytics({ sheetData, loading, apiKey, supa, setLastAnalysis, ac
       updated.forEach(u => map.set(u.post_id, u));
       return [...map.values()].sort((a,b) => (b.date||"").localeCompare(a.date||""));
     });
-    setStatus("✓ "+matched+" AI, "+(updated.length-matched)+" manual"); setBusy(false);
+    const aiCount = updated.filter(u=>u.source==="ai").length;
+    const manCount = updated.filter(u=>u.source==="manual").length;
+    const orgCount = updated.length - aiCount - manCount;
+    setStatus("✓ "+matched+" matched ("+aiCount+" AI, "+manCount+" manual) · "+orgCount+" organic"); setBusy(false);
   };
 
   // ─── Computed ───
@@ -2927,7 +3019,8 @@ ${scoredPosts.length > 0 ? "8) AI Scoring Accuracy — how accurate were your sc
 Direct, lowercase django strategist voice. No fluff.`;
 
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"},
+      const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]}) });
       const data = await r.json();
       const reportText = data.content?.map(c=>c.text||"").join("")||"no response";
@@ -3118,7 +3211,28 @@ Direct, lowercase django strategist voice. No fluff.`;
             {!apiKey && <span style={{ fontSize: 10, color: T.red }}>set Claude API key in ⚙ settings</span>}
           </div>
           {report && <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7, color: T.text, padding: 14, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border, marginTop: 10 }}>{report}</div>}
+          {report && <>
+            <div style={{ marginTop: 10 }}>
+              <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="add your own notes for this week (observations, plans, things to remember)..." style={{ width: "100%", minHeight: 60, background: T.card, color: T.text, border: "1px solid "+T.border, borderRadius: 6, padding: 8, fontSize: 11, fontFamily: "'IBM Plex Mono'", resize: "vertical" }} />
+            </div>
+            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <Btn small color={T.green} outline onClick={async () => {
+              if (!supa?.url || !report) return;
+              const note = { account: account||"@django_crypto", date: new Date().toISOString().slice(0,10), range: rangeLabel, report, notes: noteText, created_at: new Date().toISOString() };
+              try {
+                await fetch(supa.url+"/rest/v1/weekly_notes", { method: "POST", headers: { apikey: supa.key, Authorization: "Bearer "+supa.key, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(note) });
+                setStatus("✓ report saved to weekly notes");
+                // Refresh notes
+                const r = await fetch(supa.url+"/rest/v1/weekly_notes?account=eq."+encodeURIComponent(account||"@django_crypto")+"&order=date.desc&limit=20", { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } });
+                if (r.ok) setSavedNotes(await r.json());
+              } catch(e) { setStatus("error saving note: "+e.message); }
+            }}>💾 Save to Weekly Notes</Btn>
+          </div>
+          </>}
         </Card>
+
+        {/* ═══ WEEKLY NOTES ═══ */}
+        <WeeklyNotes supa={supa} account={account} noteText={noteText} setNoteText={setNoteText} savedNotes={savedNotes} setSavedNotes={setSavedNotes} />
       </>)}
     </div>
   );
