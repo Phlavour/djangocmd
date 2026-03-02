@@ -36,7 +36,7 @@ let T = DARK;
 // ═══════════════════════════════════════════════════════════════
 
 const SHEET_ID = "15QxYvRiyV7FBgMvs9qlFTDH5erWTPYyZaoA6b-oZjGM";
-const TABS = ["DRAFT", "POST", "DATABASE", "USED", "BAD"];
+const TABS = ["DRAFT", "POST", "DATABASE", "USED", "BAD", "SKETCH", "IDEAS"];
 
 // Tab name → GID mapping (you may need to update these)
 // To find GIDs: open each tab in browser, look at URL &gid=XXXXX
@@ -156,9 +156,11 @@ const TABS_CONFIG_FN = () => ({
   USED: { color: T.textDim, icon: "✓", label: "Used" },
   DATABASE: { color: T.purple, icon: "◈", label: "Database" },
   BAD: { color: T.red, icon: "✕", label: "Bad" },
+  SKETCH: { color: T.amber, icon: "💡", label: "Sketch" },
+  IDEAS: { color: T.cyan, icon: "📝", label: "Ideas" },
 });
 
-const STATUS_ORDER = ["DRAFT", "POST", "USED", "DATABASE", "BAD"];
+const STATUS_ORDER = ["DRAFT", "POST", "USED", "DATABASE", "BAD", "SKETCH", "IDEAS"];
 
 const ACCOUNTS = [
   { handle: "@django_crypto", name: "Django", avatar: "/pfp-django.jpg", gradient: ["#00e87b", "#00aa55"] },
@@ -1120,6 +1122,62 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [genProgress, setGenProgress] = useState("");
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
+  const [sketchLoading, setSketchLoading] = useState(null);
+
+  // Make Post from Sketch — send sketch to Claude, get polished post, add to DRAFT
+  const makePostFromSketch = async (id, sketchText, category) => {
+    if (!apiKey || !sketchText) return;
+    setSketchLoading(id);
+    try {
+      const bv = brandVoice ? brandVoice.slice(0, 2000) : "";
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 800,
+          messages: [{ role: "user", content: `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
+
+${bv ? "BRAND VOICE:\n"+bv+"\n" : ""}
+SKETCH from Django (raw idea / rough draft):
+"${sketchText}"
+
+Category: ${category || "growth"}
+${weeklyNotes ? "\nWEEKLY CONTEXT:\n"+weeklyNotes+"\n" : ""}
+
+Turn this sketch into a polished, ready-to-post tweet in Django's authentic voice.
+
+HEADLINE HOOK: Start with a strong first line using one of: Helpful / Emotion / Ask / Do's-Don'ts / Lists / Inspire / Numbers / Empathy
+
+RULES:
+- always lowercase, no dots at end, no em dashes, no emojis, no hashtags
+- use ">" for bullet points
+- keep Django's casual, punchy, authentic style
+- the sketch is the IDEA — you polish the delivery, not change the message
+- if sketch is short, keep post short. if sketch has multiple points, expand naturally
+
+Respond with ONLY the post text. Nothing else.` }]
+        }),
+      });
+      const data = await res.json();
+      const postText = data.content?.map(c => c.text || "").join("") || "";
+      if (postText && !postText.startsWith("error")) {
+        // Add polished post to DRAFT
+        const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+        const newPost = {
+          id: newId, tab: "DRAFT", category: category || "growth", structure: "",
+          post: postText.trim(), notes: "from sketch: " + sketchText.slice(0, 60), score: "", howToFix: "", day: "",
+          source: "ai", account, hook_type: "",
+        };
+        setAllPosts(p => [...(p || []), newPost]);
+        if (supa) {
+          try { await savePostsToSupa([newPost]); } catch {}
+        }
+        // Auto-score
+        if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 500);
+      }
+    } catch (err) { console.error("Make post error:", err); }
+    setSketchLoading(null);
+  };
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [fixLoading, setFixLoading] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -1251,7 +1309,8 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
   STATUS_ORDER.forEach(t => { counts[t] = accountPosts.filter(p => p.tab === t).length; });
 
   const isUsed = activeTab === "USED", isBad = activeTab === "BAD",
-    isPost = activeTab === "POST", isDraft = activeTab === "DRAFT", isDb = activeTab === "DATABASE";
+    isPost = activeTab === "POST", isDraft = activeTab === "DRAFT", isDb = activeTab === "DATABASE",
+    isSketch = activeTab === "SKETCH", isIdeas = activeTab === "IDEAS";
 
   // Actions
   const movePost = (id, to) => {
@@ -2168,11 +2227,17 @@ RESPOND ONLY with JSON array, one per post in order:
             {weeklyNotesSaving && <span style={{ fontSize: 10, color: T.green }}>✓ saved</span>}
             <Btn small color={T.green} outline onClick={async () => {
               if (!supa) return;
+              // Build combined notes and update weeklyNotes state immediately
+              const combined = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`[${k.toUpperCase()}] ${v}`).join("\n");
+              setWeeklyNotes(combined);
+              // Save to settings (for generation prompt)
+              const s = account.replace("@","");
+              supa.upsert("settings", { key: `weekly_notes_${s}`, value: combined }).catch(()=>{});
+              // Save to weekly_context (for history)
               const ctx = { account, week_start: new Date().toISOString().slice(0,10), hot_topics: wctx.hot_topics||"", personal: wctx.personal||"", avoid: wctx.avoid||"", ai_notes: wctx.ai_notes||"", seasonal: wctx.seasonal||"", updated_at: new Date().toISOString() };
               try {
                 await fetch(supa.url+"/rest/v1/weekly_context", { method: "POST", headers: { apikey: supa.key, Authorization: "Bearer "+supa.key, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(ctx) });
                 setWeeklyNotesSaving(true); setTimeout(() => setWeeklyNotesSaving(false), 2000);
-                // refresh history
                 const r = await fetch(supa.url+"/rest/v1/weekly_context?account=eq."+encodeURIComponent(account)+"&order=week_start.desc&limit=10", { headers: { apikey: supa.key, Authorization: "Bearer "+supa.key } });
                 if (r.ok) setWctxHistory(await r.json());
               } catch {}
@@ -2434,6 +2499,65 @@ RESPOND ONLY with JSON array, one per post in order:
         </div>
       )}
 
+      {/* Add Sketch */}
+      {isSketch && (
+        <div style={{ marginBottom: 16 }}>
+          <Card>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 14 }}>💡</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>New Sketch</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>rough idea → Claude polishes it into a post</span>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={{ ...sel, fontSize: 11 }}>
+                {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
+              placeholder="wrzuć luźny pomysł, myśl, obserwację... Claude zamieni to w gotowy post"
+              style={{ width: "100%", minHeight: 60, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
+              onFocus={e => e.target.style.borderColor = T.amber} onBlur={e => e.target.style.borderColor = T.border} />
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <Btn color={T.amber} onClick={async () => {
+                if (!newPostText.trim()) return;
+                const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+                const newPost = { id: newId, tab: "SKETCH", category: newPostCat, structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account };
+                setAllPosts(p => [...(p || []), newPost]);
+                if (supa) try { await savePostsToSupa([newPost]); } catch {}
+                setNewPostText("");
+              }}>💡 Save Sketch</Btn>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Add Idea */}
+      {isIdeas && (
+        <div style={{ marginBottom: 16 }}>
+          <Card>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 14 }}>📝</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>New Idea</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>bank pomysłów na przyszłość</span>
+            </div>
+            <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
+              placeholder="temat, obserwacja, link, cokolwiek do późniejszego użycia..."
+              style={{ width: "100%", minHeight: 50, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
+              onFocus={e => e.target.style.borderColor = T.cyan} onBlur={e => e.target.style.borderColor = T.border} />
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <Btn color={T.cyan} onClick={async () => {
+                if (!newPostText.trim()) return;
+                const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+                const newPost = { id: newId, tab: "IDEAS", category: "", structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account };
+                setAllPosts(p => [...(p || []), newPost]);
+                if (supa) try { await savePostsToSupa([newPost]); } catch {}
+                setNewPostText("");
+              }}>📝 Save Idea</Btn>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Posts */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sorted.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No posts in {TC[activeTab]?.label}</div>}
@@ -2530,6 +2654,18 @@ RESPOND ONLY with JSON array, one per post in order:
                   <Btn small color={T.red} outline onClick={() => delPost(p.id)}>🗑 Delete</Btn>
                 </>}
                 {isUsed && <>
+                  <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
+                </>}
+                {isSketch && <>
+                  <Btn small color={T.green} disabled={sketchLoading === p.id || !p.post} onClick={() => makePostFromSketch(p.id, p.post, p.category)}>
+                    {sketchLoading === p.id ? "⏳ writing..." : "✨ Make Post"}
+                  </Btn>
+                  <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft as-is</Btn>
+                  <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
+                </>}
+                {isIdeas && <>
+                  <Btn small color={T.amber} outline onClick={() => movePost(p.id, "SKETCH")}>💡 → Sketch</Btn>
                   <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft</Btn>
                   <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
                 </>}
