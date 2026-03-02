@@ -1096,6 +1096,12 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
   const [newPostHook, setNewPostHook] = useState("");
+  // Reset category/structure when account changes
+  React.useEffect(() => {
+    const cats = ACCOUNT_CATEGORIES[account] || CATEGORIES;
+    setNewPostCat(cats[0] || "growth");
+    setNewPostStructure("");
+  }, [account]);
   const [showAdd, setShowAdd] = useState(false);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiResults, setAiResults] = useState({});
@@ -1542,7 +1548,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat(account === "@henryk0x" ? "market" : "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat((ACCOUNT_CATEGORIES[account] || CATEGORIES)[0] || "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -2581,7 +2587,7 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
                 </label>
               )}
               <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-                {genLoading ? "⏳ Generating..." : "⚡ Generate 42 Posts"}
+                {genLoading ? "⏳ Generating..." : `⚡ Generate ${account === "@ghost" ? 21 : account === "@faceless" ? 21 : account === "@henryk0x" ? 42 : 42} Posts`}
               </Btn>
             </div>
           </div>
