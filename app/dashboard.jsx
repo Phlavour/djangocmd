@@ -1100,6 +1100,48 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const weeklyNotesTimer = useRef(null);
   const [wctx, setWctx] = useState({ hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" });
   const [wctxHistory, setWctxHistory] = useState([]);
+  const [topicIdeas, setTopicIdeas] = useState("");
+  const [topicLoading, setTopicLoading] = useState(false);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [weeklyTopics, setWeeklyTopics] = useState("");
+
+  // Generate weekly growth topics
+  const generateTopics = async () => {
+    if (!apiKey) return;
+    setTopicsLoading(true); setWeeklyTopics("");
+    try {
+      const ctx = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`[${k.toUpperCase()}] ${v}`).join("\n");
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 1200,
+          messages: [{ role: "user", content: `You are Django's (@django_xbt) content strategist. Generate a list of 15-20 specific GROWTH post topics for this week.
+
+${ctx ? "WEEKLY CONTEXT:\n"+ctx+"\n" : ""}
+${lastAnalysis ? "LAST ANALYSIS:\n"+lastAnalysis.slice(0,800)+"\n" : ""}
+
+GROWTH SUBTOPICS to rotate across:
+- Growing X account, X analytics, X know-how, Marketing knowledge
+- Building personal brand, Importance of visuals, Replying strategies
+- Importance of storytelling, How to make money in web3, Writing/copywriting
+- Using AI and automation, Tools, Cold reach/BD, Productivity hacks
+
+For each topic give:
+1. The topic angle (specific, not generic)
+2. Suggested hook type (H/E/A/D/L/I/N/E)
+3. Suggested structure
+
+Format as numbered list. Be specific — "how i use AI to write 10x faster" not "AI is useful".
+Topics should be timely (use weekly context if available) and match Django's contrarian, anti-guru style.
+Include 2-3 topics that reference current events or trends from hot_topics.` }]
+        }),
+      });
+      const data = await res.json();
+      setWeeklyTopics(data.content?.map(c => c.text || "").join("") || "no response");
+    } catch (err) { setWeeklyTopics("error: " + err.message); }
+    setTopicsLoading(false);
+  };
 
   // Load weekly context history
   useEffect(() => {
@@ -1124,17 +1166,19 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [rewriteFeedback, setRewriteFeedback] = useState("");
   const [sketchLoading, setSketchLoading] = useState(null);
 
-  // Make Post from Sketch — send sketch to Claude, get polished post, add to DRAFT
+  // Make Post from Sketch — send sketch to Claude, get 3 polished variants, add to DRAFT
   const makePostFromSketch = async (id, sketchText, category) => {
-    if (!apiKey || !sketchText) return;
+    if (!apiKey) { alert("Add Claude API key in ⚙ Settings first"); return; }
+    if (!sketchText) return;
     setSketchLoading(id);
     try {
       const bv = brandVoice ? brandVoice.slice(0, 2000) : "";
+      const hookList = Object.entries(HOOKS).map(([k,h]) => `${k}=${h.name}: ${h.desc}`).join("\n");
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 800,
+          model: "claude-sonnet-4-20250514", max_tokens: 1500,
           messages: [{ role: "user", content: `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 ${bv ? "BRAND VOICE:\n"+bv+"\n" : ""}
@@ -1144,38 +1188,61 @@ SKETCH from Django (raw idea / rough draft):
 Category: ${category || "growth"}
 ${weeklyNotes ? "\nWEEKLY CONTEXT:\n"+weeklyNotes+"\n" : ""}
 
-Turn this sketch into a polished, ready-to-post tweet in Django's authentic voice.
+Generate 3 DIFFERENT post variants from this sketch. Each variant must:
+- Use a DIFFERENT hook type for the first line
+- Use a DIFFERENT post structure
+- Be a complete, ready-to-post tweet
 
-HEADLINE HOOK: Start with a strong first line using one of: Helpful / Emotion / Ask / Do's-Don'ts / Lists / Inspire / Numbers / Empathy
+HOOK TYPES:
+${hookList}
 
 RULES:
 - always lowercase, no dots at end, no em dashes, no emojis, no hashtags
 - use ">" for bullet points
 - keep Django's casual, punchy, authentic style
-- the sketch is the IDEA — you polish the delivery, not change the message
-- if sketch is short, keep post short. if sketch has multiple points, expand naturally
+- the sketch is the IDEA — polish the delivery, don't change the message
+- vary LENGTH: one short (<280 chars), one medium, one longer
+- score each variant 1-10 on "would django actually post this?"
 
-Respond with ONLY the post text. Nothing else.` }]
+RESPOND ONLY with valid JSON array (no markdown, no backticks):
+[{"post":"text","hook_type":"H","structure":"Problem → Solution","score":8},{"post":"text","hook_type":"A","structure":"Single Insight","score":7},{"post":"text","hook_type":"N","structure":"Story / Narrative","score":9}]` }]
         }),
       });
-      const data = await res.json();
-      const postText = data.content?.map(c => c.text || "").join("") || "";
-      if (postText && !postText.startsWith("error")) {
-        // Add polished post to DRAFT
-        const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
-        const newPost = {
-          id: newId, tab: "DRAFT", category: category || "growth", structure: "",
-          post: postText.trim(), notes: "from sketch: " + sketchText.slice(0, 60), score: "", howToFix: "", day: "",
-          source: "ai", account, hook_type: "",
-        };
-        setAllPosts(p => [...(p || []), newPost]);
-        if (supa) {
-          try { await savePostsToSupa([newPost]); } catch {}
-        }
-        // Auto-score
-        if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category), 500);
+      if (!res.ok) {
+        const errText = await res.text();
+        alert("API error: " + res.status + " — check your Claude API key in Settings");
+        console.error("Sketch API error:", res.status, errText);
+        setSketchLoading(null); return;
       }
-    } catch (err) { console.error("Make post error:", err); }
+      const data = await res.json();
+      const raw = (data.content?.map(c => c.text || "").join("") || "").trim();
+      let variants = [];
+      try {
+        const cleaned = raw.replace(/```json\s?|```/g, "").trim();
+        variants = JSON.parse(cleaned);
+      } catch { variants = [{ post: raw, hook_type: "?", structure: "?", score: 0 }]; }
+
+      if (variants.length > 0) {
+        let maxId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) : 0;
+        const newPosts = variants.map((v, i) => ({
+          id: ++maxId, tab: "DRAFT", category: category || "growth", structure: v.structure || "",
+          post: (v.post || "").trim(),
+          notes: `from sketch · hook: ${v.hook_type || "?"} · score: ${v.score || "?"}/10 · variant ${i+1}/${variants.length}`,
+          score: String(v.score || ""), howToFix: "", day: "",
+          source: "ai", account, hook_type: v.hook_type || "",
+        }));
+        setAllPosts(p => [...(p || []), ...newPosts]);
+        if (supa) try { await savePostsToSupa(newPosts); } catch {}
+        // Mark sketch as processed
+        setAllPosts(p => p.map(x => x.id === id ? { ...x, notes: `✓ ${variants.length} variants generated → check DRAFT tab` } : x));
+        if (supa) {
+          const skPost = (allPosts||[]).find(x=>x.id===id);
+          if (skPost?._supaId) supa.patch("posts", `id=eq.${skPost._supaId}`, { notes: `✓ ${variants.length} variants generated` });
+        }
+      } else {
+        alert("Claude returned empty response. Try again.");
+      }
+    } catch (err) { console.error("Make post error:", err); alert("Error: " + err.message); }
     setSketchLoading(null);
   };
   const [rewriteLoading, setRewriteLoading] = useState(false);
@@ -2268,6 +2335,75 @@ RESPOND ONLY with JSON array, one per post in order:
               onFocus={e => e.target.style.borderColor = f.color} onBlur={e => e.target.style.borderColor = T.border} />
           </div>
         ))}
+
+        {/* Weekly Topics Generator */}
+        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.greenDim, borderRadius: 8, border: "1px solid "+T.greenMid }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: weeklyTopics ? 8 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12 }}>🎯</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.green }}>Weekly Growth Topics</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topic ideas based on your context</span>
+            </div>
+            <Btn small color={T.green} onClick={generateTopics} disabled={topicsLoading || !apiKey}>
+              {topicsLoading ? "⏳ generating..." : "🎯 Generate Topics"}
+            </Btn>
+          </div>
+          {weeklyTopics && (
+            <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, padding: 10, background: T.card, borderRadius: 6, border: "1px solid "+T.border, maxHeight: 300, overflowY: "auto" }}>
+              {weeklyTopics}
+            </div>
+          )}
+        </div>
+
+        {/* Topic Generator */}
+        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: topicIdeas ? 8 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: T.cyan, letterSpacing: .5, textTransform: "uppercase" }}>💡 Weekly Topic Ideas</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topics based on your context</span>
+            </div>
+            <Btn small color={T.cyan} outline disabled={topicLoading} onClick={async () => {
+              if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+              setTopicLoading(true); setTopicIdeas("");
+              try {
+                const ctx = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`${k}: ${v}`).join("\n");
+                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+                  body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514", max_tokens: 1200,
+                    messages: [{ role: "user", content: `You are django_xbt's content strategist. Generate 15 specific post topic ideas for this week.
+
+CONTEXT:
+${ctx || "no context provided"}
+${lastAnalysis ? "\nLAST WEEK'S ANALYSIS:\n"+lastAnalysis.slice(0,800) : ""}
+
+DISTRIBUTION:
+- 6 GROWTH topics (X growth, marketing, branding, replying, AI tools, making money in web3)
+- 3 MARKET topics (trading mentality, current market, risk management)
+- 2 SHITPOSTING topics (funny observations, CT culture, ironic takes)
+- 2 LIFESTYLE topics (health, travel, personal growth, passions)
+- 2 BUSTING topics (bad actors, scams, false prophets, AI slop)
+
+For each topic give:
+- The topic idea (specific, not generic)
+- Suggested hook type (H/E/A/D/L/I/N/E)
+- Suggested structure
+- Why it could perform well
+
+Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's context and current crypto/X trends.` }]
+                  }),
+                });
+                if (!res.ok) { alert("API error: "+res.status); setTopicLoading(false); return; }
+                const data = await res.json();
+                setTopicIdeas(data.content?.map(c=>c.text||"").join("")||"no response");
+              } catch(e) { alert("Error: "+e.message); }
+              setTopicLoading(false);
+            }}>{topicLoading ? "⏳ generating..." : "🎯 Generate Topics"}</Btn>
+          </div>
+          {topicIdeas && <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, maxHeight: 400, overflow: "auto" }}>{topicIdeas}</div>}
+        </div>
+
         {wctxHistory.length > 0 && (
           <details style={{ marginTop: 6 }}>
             <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📜 Previous weeks ({wctxHistory.length})</summary>
@@ -2659,7 +2795,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 </>}
                 {isSketch && <>
                   <Btn small color={T.green} disabled={sketchLoading === p.id || !p.post} onClick={() => makePostFromSketch(p.id, p.post, p.category)}>
-                    {sketchLoading === p.id ? "⏳ writing..." : "✨ Make Post"}
+                    {sketchLoading === p.id ? "⏳ generating 3 variants..." : "✨ Generate 3 Posts"}
                   </Btn>
                   <Btn small color={T.blue} outline onClick={() => movePost(p.id, "DRAFT")}>✎ → Draft as-is</Btn>
                   <Btn small outline onClick={() => delPost(p.id)}>🗑</Btn>
