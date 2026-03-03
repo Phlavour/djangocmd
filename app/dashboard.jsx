@@ -1099,7 +1099,9 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [genLoading, setGenLoading] = useState(false);
   const [weeklyNotesSaving, setWeeklyNotesSaving] = useState(false);
   const weeklyNotesTimer = useRef(null);
-  const [wctx, setWctx] = useState({ hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" });
+  const [wctxMap, setWctxMap] = useState({});
+  const wctx = wctxMap[account] || { hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" };
+  const setWctx = (v) => setWctxMap(prev => ({ ...prev, [account]: v }));
   const [wctxHistory, setWctxHistory] = useState([]);
   const [topicIdeas, setTopicIdeas] = useState("");
   const [topicLoading, setTopicLoading] = useState(false);
@@ -1811,6 +1813,7 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
 
     const isHenryk = account === "@henryk0x";
     const isFaceless = account === "@faceless";
+    const isGhost = account === "@ghost";
 
     const EXAMPLE_POSTS = isHenryk ? `PRZYKŁADOWE POSTY HENRYKA (studiuj ton, długość, słownictwo — WSZYSTKO PO POLSKU):
 
@@ -1955,6 +1958,12 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
         structures: ["Single Insight", "Story / Narrative", "Observation → Pattern", "Mindset Shift", "Before → After", "Contrarian View"],
         advisor: "LIFESTYLE: connect fitness/health to trading/success mindset. gym = discipline training. sleep = edge maintenance. NO personal details — faceless account, universal truths only.",
       },
+    ] : isGhost ? [
+      { category: "observations", count: 8, subtopics: ["travel story", "absurd situation", "self-deprecation", "place description", "funny moment", "cultural observation", "night scene", "morning after"], structures: ["The Signature", "The Observation", "Beauty in Filth", "Realistic Take", "Sensitive Tough Guy"], advisor: "OBSERVATIONS: raw travel stories, self-deprecation. bukowski meets bourdain." },
+      { category: "interviews", count: 5, subtopics: ["her life story", "surprising answer", "what clients are like", "money and ambition", "her perspective"], structures: ["Interview Quote", "The Observation", "Beauty in Filth", "Sensitive Tough Guy"], advisor: "INTERVIEWS: conversations with sex workers. humanizing. NEVER dehumanize." },
+      { category: "kinky", count: 3, subtopics: ["desire expression", "tender perversion", "self-aware kink"], structures: ["Kinky Confession", "The Signature", "Double Meaning"], advisor: "KINKY: short provocative confessions. erotic NOT pornographic." },
+      { category: "confrontational", count: 3, subtopics: ["hypocrisy of critics", "dating vs prostitution economics", "tinder reality"], structures: ["The Confrontation", "Cost Comparison", "Realistic Take"], advisor: "CONFRONTATIONAL: call out hypocrisy. provocative but logical." },
+      { category: "philosophical", count: 2, subtopics: ["dualism of desire", "double meaning reflections"], structures: ["Double Meaning", "Beauty in Filth", "Sensitive Tough Guy"], advisor: "PHILOSOPHICAL: double meanings, dualism. short, poetic." },
     ] : [
       {
         category: "growth", count: 17,
@@ -2080,6 +2089,34 @@ CRITICAL RULES:
 
 RESPOND ONLY with valid JSON array:
 [{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"}]`
+      : isGhost ? `You are @borderline_lust - a 33yo marketing pro by day, sex tourist/journalist by night. Voice: Bukowski meets Bourdain.
+
+RULES: lowercase, no dots, profanity natural, erotic NOT pornographic, NEVER violent/non-consensual/dehumanizing, treat sex workers as humans.
+Phrases: ""tonight is the night"", ""lets be honest"", ""be realistic"", ""theres something with..."", ""she told me..."""
+Most posts under 280 chars.
+
+EXAMPLES:
+[observations] ""i asked the bartender where to find the best girls. he pointed at himself. i respect the hustle""
+[interviews] ""she told me she makes more in one night than her ex makes in a month""
+[kinky] ""i have a type. its called available and not judging me""
+[confrontational] ""guys spend 200 on a tinder date hoping to get laid. i spend 100 and skip the small talk""
+[philosophical] ""theres something poetic about paying for honesty in a world full of free lies""
+
+=== CATEGORY: ${batch.category.toUpperCase()} ===
+SUBTOPICS:
+${subtopicList}
+STRUCTURES:
+${structList}
+ADVISOR:
+${batch.advisor}
+CONTEXT:
+${weeklyNotes || ""no context""}
+
+Generate exactly ${batch.count} posts for "${batch.category}"".
+- Different subtopic each, vary length, sound human NOT AI
+
+Return ONLY JSON array:
+[{""post"": ""text"", ""structure"": ""Name"", ""subtopic"": ""used""}]`
       : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 YOUR BRAND VOICE:
@@ -2190,6 +2227,9 @@ ${postsText}
 
 ODPOWIEDZ TYLKO JSON:
 [{"score": 7.5, "feedback": "krótki feedback po polsku + sugestia poprawy"}]`
+              : isGhost ? `You are scoring posts for @borderline_lust - raw confessional sex tourism account.
+Score 1-10. Criteria: raw/confessional? self-deprecating? treats sex workers as humans? erotic not pornographic? punchy?
+For each: {""score"": 1-10, ""howToFix"": ""feedback""}``
               : (isFaceless ? `You are scoring posts for a faceless trading/motivation account. Score these posts.
 
 CRITERIA:
@@ -2337,128 +2377,6 @@ RESPOND ONLY with JSON array, one per post in order:
           </div>
         ))}
 
-        {/* Weekly Topics Generator */}
-        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.greenDim, borderRadius: 8, border: "1px solid "+T.greenMid }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: weeklyTopics ? 8 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 12 }}>🎯</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.green }}>Weekly Growth Topics</span>
-              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topic ideas based on your context</span>
-            </div>
-            <Btn small color={T.green} onClick={generateTopics} disabled={topicsLoading || !apiKey}>
-              {topicsLoading ? "⏳ generating..." : "🎯 Generate Topics"}
-            </Btn>
-          </div>
-          {weeklyTopics && (
-            <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, padding: 10, background: T.card, borderRadius: 6, border: "1px solid "+T.border, maxHeight: 300, overflowY: "auto" }}>
-              {weeklyTopics}
-            </div>
-          )}
-        </div>
-
-        {/* Topic Generator */}
-        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: topicIdeas ? 8 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: T.cyan, letterSpacing: .5, textTransform: "uppercase" }}>💡 Weekly Topic Ideas</span>
-              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topics based on your context</span>
-            </div>
-            <Btn small color={T.cyan} outline disabled={topicLoading} onClick={async () => {
-              if (!apiKey) { alert("Add Claude API key in Settings"); return; }
-              setTopicLoading(true); setTopicIdeas("");
-              try {
-                const ctx = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`${k}: ${v}`).join("\n");
-                const res = await fetch("https://api.anthropic.com/v1/messages", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-                  body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514", max_tokens: 1200,
-                    messages: [{ role: "user", content: `You are django_xbt's content strategist. Generate 15 specific post topic ideas for this week.
-
-CONTEXT:
-${ctx || "no context provided"}
-${lastAnalysis ? "\nLAST WEEK'S ANALYSIS:\n"+lastAnalysis.slice(0,800) : ""}
-
-DISTRIBUTION:
-- 6 GROWTH topics (X growth, marketing, branding, replying, AI tools, making money in web3)
-- 3 MARKET topics (trading mentality, current market, risk management)
-- 2 SHITPOSTING topics (funny observations, CT culture, ironic takes)
-- 2 LIFESTYLE topics (health, travel, personal growth, passions)
-- 2 BUSTING topics (bad actors, scams, false prophets, AI slop)
-
-For each topic give:
-- The topic idea (specific, not generic)
-- Suggested hook type (H/E/A/D/L/I/N/E)
-- Suggested structure
-- Why it could perform well
-
-Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's context and current crypto/X trends.` }]
-                  }),
-                });
-                if (!res.ok) { alert("API error: "+res.status); setTopicLoading(false); return; }
-                const data = await res.json();
-                setTopicIdeas(data.content?.map(c=>c.text||"").join("")||"no response");
-              } catch(e) { alert("Error: "+e.message); }
-              setTopicLoading(false);
-            }}>{topicLoading ? "⏳ generating..." : "🎯 Generate Topics"}</Btn>
-          </div>
-          {topicIdeas && <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, maxHeight: 400, overflow: "auto" }}>{topicIdeas}</div>}
-        </div>
-
-        {wctxHistory.length > 0 && (
-          <details style={{ marginTop: 6 }}>
-            <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📜 Previous weeks ({wctxHistory.length})</summary>
-            <div style={{ marginTop: 6 }}>
-              {wctxHistory.map(h => (
-                <div key={h.id} style={{ padding: 8, background: T.bg2, borderRadius: 6, marginBottom: 6, fontSize: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600, color: T.text }}>{h.week_start}</span>
-                    <button onClick={() => { setWctx({ hot_topics: h.hot_topics||"", personal: h.personal||"", avoid: h.avoid||"", ai_notes: h.ai_notes||"", seasonal: h.seasonal||"" }); }} style={{ fontSize: 9, color: T.blue, background: "none", border: "none", cursor: "pointer" }}>load</button>
-                  </div>
-                  {h.hot_topics && <div style={{ color: T.textSoft }}><span style={{color:T.red}}>🔥</span> {h.hot_topics.slice(0,80)}...</div>}
-                  {h.personal && <div style={{ color: T.textSoft }}><span style={{color:T.blue}}>👤</span> {h.personal.slice(0,80)}...</div>}
-                  {h.seasonal && <div style={{ color: T.textSoft }}><span style={{color:T.purple}}>📅</span> {h.seasonal.slice(0,80)}...</div>}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
-        {lastAnalysis && (
-          <details style={{ marginTop: 8 }}>
-            <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📊 Last AI Analysis (auto-attached to generation)</summary>
-            <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5, marginTop: 6, padding: 8, background: T.bg2, borderRadius: 6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{lastAnalysis}</div>
-          </details>
-        )}
-      </Card>
-
-      {/* Generator + GOAL row */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
-        {/* Generator */}
-        <Card style={{ flex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 14 }}>🤖</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Weekly Content Generator</span>
-              {brandVoice && <Badge color={T.green}>Brand voice loaded</Badge>}
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {!brandVoice && (
-                <label style={{ cursor: "pointer" }}>
-                  <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
-                  <Btn small color={T.cyan} style={{ pointerEvents: "none" }}>📄 Upload Brand Voice .txt</Btn>
-                </label>
-              )}
-              {brandVoice && (
-                <label style={{ cursor: "pointer" }}>
-                  <input type="file" accept=".txt" onChange={handleBrandVoice} style={{ display: "none" }} />
-                  <Btn small outline style={{ pointerEvents: "none" }}>↻ Update Voice</Btn>
-                </label>
-              )}
-              <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-                {genLoading ? "⏳ Generating..." : "⚡ Generate 42 Posts"}
-              </Btn>
-            </div>
-          </div>
           {genProgress && <div style={{ marginTop: 8, fontSize: 11, color: genProgress.startsWith("✅") ? T.green : genProgress.startsWith("❌") ? T.red : T.textSoft, fontFamily: "'IBM Plex Mono', monospace" }}>{genProgress}</div>}
           {!apiKey && <div style={{ marginTop: 6, fontSize: 10, color: T.amber }}>⚠ Add Claude API key in Settings first</div>}
         </Card>
@@ -2519,7 +2437,7 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
             active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy(tab === "DRAFT" ? "mine-first" : "default"); }}
