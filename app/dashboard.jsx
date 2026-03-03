@@ -1103,6 +1103,10 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const wctx = wctxMap[account] || { hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" };
   const setWctx = (v) => setWctxMap(prev => ({ ...prev, [account]: v }));
   const [wctxHistory, setWctxHistory] = useState([]);
+  const [topicIdeas, setTopicIdeas] = useState("");
+  const [topicLoading, setTopicLoading] = useState(false);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [weeklyTopics, setWeeklyTopics] = useState("");
 
   // Generate weekly growth topics
   const generateTopics = async () => {
@@ -1440,7 +1444,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       const rows = posts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "", image_url: p.image_url || "", hook_type: p.hook_type || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1473,7 +1477,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       const rows = allPosts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "", image_url: p.image_url || "", hook_type: p.hook_type || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -2315,6 +2319,9 @@ RESPOND ONLY with JSON array, one per post in order:
           {saving && <Badge color={T.amber}>saving...</Badge>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
+            {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
           {supa && <Btn small color={T.purple} onClick={saveAllToSupa} disabled={saving}>💾 Save All to Supabase</Btn>}
           <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
@@ -2440,9 +2447,6 @@ RESPOND ONLY with JSON array, one per post in order:
             active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy(tab === "DRAFT" ? "mine-first" : "default"); }}
             color={TC[tab].color} count={counts[tab]} />
         ))}
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ ...sel, marginLeft: "auto" }}>
-          {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
       </div>
 
       {/* Stats */}
@@ -2492,7 +2496,7 @@ RESPOND ONLY with JSON array, one per post in order:
                   </select>
                 </div>
               </div>
-              {account !== "@ghost" && (<div style={{ marginBottom: 10 }}>
+              <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 6, textTransform: "uppercase" }}>Hook Type (HEADLINE)</div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {Object.entries(HOOKS).map(([k, h]) => {
@@ -2523,7 +2527,7 @@ RESPOND ONLY with JSON array, one per post in order:
                     ))}
                   </div>
                 )}
-              </div>)}
+              </div>
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
@@ -2576,9 +2580,9 @@ RESPOND ONLY with JSON array, one per post in order:
               <Btn color={T.amber} onClick={async () => {
                 if (!newPostText.trim()) return;
                 const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
-                const newPost = { id: newId, tab: "SKETCH", category: newPostCat, structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account, hook_type: "", image_url: "", postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "", replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "" };
+                const newPost = { id: newId, tab: "SKETCH", category: newPostCat, structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account };
                 setAllPosts(p => [...(p || []), newPost]);
-                if (supa) try { await savePostsToSupa([newPost]); } catch (err) { console.error("Sketch save error:", err); }
+                if (supa) try { await savePostsToSupa([newPost]); } catch {}
                 setNewPostText("");
               }}>💡 Save Sketch</Btn>
             </div>
@@ -2603,9 +2607,9 @@ RESPOND ONLY with JSON array, one per post in order:
               <Btn color={T.cyan} onClick={async () => {
                 if (!newPostText.trim()) return;
                 const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
-                const newPost = { id: newId, tab: "IDEAS", category: "", structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account, hook_type: "", image_url: "", postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "", replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "" };
+                const newPost = { id: newId, tab: "IDEAS", category: "", structure: "", post: newPostText.trim(), notes: "", score: "", howToFix: "", day: "", source: "manual", account };
                 setAllPosts(p => [...(p || []), newPost]);
-                if (supa) try { await savePostsToSupa([newPost]); } catch (err) { console.error("Ideas save error:", err); }
+                if (supa) try { await savePostsToSupa([newPost]); } catch {}
                 setNewPostText("");
               }}>📝 Save Idea</Btn>
             </div>
@@ -3628,16 +3632,10 @@ function TwitterPanel({ apiKey, supa }) {
   const setWeeklyNotes = (v) => setWeeklyNotesMap(prev => ({ ...prev, [account]: v }));
   const lastAnalysis = lastAnalysisMap[account] || "";
   const setLastAnalysis = (v) => setLastAnalysisMap(prev => ({ ...prev, [account]: v }));
-  const goalTarget = goalMap[account] && goalMap[account].target !== undefined ? goalMap[account].target : 20000;
-  const goalCurrent = goalMap[account] && goalMap[account].current !== undefined ? goalMap[account].current : 0;
-  const setGoalTarget = (v) => setGoalMap(prev => {
-    const existing = prev[account] || {};
-    return { ...prev, [account]: { target: v, current: existing.current !== undefined ? existing.current : 0 } };
-  });
-  const setGoalCurrent = (v) => setGoalMap(prev => {
-    const existing = prev[account] || {};
-    return { ...prev, [account]: { target: existing.target !== undefined ? existing.target : 20000, current: v } };
-  });
+  const goalTarget = goalMap[account]?.target || 20000;
+  const goalCurrent = goalMap[account]?.current || 0;
+  const setGoalTarget = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], target: v } }));
+  const setGoalCurrent = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], current: v } }));
   const [goalDeadline] = useState("2027-01-01");
   const [supaLoaded, setSupaLoaded] = useState(false);
 
@@ -3723,7 +3721,7 @@ function TwitterPanel({ apiKey, supa }) {
       )}
       {account === "@ghost" && (
         <div style={{ background: `#a29bfe15`, border: `1px solid #a29bfe30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#a29bfe" }}>
-          👻 Ghost mode — @borderline_lust · Observations 40% · Interviews 25% · Kinky 15% · Confrontational 15% · Philosophical 5%
+          👻 Ghost mode — hidden profile
         </div>
       )}
 
