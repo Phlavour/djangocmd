@@ -2407,9 +2407,6 @@ RESPOND ONLY with JSON array, one per post in order:
           {saving && <Badge color={T.amber}>saving...</Badge>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
-            {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </select>
           {supa && <Btn small color={T.purple} onClick={saveAllToSupa} disabled={saving}>💾 Save All to Supabase</Btn>}
           <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
@@ -2468,74 +2465,6 @@ RESPOND ONLY with JSON array, one per post in order:
               onFocus={e => e.target.style.borderColor = f.color} onBlur={e => e.target.style.borderColor = T.border} />
           </div>
         ))}
-
-        {/* Weekly Topics Generator */}
-        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.greenDim, borderRadius: 8, border: "1px solid "+T.greenMid }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: weeklyTopics ? 8 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 12 }}>🎯</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.green }}>Weekly Growth Topics</span>
-              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topic ideas based on your context</span>
-            </div>
-            <Btn small color={T.green} onClick={generateTopics} disabled={topicsLoading || !apiKey}>
-              {topicsLoading ? "⏳ generating..." : "🎯 Generate Topics"}
-            </Btn>
-          </div>
-          {weeklyTopics && (
-            <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, padding: 10, background: T.card, borderRadius: 6, border: "1px solid "+T.border, maxHeight: 300, overflowY: "auto" }}>
-              {weeklyTopics}
-            </div>
-          )}
-        </div>
-
-        {/* Topic Generator */}
-        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: topicIdeas ? 8 : 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: T.cyan, letterSpacing: .5, textTransform: "uppercase" }}>💡 Weekly Topic Ideas</span>
-              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topics based on your context</span>
-            </div>
-            <Btn small color={T.cyan} outline disabled={topicLoading} onClick={async () => {
-              if (!apiKey) { alert("Add Claude API key in Settings"); return; }
-              setTopicLoading(true); setTopicIdeas("");
-              try {
-                const ctx = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`${k}: ${v}`).join("\n");
-                const res = await fetch("https://api.anthropic.com/v1/messages", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-                  body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514", max_tokens: 1200,
-                    messages: [{ role: "user", content: `You are django_xbt's content strategist. Generate 15 specific post topic ideas for this week.
-
-CONTEXT:
-${ctx || "no context provided"}
-${lastAnalysis ? "\nLAST WEEK'S ANALYSIS:\n"+lastAnalysis.slice(0,800) : ""}
-
-DISTRIBUTION:
-- 6 GROWTH topics (X growth, marketing, branding, replying, AI tools, making money in web3)
-- 3 MARKET topics (trading mentality, current market, risk management)
-- 2 SHITPOSTING topics (funny observations, CT culture, ironic takes)
-- 2 LIFESTYLE topics (health, travel, personal growth, passions)
-- 2 BUSTING topics (bad actors, scams, false prophets, AI slop)
-
-For each topic give:
-- The topic idea (specific, not generic)
-- Suggested hook type (H/E/A/D/L/I/N/E)
-- Suggested structure
-- Why it could perform well
-
-Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's context and current crypto/X trends.` }]
-                  }),
-                });
-                if (!res.ok) { alert("API error: "+res.status); setTopicLoading(false); return; }
-                const data = await res.json();
-                setTopicIdeas(data.content?.map(c=>c.text||"").join("")||"no response");
-              } catch(e) { alert("Error: "+e.message); }
-              setTopicLoading(false);
-            }}>{topicLoading ? "⏳ generating..." : "🎯 Generate Topics"}</Btn>
-          </div>
-          {topicIdeas && <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, maxHeight: 400, overflow: "auto" }}>{topicIdeas}</div>}
-        </div>
 
         {wctxHistory.length > 0 && (
           <details style={{ marginTop: 6 }}>
@@ -2651,12 +2580,15 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
             active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy(tab === "DRAFT" ? "mine-first" : "default"); }}
             color={TC[tab].color} count={counts[tab]} />
         ))}
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ ...sel, marginLeft: "auto", fontSize: 11 }}>
+          {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
       </div>
 
       {/* Stats */}
@@ -2695,18 +2627,24 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
                   <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
-                    {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                    {account === "@ghost"
+                      ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>)
+                      : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)
+                    }
                   </select>
                 </div>
                 <div style={{ flex: 2 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
                   <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...sel, width: "100%" }}>
                     <option value="">-- select --</option>
-                    {(account === "@ghost" ? STRUCTURES_GHOST : STRUCTURES).map(s => <option key={s} value={s}>{s}</option>)}
+                    {account === "@ghost"
+                      ? ["The Signature","The Observation","Interview Quote","The Confrontation","Kinky Confession","Realistic Take","Beauty in Filth","Cost Comparison","Double Meaning","Sensitive Tough Guy"].map(s => <option key={s} value={s}>{s}</option>)
+                      : STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)
+                    }
                   </select>
                 </div>
               </div>
-              <div style={{ marginBottom: 10 }}>
+              {account !== "@ghost" && <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 6, textTransform: "uppercase" }}>Hook Type (HEADLINE)</div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {Object.entries(HOOKS).map(([k, h]) => {
@@ -2737,7 +2675,7 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
@@ -4797,5 +4735,6 @@ export default function App() {
     </div>
   );
 }
-/ /   v 2 5 q 1 7 b  
+/ /   v 2 5 q 1 7 b 
+ 
  
