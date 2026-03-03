@@ -114,12 +114,7 @@ const PILLAR_COLORS_FN = () => ({
 const CATEGORIES = ["growth", "market", "lifestyle", "busting", "shitposting"];
 const CATEGORIES_HENRYK = ["market", "busting", "shitposting", "growth", "ai", "lifestyle"];
 const CATEGORIES_FACELESS = ["market", "motivation", "lifestyle"];
-const CATEGORIES_GHOST = ["observations", "interviews", "kinky", "confrontational", "philosophical"];
-const STRUCTURES_GHOST = [
-  "The Signature", "The Observation", "Interview Quote", "The Confrontation",
-  "Kinky Confession", "Realistic Take", "Beauty in Filth", "Cost Comparison",
-  "Double Meaning", "Sensitive Tough Guy",
-];
+const CATEGORIES_GHOST = ["growth", "market", "lifestyle"];
 const ACCOUNT_CATEGORIES = {
   "@django_crypto": CATEGORIES, "@henryk0x": CATEGORIES_HENRYK,
   "@faceless": CATEGORIES_FACELESS, "@ghost": CATEGORIES_GHOST,
@@ -732,12 +727,12 @@ Respond ONLY with valid JSON array, no markdown:
             <Btn small color={T.green} onClick={() => moveVariantToDraft(item, variant)}>→ Draft</Btn>
             <select value={variant.category} onChange={e => updateVariant(item.id, idx, "category", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
-              {account === "@ghost" ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>) : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+              {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
               <option value="">Structure</option>
-              {account === "@ghost" ? ["The Signature","The Observation","Interview Quote","The Confrontation","Kinky Confession","Realistic Take","Beauty in Filth","Cost Comparison","Double Meaning","Sensitive Tough Guy"].map(s => <option key={s} value={s}>{s}</option>) : STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+              {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         )}
@@ -1096,12 +1091,6 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [newPostCat, setNewPostCat] = useState("growth");
   const [newPostStructure, setNewPostStructure] = useState("");
   const [newPostHook, setNewPostHook] = useState("");
-  // Reset category/structure when account changes
-  React.useEffect(() => {
-    const cats = ACCOUNT_CATEGORIES[account] || CATEGORIES;
-    setNewPostCat(cats[0] || "growth");
-    setNewPostStructure("");
-  }, [account]);
   const [showAdd, setShowAdd] = useState(false);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiResults, setAiResults] = useState({});
@@ -1190,26 +1179,7 @@ Include 2-3 topics that reference current events or trends from hot_topics.` }]
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 1500,
-          messages: [{ role: "user", content: account === "@ghost" ? `You are @borderline_lust — average looking guy, marketing professional by day, sex tourist and journalist by night. Bukowski/Bourdain style. Raw, confessional, self-deprecating.
-
-${bv ? "BRAND VOICE:\n"+bv+"\n" : ""}
-SKETCH (raw idea):
-"${sketchText}"
-
-Category: ${category || "observations"}
-${weeklyNotes ? "\nWEEKLY CONTEXT:\n"+weeklyNotes+"\n" : ""}
-
-Generate 3 DIFFERENT post variants from this sketch. Each must:
-- Use a DIFFERENT post structure from: The Signature, The Observation, Interview Quote, The Confrontation, Kinky Confession, Realistic Take, Beauty in Filth, Cost Comparison, Double Meaning, Sensitive Tough Guy
-- Be complete, ready-to-post
-- Always lowercase, no dots at end, no emojis, no hashtags
-- Profanity OK (natural), NEVER violent/non-consensual
-- Erotic yes, pornographic play-by-play NO
-- Vary LENGTH: one short (<280 chars), one medium, one longer
-- Score each 1-10
-
-RESPOND ONLY with valid JSON array:
-[{"post":"text","hook_type":"","structure":"The Observation","score":8}]` : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
+          messages: [{ role: "user", content: `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 ${bv ? "BRAND VOICE:\n"+bv+"\n" : ""}
 SKETCH from Django (raw idea / rough draft):
@@ -1548,7 +1518,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat((ACCOUNT_CATEGORIES[account] || CATEGORIES)[0] || "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat(account === "@henryk0x" ? "market" : "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -1840,7 +1810,6 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
 
     const isHenryk = account === "@henryk0x";
     const isFaceless = account === "@faceless";
-    const isGhost = account === "@ghost";
 
     const EXAMPLE_POSTS = isHenryk ? `PRZYKŁADOWE POSTY HENRYKA (studiuj ton, długość, słownictwo — WSZYSTKO PO POLSKU):
 
@@ -1858,20 +1827,7 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
 [motivation] "you don't need another strategy. you need 6 months of discipline with the one you already have. consistency compounds. impatience destroys"
 [motivation] "the gap between where you are and where you want to be is filled with reps you haven't done yet. stop planning. start executing"
 [lifestyle] "morning routine isn't about productivity hacks. it's about starting the day on YOUR terms before the world tells you what to do"
-[lifestyle] "gym taught me more about trading than any course. show up when you don't feel like it. results come from consistency not intensity"` : isGhost ? `EXAMPLE POSTS @borderline_lust (study tone — raw, confessional, Bukowski-style, first-person):
-
-[observations] "i cum way too fast. always have, probably always will. she laughed about it though - said most guys don't even last that long. somehow that made me feel worse"
-[observations] "pattaya has its vibe but it's also terribly touristic and cheap. the real ones know you gotta go deeper into the sois where the neon stops and the real conversations start"
-[observations] "sitting in a massage parlor in bangkok reading marcus aurelius on my phone while a girl named ploy painted her nails next to me. life is strange when you stop pretending it isn't"
-[interviews] "she told me guys that she sleeps with cum in less than 5 minutes. i asked - does that bother you? she said - no baby, it means i can watch my show sooner"
-[interviews] "i asked her why she does that. she said - i enjoy it, i really enjoy it. you europeans are so strict and boring you can't imagine someone choosing this"
-[interviews] "she told me the worst clients aren't the rough ones. the worst ones are the ones who want to save her. i don't need saving. i need respect and fair payment"
-[kinky] "there's something with holding them on a leash that makes the whole world disappear"
-[kinky] "oh boy i would love to decorate this face. but let's be honest - she'd have to wait about 90 seconds"
-[confrontational] "the guys who criticize me are the same guys who jerk off on pornhub 5 times a week. at least i look them in the eyes"
-[confrontational] "spending money on prostitutes is actually way cheaper than all this nonsense with dating - dinner, uber, supper, breakfast, cinema, you name it. and in the end she still might ghost you. ironic"
-[philosophical] "spending a whole sex life with one partner is like visiting one country. beautiful - but you'll always wonder"
-[philosophical] "i try to be a good human every single day. and every single night i prove to myself that good and bad live in the same body"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
+[lifestyle] "gym taught me more about trading than any course. show up when you don't feel like it. results come from consistency not intensity"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
 
 [growth] "next time someone tells you stealing a post is a thing - do yourself a favor and mute this fella. if you want to be average - sure, go for it. but if you are here to play a long term game - you should avoid being like everyone else at all costs"
 [growth] "locked in more than ever. time for a deep clean of inactive accounts that won't make it (quitoooors). i'm putting together a list of true onchain, web3 independent thinkers over the weekend. who wants in? drop your handle below"
@@ -1998,37 +1954,6 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
         structures: ["Single Insight", "Story / Narrative", "Observation → Pattern", "Mindset Shift", "Before → After", "Contrarian View"],
         advisor: "LIFESTYLE: connect fitness/health to trading/success mindset. gym = discipline training. sleep = edge maintenance. NO personal details — faceless account, universal truths only.",
       },
-    ] : isGhost ? [
-      {
-        category: "observations", count: 8,
-        subtopics: ["travel story from red light district", "absurd situation while traveling", "self-deprecating sex confession", "place description (raw, honest)", "funny moment with a girl", "cultural observation from cheap country", "bar/hotel/street scene at night", "morning after reflection"],
-        structures: ["The Observation", "Beauty in Filth", "Sensitive Tough Guy", "Double Meaning", "Realistic Take"],
-        advisor: "OBSERVATIONS: raw first-person narratives. Bukowski/Henry Miller style. humor comes from honesty, not from trying to be funny. describe places, moments, absurd situations. self-deprecating, vulnerable, real.",
-      },
-      {
-        category: "interviews", count: 5,
-        subtopics: ["her life story", "surprising answer about her work", "what clients are really like", "money and ambition", "her perspective on relationships"],
-        structures: ["Interview Quote", "Beauty in Filth", "Sensitive Tough Guy", "The Observation"],
-        advisor: "INTERVIEWS: conversations with sex workers. format: 'she told me...' or 'i asked her...'. treat them as real humans with complex stories. humanize, don't objectify. show genuine curiosity. the unexpected detail is what makes it powerful.",
-      },
-      {
-        category: "kinky", count: 3,
-        subtopics: ["desire expression", "tender perversion", "self-aware kink"],
-        structures: ["Kinky Confession", "Double Meaning", "Sensitive Tough Guy"],
-        advisor: "KINKY: short, provocative, erotic. perverse but NEVER creepy or cheap. whispered confession, not locker room talk. the line between hot and creepy is thin — stay on the hot side. often mix desire with self-deprecation (e.g. wanting something but admitting you'd last 90 seconds).",
-      },
-      {
-        category: "confrontational", count: 3,
-        subtopics: ["hypocrisy of critics", "dating vs prostitution economics", "tinder reality check"],
-        structures: ["The Confrontation", "Cost Comparison", "Realistic Take"],
-        advisor: "CONFRONTATIONAL: call out hypocrisy. people who judge but do worse. direct, unapologetic, logical. 'you dream about it, i do it.' end with 'be realistic' when appropriate. NEVER angry — cold, factual, unbothered.",
-      },
-      {
-        category: "philosophical", count: 2,
-        subtopics: ["dualism of human nature", "double meaning life observation"],
-        structures: ["Double Meaning", "Beauty in Filth", "Sensitive Tough Guy"],
-        advisor: "PHILOSOPHICAL: posts that work on two levels — seem innocent but have sexual undertone. or genuine reflections about desire, relationships, human nature. shortest posts — max 2-3 lines. make people re-read.",
-      },
     ] : [
       {
         category: "growth", count: 17,
@@ -2154,47 +2079,6 @@ CRITICAL RULES:
 
 RESPOND ONLY with valid JSON array:
 [{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"}]`
-      : isGhost ? `You are @borderline_lust — a 33-year-old marketing professional by day, sex tourist and journalist by night. Average looking guy who owns it. Travels to cheap countries in Asia and Latin America. Has a girlfriend who doesn't know about his other life. Treats sex workers with genuine respect — their lives interest you as a journalist.
-
-VOICE: Bukowski meets Anthony Bourdain. Raw, confessional, first-person. Humor from honesty, not from trying. Very casual — like talking to a friend at a bar at 3AM. Vulnerability 9/10. Self-deprecating about looks, performance, being average.
-
-${brandVoice ? `YOUR BRAND VOICE:\n${bvTrimmed}\n` : ""}
-${EXAMPLE_POSTS}
-
-═══ CATEGORY: ${batch.category.toUpperCase()} ═══
-
-SUBTOPICS (ROTATE — each post different):
-${subtopicList}
-
-STRUCTURES:
-${structList}
-
-═══ ADVISOR ═══
-${batch.advisor}
-
-${badFeedback ? `═══ POSTS THAT FAILED ═══\n${badFeedback}\n` : ""}
-${weeklyNotes ? `═══ WEEKLY CONTEXT ═══\n${weeklyNotes}\n` : ""}
-
-═══ TASK ═══
-Generate exactly ${batch.count} original posts for "${batch.category}".
-
-SIGNATURE PHRASES (use naturally, not forced):
-"tonight is the night" / "let's be honest" / "be realistic" / "i don't love to waste time" / "there's something with..." / "she told me..." / "oh boy i would love to..."
-
-CRITICAL RULES:
-- always lowercase, no dots at end, no emojis, no hashtags
-- profanity allowed naturally (fuck, shit, cum) — not excessive
-- uses sex work slang matter-of-factly (not as insults)
-- NEVER violent, NEVER non-consensual, NEVER incel/redpill
-- NEVER dehumanize sex workers — they're people with stories
-- NEVER "alpha" / "sigma" / "high value man" language
-- erotic and suggestive YES, pornographic play-by-play NO
-- be brutally honest about yourself — cum too fast, average looking, flawed
-- short posts — punchline within 2-3 lines max, most under 280 chars
-- sound like a guy confessing at 3am, not like AI
-
-RESPOND ONLY with valid JSON array:
-[{"post": "post text", "structure": "Structure Name", "subtopic": "subtopic used"}]`
       : `You are django_xbt — crypto trader, AI enthusiast, personal brand builder on Twitter/X.
 
 YOUR BRAND VOICE:
@@ -2320,23 +2204,6 @@ POSTS:
 ${postsText}
 
 JSON only: [{"score": 7.5, "feedback": "brief feedback"}]`
-              : isGhost ? `You are scoring posts for @borderline_lust — a raw, confessional sex tourism/journalism account. Bukowski style.
-
-CRITERIA:
-- Does it sound raw and confessional? (not AI-generated fluff)
-- Is it self-deprecating and honest? (vulnerability = strength)
-- Does it treat sex workers as humans? (NEVER dehumanizing)
-- Is it erotic without being pornographic? (suggestive > explicit)
-- Would it make someone uncomfortable in a way that makes them think?
-- Is profanity natural? (not forced)
-- Short and punchy? (punchline within 2-3 lines)
-
-SCORE: 9-10 exceptional, 7-8 solid, 5-6 generic, 1-4 bad/creepy
-
-POSTS:
-${postsText}
-
-JSON only: [{"score": 7.5, "feedback": "brief feedback"}]`
               : `You are django_xbt's content strategist and honest critic. Score these posts.
 
 SCORING CRITERIA:
@@ -2407,6 +2274,9 @@ RESPOND ONLY with JSON array, one per post in order:
           {saving && <Badge color={T.amber}>saving...</Badge>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sel}>
+            {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
           {supa && <Btn small color={T.purple} onClick={saveAllToSupa} disabled={saving}>💾 Save All to Supabase</Btn>}
           <Btn small color={T.cyan} onClick={reloadFromSheets} disabled={loading}>↻ Reload Sheets</Btn>
         </div>
@@ -2466,6 +2336,74 @@ RESPOND ONLY with JSON array, one per post in order:
           </div>
         ))}
 
+        {/* Weekly Topics Generator */}
+        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.greenDim, borderRadius: 8, border: "1px solid "+T.greenMid }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: weeklyTopics ? 8 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12 }}>🎯</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.green }}>Weekly Growth Topics</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topic ideas based on your context</span>
+            </div>
+            <Btn small color={T.green} onClick={generateTopics} disabled={topicsLoading || !apiKey}>
+              {topicsLoading ? "⏳ generating..." : "🎯 Generate Topics"}
+            </Btn>
+          </div>
+          {weeklyTopics && (
+            <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, padding: 10, background: T.card, borderRadius: 6, border: "1px solid "+T.border, maxHeight: 300, overflowY: "auto" }}>
+              {weeklyTopics}
+            </div>
+          )}
+        </div>
+
+        {/* Topic Generator */}
+        <div style={{ marginTop: 8, marginBottom: 8, padding: 10, background: T.surfaceAlt, borderRadius: 8, border: "1px solid "+T.border }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: topicIdeas ? 8 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: T.cyan, letterSpacing: .5, textTransform: "uppercase" }}>💡 Weekly Topic Ideas</span>
+              <span style={{ fontSize: 10, color: T.textDim }}>AI generates topics based on your context</span>
+            </div>
+            <Btn small color={T.cyan} outline disabled={topicLoading} onClick={async () => {
+              if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+              setTopicLoading(true); setTopicIdeas("");
+              try {
+                const ctx = Object.entries(wctx).filter(([,v])=>v&&v.trim()).map(([k,v])=>`${k}: ${v}`).join("\n");
+                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+                  body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514", max_tokens: 1200,
+                    messages: [{ role: "user", content: `You are django_xbt's content strategist. Generate 15 specific post topic ideas for this week.
+
+CONTEXT:
+${ctx || "no context provided"}
+${lastAnalysis ? "\nLAST WEEK'S ANALYSIS:\n"+lastAnalysis.slice(0,800) : ""}
+
+DISTRIBUTION:
+- 6 GROWTH topics (X growth, marketing, branding, replying, AI tools, making money in web3)
+- 3 MARKET topics (trading mentality, current market, risk management)
+- 2 SHITPOSTING topics (funny observations, CT culture, ironic takes)
+- 2 LIFESTYLE topics (health, travel, personal growth, passions)
+- 2 BUSTING topics (bad actors, scams, false prophets, AI slop)
+
+For each topic give:
+- The topic idea (specific, not generic)
+- Suggested hook type (H/E/A/D/L/I/N/E)
+- Suggested structure
+- Why it could perform well
+
+Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's context and current crypto/X trends.` }]
+                  }),
+                });
+                if (!res.ok) { alert("API error: "+res.status); setTopicLoading(false); return; }
+                const data = await res.json();
+                setTopicIdeas(data.content?.map(c=>c.text||"").join("")||"no response");
+              } catch(e) { alert("Error: "+e.message); }
+              setTopicLoading(false);
+            }}>{topicLoading ? "⏳ generating..." : "🎯 Generate Topics"}</Btn>
+          </div>
+          {topicIdeas && <div style={{ whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.6, color: T.text, maxHeight: 400, overflow: "auto" }}>{topicIdeas}</div>}
+        </div>
+
         {wctxHistory.length > 0 && (
           <details style={{ marginTop: 6 }}>
             <summary style={{ fontSize: 11, color: T.textDim, cursor: "pointer" }}>📜 Previous weeks ({wctxHistory.length})</summary>
@@ -2516,7 +2454,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 </label>
               )}
               <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-                {genLoading ? "⏳ Generating..." : `⚡ Generate ${account === "@ghost" ? 21 : account === "@faceless" ? 21 : account === "@henryk0x" ? 42 : 42} Posts`}
+                {genLoading ? "⏳ Generating..." : "⚡ Generate 42 Posts"}
               </Btn>
             </div>
           </div>
@@ -2580,15 +2518,12 @@ RESPOND ONLY with JSON array, one per post in order:
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {STATUS_ORDER.map(tab => (
           <TabBtn key={tab} label={`${TC[tab].icon} ${TC[tab].label}`}
             active={activeTab === tab} onClick={() => { setActiveTab(tab); setSortBy(tab === "DRAFT" ? "mine-first" : "default"); }}
             color={TC[tab].color} count={counts[tab]} />
         ))}
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ ...sel, marginLeft: "auto", fontSize: 11 }}>
-          {sortOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
       </div>
 
       {/* Stats */}
@@ -2627,24 +2562,18 @@ RESPOND ONLY with JSON array, one per post in order:
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
                   <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={sel}>
-                    {account === "@ghost"
-                      ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>)
-                      : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)
-                    }
+                    {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 2 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
                   <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...sel, width: "100%" }}>
                     <option value="">-- select --</option>
-                    {account === "@ghost"
-                      ? ["The Signature","The Observation","Interview Quote","The Confrontation","Kinky Confession","Realistic Take","Beauty in Filth","Cost Comparison","Double Meaning","Sensitive Tough Guy"].map(s => <option key={s} value={s}>{s}</option>)
-                      : STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)
-                    }
+                    {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              {account !== "@ghost" && <div style={{ marginBottom: 10 }}>
+              <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 6, textTransform: "uppercase" }}>Hook Type (HEADLINE)</div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {Object.entries(HOOKS).map(([k, h]) => {
@@ -2675,7 +2604,7 @@ RESPOND ONLY with JSON array, one per post in order:
                     ))}
                   </div>
                 )}
-              </div>}
+              </div>
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
@@ -2717,7 +2646,7 @@ RESPOND ONLY with JSON array, one per post in order:
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={{ ...sel, fontSize: 11 }}>
-                {account === "@ghost" ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>) : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
@@ -3869,7 +3798,7 @@ function TwitterPanel({ apiKey, supa }) {
       )}
       {account === "@ghost" && (
         <div style={{ background: `#a29bfe15`, border: `1px solid #a29bfe30`, borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#a29bfe" }}>
-          👻 Ghost mode — @borderline_lust · Observations 40% · Interviews 25% · Kinky 15% · Confrontational 15% · Philosophical 5%
+          👻 Ghost mode — hidden profile
         </div>
       )}
 
@@ -4735,6 +4664,3 @@ export default function App() {
     </div>
   );
 }
-/ /   v 2 5 q 1 7 b 
- 
- 
