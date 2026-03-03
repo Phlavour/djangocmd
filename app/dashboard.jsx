@@ -114,7 +114,8 @@ const PILLAR_COLORS_FN = () => ({
 const CATEGORIES = ["growth", "market", "lifestyle", "busting", "shitposting"];
 const CATEGORIES_HENRYK = ["market", "busting", "shitposting", "growth", "ai", "lifestyle"];
 const CATEGORIES_FACELESS = ["market", "motivation", "lifestyle"];
-const CATEGORIES_GHOST = ["growth", "market", "lifestyle"];
+const CATEGORIES_GHOST = ["observations", "interviews", "kinky", "confrontational", "philosophical"];
+const STRUCTURES_GHOST = ["The Signature", "The Observation", "Interview Quote", "The Confrontation", "Kinky Confession", "Realistic Take", "Beauty in Filth", "Cost Comparison", "Double Meaning", "Sensitive Tough Guy"];
 const ACCOUNT_CATEGORIES = {
   "@django_crypto": CATEGORIES, "@henryk0x": CATEGORIES_HENRYK,
   "@faceless": CATEGORIES_FACELESS, "@ghost": CATEGORIES_GHOST,
@@ -732,7 +733,7 @@ Respond ONLY with valid JSON array, no markdown:
             <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
               <option value="">Structure</option>
-              {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+              {(account === "@ghost" ? STRUCTURES_GHOST : STRUCTURES).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         )}
@@ -2569,7 +2570,7 @@ Format: numbered list, direct, no fluff. Make topics SPECIFIC to this week's con
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Structure</div>
                   <select value={newPostStructure} onChange={e => setNewPostStructure(e.target.value)} style={{ ...sel, width: "100%" }}>
                     <option value="">-- select --</option>
-                    {STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {(account === "@ghost" ? STRUCTURES_GHOST : STRUCTURES).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
