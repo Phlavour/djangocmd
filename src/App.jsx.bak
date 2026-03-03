@@ -732,12 +732,12 @@ Respond ONLY with valid JSON array, no markdown:
             <Btn small color={T.green} onClick={() => moveVariantToDraft(item, variant)}>→ Draft</Btn>
             <select value={variant.category} onChange={e => updateVariant(item.id, idx, "category", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
-              {account === "@ghost" ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>) : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+              {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select value={variant.structure} onChange={e => updateVariant(item.id, idx, "structure", e.target.value)}
               style={{ ...sel, fontSize: 10, padding: "3px 6px" }}>
               <option value="">Structure</option>
-              {account === "@ghost" ? ["The Signature","The Observation","Interview Quote","The Confrontation","Kinky Confession","Realistic Take","Beauty in Filth","Cost Comparison","Double Meaning","Sensitive Tough Guy"].map(s => <option key={s} value={s}>{s}</option>) : STRUCTURES.map(s => <option key={s} value={s}>{s}</option>)}
+              {(account === "@ghost" ? STRUCTURES_GHOST : STRUCTURES).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         )}
@@ -2717,7 +2717,7 @@ RESPOND ONLY with JSON array, one per post in order:
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <select value={newPostCat} onChange={e => setNewPostCat(e.target.value)} style={{ ...sel, fontSize: 11 }}>
-                {account === "@ghost" ? ["observations","interviews","kinky","confrontational","philosophical"].map(c => <option key={c} value={c}>{c}</option>) : (ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                {(ACCOUNT_CATEGORIES[account] || CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)}
