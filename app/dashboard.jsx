@@ -1434,7 +1434,8 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
   };
   const saveGoal = async (target, current) => {
     const t = Number(target) || 0, c = Number(current) || 0;
-    setGoalTarget(t); setGoalCurrent(c);
+    // Single atomic update to avoid React batching issues
+    setGoalMap(prev => ({ ...prev, [account]: { target: t, current: c } }));
     if (supa) {
       try {
         console.log(`🎯 Saving goal for ${account}: target=${t}, current=${c}`);
@@ -1467,7 +1468,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       const rows = posts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "", image_url: p.image_url || "", hook_type: p.hook_type || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -1500,7 +1501,7 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
       const rows = allPosts.map(p => ({
         tab: p.tab, category: p.category, structure: p.structure, post: p.post,
         notes: p.notes, score: p.score, how_to_fix: p.howToFix || "", day: p.day || "",
-        source: p.source || "", image_url: p.image_url || "", hook_type: p.hook_type || "",
+        source: p.source || "", image_url: p.image_url || "",
         post_link: p.postLink || "", impressions: p.impressions || "", likes: p.likes || "",
         engagements: p.engagements || "", bookmarks: p.bookmarks || "", replies: p.replies || "",
         reposts: p.reposts || "", profile_visits: p.profileVisits || "", new_follows: p.newFollows || "",
@@ -3751,7 +3752,7 @@ Direct, lowercase django strategist voice. No fluff. Focus on actionable insight
 // TWITTER PANEL
 // ═══════════════════════════════════════════════════════════════
 
-function TwitterPanel({ apiKey, supa }) {
+function TwitterPanel({ apiKey, supa, twitterApiKey }) {
   const [account, setAccount] = useState("@django_crypto");
   const [subTab, setSubTab] = useState("content");
   const { data: sheetData, loading, error, refetch, lastFetch } = useSheetData();
@@ -3776,16 +3777,10 @@ function TwitterPanel({ apiKey, supa }) {
   const setWeeklyNotes = (v) => setWeeklyNotesMap(prev => ({ ...prev, [account]: v }));
   const lastAnalysis = lastAnalysisMap[account] || "";
   const setLastAnalysis = (v) => setLastAnalysisMap(prev => ({ ...prev, [account]: v }));
-  const goalTarget = goalMap[account] && goalMap[account].target !== undefined ? goalMap[account].target : 20000;
-  const goalCurrent = goalMap[account] && goalMap[account].current !== undefined ? goalMap[account].current : 0;
-  const setGoalTarget = (v) => setGoalMap(prev => {
-    const existing = prev[account] || {};
-    return { ...prev, [account]: { target: v, current: existing.current !== undefined ? existing.current : 0 } };
-  });
-  const setGoalCurrent = (v) => setGoalMap(prev => {
-    const existing = prev[account] || {};
-    return { ...prev, [account]: { target: existing.target !== undefined ? existing.target : 20000, current: v } };
-  });
+  const goalTarget = goalMap[account]?.target || 20000;
+  const goalCurrent = goalMap[account]?.current || 0;
+  const setGoalTarget = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], target: v } }));
+  const setGoalCurrent = (v) => setGoalMap(prev => ({ ...prev, [account]: { ...prev[account], current: v } }));
   const [goalDeadline] = useState("2027-01-01");
   const [supaLoaded, setSupaLoaded] = useState(false);
 
@@ -4644,7 +4639,7 @@ export default function App() {
 
       {/* CONTENT */}
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
-        {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} />}
+        {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} twitterApiKey={twitterApiKey} />}
         {nav === "health" && <HealthPanel T={T} />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
