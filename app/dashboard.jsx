@@ -1438,19 +1438,28 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
     setGoalMap(prev => ({ ...prev, [account]: { target: t, current: c } }));
     if (supa) {
       try {
-        console.log(`🎯 Saving goal for ${account}: target=${t}, current=${c}`);
-        const result = await supa.patch("goal", `account=eq.${account}`, { target_followers: t, current_followers: c, deadline: goalDeadline });
-        console.log(`🎯 Goal patch result:`, result);
-        // patch returns empty array if no rows matched — need to insert
-        if (!result || (Array.isArray(result) && result.length === 0)) {
-          console.log(`🎯 No existing goal row, inserting new...`);
-          const ins = await supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]);
-          console.log(`🎯 Goal insert result:`, ins);
+        console.log(`🎯 SAVE goal for ${account}: target=${t}, current=${c}`);
+        const patchResp = await fetch(`${supa.url}/rest/v1/goal?account=eq.${encodeURIComponent(account)}`, {
+          method: "PATCH", headers: supa.headers,
+          body: JSON.stringify({ target_followers: t, current_followers: c })
+        });
+        const patchBody = await patchResp.text();
+        console.log(`🎯 PATCH status=${patchResp.status} body=${patchBody}`);
+        // If no rows matched (empty array) or 404, insert new row
+        if (patchResp.status === 404 || patchBody === "[]" || !patchResp.ok) {
+          console.log(`🎯 No existing row or error, inserting...`);
+          const insResp = await fetch(`${supa.url}/rest/v1/goal`, {
+            method: "POST", headers: supa.headers,
+            body: JSON.stringify([{ account, target_followers: t, current_followers: c }])
+          });
+          const insBody = await insResp.text();
+          console.log(`🎯 INSERT status=${insResp.status} body=${insBody}`);
         }
       } catch (err) {
-        console.error(`🎯 Goal save error:`, err);
-        try { await supa.post("goal", [{ account, target_followers: t, current_followers: c, deadline: goalDeadline }]); } catch {}
+        console.error(`🎯 Goal save EXCEPTION:`, err);
       }
+    } else {
+      console.warn(`🎯 supa is null — cannot save goal`);
     }
   };
 
@@ -3807,6 +3816,7 @@ function TwitterPanel({ apiKey, supa, twitterApiKey }) {
         for (const acct of ["@django_crypto", "@henryk0x", "@faceless", "@ghost"]) {
           const acctSlug = acct.replace("@", "");
           const goals = await supa.get("goal", `account=eq.${acct}`);
+          console.log(`🎯 LOAD goal for ${acct}:`, JSON.stringify(goals));
           if (Array.isArray(goals) && goals[0]) {
             const g = goals[0];
             setGoalMap(prev => ({ ...prev, [acct]: { target: Number(g.target_followers) || 20000, current: Number(g.current_followers) || 0 } }));
