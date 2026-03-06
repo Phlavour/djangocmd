@@ -335,6 +335,58 @@ function DailyResearch({ account, apiKey, twitterApiKey, supa, allPosts, setAllP
   const [fetchLoading, setFetchLoading] = useState(null); // which prompt is loading
   const [fetchStatus, setFetchStatus] = useState("");
 
+  // ─── Saved Prompts (persisted in Supabase) ───
+  const [savedPrompts, setSavedPrompts] = useState([]);
+  const [showPromptManager, setShowPromptManager] = useState(false);
+  const [newPromptName, setNewPromptName] = useState("");
+  const [newPromptText, setNewPromptText] = useState("");
+  const [editingPromptId, setEditingPromptId] = useState(null);
+  const [copiedPromptId, setCopiedPromptId] = useState(null);
+
+  // Load saved prompts from Supabase
+  useEffect(() => {
+    if (!supa?.url || !supa?.key) return;
+    fetch(`${supa.url}/rest/v1/settings?key=like.research_prompt_*&order=key.asc`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(rows => {
+        if (Array.isArray(rows)) {
+          const prompts = rows.map(r => {
+            try { const p = JSON.parse(r.value); return { id: r.key, name: p.name || r.key, text: p.text || "" }; }
+            catch { return { id: r.key, name: r.key, text: r.value }; }
+          });
+          setSavedPrompts(prompts);
+        }
+      }).catch(() => {});
+  }, [supa?.url, supa?.key]);
+
+  // Save prompt to Supabase
+  const savePrompt = async (name, text, existingId) => {
+    if (!name.trim() || !text.trim()) return;
+    const key = existingId || `research_prompt_${Date.now()}`;
+    const val = JSON.stringify({ name: name.trim(), text: text.trim() });
+    if (supa) {
+      try { await supa.upsert("settings", { key, value: val }); } catch {}
+    }
+    setSavedPrompts(prev => {
+      const existing = prev.findIndex(p => p.id === key);
+      if (existing >= 0) { const u = [...prev]; u[existing] = { id: key, name: name.trim(), text: text.trim() }; return u; }
+      return [...prev, { id: key, name: name.trim(), text: text.trim() }];
+    });
+    setNewPromptName(""); setNewPromptText(""); setEditingPromptId(null);
+  };
+
+  // Delete prompt from Supabase
+  const deletePrompt = async (id) => {
+    if (!confirm("Delete this prompt?")) return;
+    if (supa) { try { await supa.del("settings", `key=eq.${encodeURIComponent(id)}`); } catch {} }
+    setSavedPrompts(prev => prev.filter(p => p.id !== id));
+  };
+
+  // Copy to clipboard
+  const copyPrompt = (text, id) => {
+    navigator.clipboard.writeText(text).then(() => { setCopiedPromptId(id); setTimeout(() => setCopiedPromptId(null), 2000); });
+  };
+
   // ─── 4 Research Prompt Definitions ───
   const RESEARCH_PROMPTS = [
     {
@@ -895,6 +947,88 @@ Respond ONLY with valid JSON array, no markdown:
         {fetchStatus && (
           <div style={{ fontSize: 11, color: fetchLoading ? T.textSoft : fetchStatus.includes("Error") ? T.red : T.green, padding: "6px 0", fontFamily: "'IBM Plex Mono', monospace" }}>
             {fetchStatus}
+          </div>
+        )}
+      </Card>
+
+      {/* ─── Saved Grok Prompts ─── */}
+      <Card style={{ marginBottom: 16 }}>
+        <Heading icon="📄" right={
+          <Btn small outline onClick={() => setShowPromptManager(!showPromptManager)}>
+            {showPromptManager ? "Hide" : savedPrompts.length ? `${savedPrompts.length} saved` : "+ Add Prompt"}
+          </Btn>
+        }>Grok Prompts</Heading>
+
+        {!showPromptManager && savedPrompts.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+            {savedPrompts.map(p => (
+              <button key={p.id} onClick={() => copyPrompt(p.text, p.id)}
+                style={{
+                  background: copiedPromptId === p.id ? `${T.green}15` : T.bg2,
+                  border: `1px solid ${copiedPromptId === p.id ? T.green : T.border}`,
+                  borderRadius: 8, padding: "12px 10px", cursor: "pointer", textAlign: "left", transition: "all .15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = T.green}
+                onMouseLeave={e => { if (copiedPromptId !== p.id) e.currentTarget.style.borderColor = T.border; }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: copiedPromptId === p.id ? T.green : T.text, marginBottom: 4 }}>
+                  {copiedPromptId === p.id ? "✓ Copied!" : p.name}
+                </div>
+                <div style={{ fontSize: 9, color: T.textDim }}>{p.text.slice(0, 60)}...</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showPromptManager && (
+          <div>
+            {/* Existing prompts */}
+            {savedPrompts.map(p => (
+              <div key={p.id} style={{ background: T.bg2, borderRadius: 8, padding: 12, marginBottom: 8, border: `1px solid ${T.border}` }}>
+                {editingPromptId === p.id ? (
+                  <div>
+                    <input value={newPromptName} onChange={e => setNewPromptName(e.target.value)}
+                      placeholder="Prompt name"
+                      style={{ width: "100%", padding: "6px 8px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 12, marginBottom: 6, outline: "none", boxSizing: "border-box", fontFamily: "'Satoshi', sans-serif", fontWeight: 600 }} />
+                    <textarea value={newPromptText} onChange={e => setNewPromptText(e.target.value)}
+                      style={{ width: "100%", minHeight: 150, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", outline: "none", boxSizing: "border-box", lineHeight: 1.5 }} />
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <Btn small color={T.green} onClick={() => savePrompt(newPromptName, newPromptText, p.id)}>Save</Btn>
+                      <Btn small outline onClick={() => { setEditingPromptId(null); setNewPromptName(""); setNewPromptText(""); }}>Cancel</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.name}</span>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <Btn small color={copiedPromptId === p.id ? T.green : T.cyan} onClick={() => copyPrompt(p.text, p.id)}>
+                          {copiedPromptId === p.id ? "✓ Copied" : "Copy"}
+                        </Btn>
+                        <Btn small outline onClick={() => { setEditingPromptId(p.id); setNewPromptName(p.name); setNewPromptText(p.text); }}>Edit</Btn>
+                        <Btn small outline onClick={() => deletePrompt(p.id)} style={{ color: T.red, borderColor: T.red }}>✕</Btn>
+                      </div>
+                    </div>
+                    <pre style={{ fontSize: 10, color: T.textDim, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 120, overflow: "auto", lineHeight: 1.4 }}>{p.text}</pre>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Add new prompt */}
+            {!editingPromptId && (
+              <div style={{ background: T.surface, borderRadius: 8, padding: 12, border: `1px dashed ${T.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.textSoft, marginBottom: 8 }}>Add New Prompt</div>
+                <input value={newPromptName} onChange={e => setNewPromptName(e.target.value)}
+                  placeholder="Prompt name (e.g. Crypto Twitter, Marketing & Growth)"
+                  style={{ width: "100%", padding: "6px 8px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 12, marginBottom: 6, outline: "none", boxSizing: "border-box", fontFamily: "'Satoshi', sans-serif", fontWeight: 600 }} />
+                <textarea value={newPromptText} onChange={e => setNewPromptText(e.target.value)}
+                  placeholder="Paste your Grok prompt here..."
+                  style={{ width: "100%", minHeight: 120, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, color: T.text, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", outline: "none", boxSizing: "border-box", lineHeight: 1.5 }} />
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <Btn small color={T.green} onClick={() => savePrompt(newPromptName, newPromptText)}>💾 Save Prompt</Btn>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
