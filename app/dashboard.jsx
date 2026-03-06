@@ -1109,8 +1109,11 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
   const [genLoading, setGenLoading] = useState(false);
   const [weeklyNotesSaving, setWeeklyNotesSaving] = useState(false);
   const weeklyNotesTimer = useRef(null);
-  const [wctx, setWctx] = useState({ hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" });
+  const [wctxMap, setWctxMap] = useState({});
   const [wctxHistory, setWctxHistory] = useState([]);
+  const EMPTY_WCTX = { hot_topics: "", personal: "", avoid: "", ai_notes: "", seasonal: "" };
+  const wctx = wctxMap[account] || EMPTY_WCTX;
+  const setWctx = (v) => setWctxMap(prev => ({ ...prev, [account]: typeof v === "function" ? v(prev[account] || EMPTY_WCTX) : v }));
 
   // Generate weekly growth topics
   const generateTopics = async () => {
@@ -1158,7 +1161,7 @@ Include 2-3 topics that reference current events or trends from hot_topics.` }]
       .then(r => r.ok ? r.json() : []).then(setWctxHistory).catch(() => {});
   }, [supa?.url, supa?.key, account]);
 
-  // Parse existing weeklyNotes into wctx fields on load
+  // Parse existing weeklyNotes into wctx fields on load or account change
   useEffect(() => {
     if (!weeklyNotes) return;
     const parsed = {};
@@ -1167,7 +1170,7 @@ Include 2-3 topics that reference current events or trends from hot_topics.` }]
       if (m) parsed[m[1].toLowerCase()] = (parsed[m[1].toLowerCase()] ? parsed[m[1].toLowerCase()] + "\n" : "") + m[2];
     });
     if (Object.keys(parsed).length > 0) setWctx(prev => ({ ...prev, ...parsed }));
-  }, []); // only on mount
+  }, [account, weeklyNotes]);
   const [genProgress, setGenProgress] = useState("");
   const [rewriteId, setRewriteId] = useState(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
