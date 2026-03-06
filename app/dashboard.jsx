@@ -142,6 +142,7 @@ const STRUCTURES = [
   "One-liner / Hot take",
   "Meme / Relatable",
   "Thread opener",
+  "Lists",
 ];
 
 const HOOKS = {
@@ -394,52 +395,51 @@ function DailyResearch({ account, apiKey, twitterApiKey, supa, allPosts, setAllP
   const PC = PILLAR_COLORS_FN();
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
 
-  // ─── Fetch research via Grok API ───
-  const fetchFromGrok = async (prompt) => {
-    if (!twitterApiKey) { alert("Add Grok API key in Settings (⚙)"); return; }
+  // ─── Fetch research via Claude API (with web search) ───
+  const fetchResearch = async (prompt) => {
+    if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
     setFetchLoading(prompt.id);
-    setFetchStatus(`Sending "${prompt.name}" to Grok...`);
+    setFetchStatus(`Running "${prompt.name}" via Claude...`);
     try {
       // Replace [DATE] placeholder with today's date
       const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
       const promptText = prompt.text.replace(/\[DATE\]/g, today);
 
-      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${twitterApiKey}` },
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "grok-3",
+          model: "claude-sonnet-4-20250514", max_tokens: 4000,
           messages: [{ role: "user", content: promptText }],
-          temperature: 0.7,
         }),
       });
 
       if (!res.ok) {
         const errBody = await res.text();
-        console.error(`Grok API error: ${res.status}`, errBody);
-        setFetchStatus(`Error: Grok API returned ${res.status}`);
+        console.error(`Claude API error: ${res.status}`, errBody);
+        setFetchStatus(`Error: API returned ${res.status}`);
         setFetchLoading(null);
         return;
       }
 
       const data = await res.json();
-      const grokOutput = data.choices?.[0]?.message?.content || "";
+      const output = data.content?.map(c => c.text || "").join("") || "";
 
-      if (!grokOutput.trim()) {
-        setFetchStatus("Grok returned empty response");
+      if (!output.trim()) {
+        setFetchStatus("Empty response from Claude");
         setFetchLoading(null);
         return;
       }
 
-      // Parse Grok output into research items (same as parseGrokInput)
-      const blocks = grokOutput.split(/(?=^\d+[\.\)]\s)/m).filter(b => b.trim().length > 10);
-      const items = blocks.length > 1 ? blocks : grokOutput.split("\n\n").filter(b => b.trim().length > 10);
+      // Parse output into research items (numbered list format)
+      const blocks = output.split(/(?=^\d+[\.\)]\s)/m).filter(b => b.trim().length > 10);
+      const items = blocks.length > 1 ? blocks : output.split("\n\n").filter(b => b.trim().length > 10);
 
       const newItems = items.map((block, i) => {
         const lines = block.trim().split("\n");
         const headlineRaw = lines[0].replace(/^\d+[\.\)]\s*/, "").trim();
         const bodyLines = lines.slice(1);
-        const urlMatch = block.match(/https?:\/\/[^\s\)]+/);
+        const urlMatch = block.match(/https?:\/\/[^\s\)\]]+/);
         const authorMatch = block.match(/(?:Source|Author|By):\s*([^\n\(]+)/i) || block.match(/@(\w+)/);
 
         return {
@@ -460,7 +460,7 @@ function DailyResearch({ account, apiKey, twitterApiKey, supa, allPosts, setAllP
       setResearch(prev => [...newItems, ...prev]);
       setFetchStatus(`${newItems.length} items added from "${prompt.name}"`);
     } catch (err) {
-      console.error("Grok fetch error:", err);
+      console.error("Research fetch error:", err);
       setFetchStatus(`Error: ${err.message}`);
     }
     setFetchLoading(null);
@@ -884,22 +884,22 @@ Respond ONLY with valid JSON array, no markdown:
       <Card style={{ marginBottom: 16 }}>
         <Heading icon="🔍" right={
           <div style={{ display: "flex", gap: 6 }}>
-            {twitterApiKey && <Badge color={T.cyan}>Grok connected</Badge>}
-            {!twitterApiKey && <Badge color={T.red}>add Grok API key in Settings</Badge>}
+            {apiKey && <Badge color={T.cyan}>Claude API connected</Badge>}
+            {!apiKey && <Badge color={T.red}>add Claude API key in Settings</Badge>}
           </div>
-        }>Fetch Research via Grok</Heading>
+        }>Fetch Research</Heading>
         {savedPrompts.length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(savedPrompts.length, 4)}, 1fr)`, gap: 10, marginBottom: 10 }}>
             {savedPrompts.map((p, i) => {
               const color = PROMPT_COLORS[i % PROMPT_COLORS.length];
               const icon = PROMPT_ICONS[i % PROMPT_ICONS.length];
               return (
-                <button key={p.id} disabled={fetchLoading !== null || !twitterApiKey}
-                  onClick={() => fetchFromGrok(p)}
+                <button key={p.id} disabled={fetchLoading !== null || !apiKey}
+                  onClick={() => fetchResearch(p)}
                   style={{
                     background: fetchLoading === p.id ? `${color}15` : T.bg2,
                     border: `1px solid ${fetchLoading === p.id ? color : T.border}`,
-                    borderRadius: 10, padding: "16px 12px", cursor: twitterApiKey ? "pointer" : "not-allowed",
+                    borderRadius: 10, padding: "16px 12px", cursor: apiKey ? "pointer" : "not-allowed",
                     opacity: (fetchLoading !== null && fetchLoading !== p.id) ? 0.4 : 1,
                     transition: "all .15s", textAlign: "center",
                   }}
@@ -1659,9 +1659,10 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
 
   const addPost = async () => {
     if (!newPostText.trim()) return;
+    const targetTab = activeTab === "POST" ? "POST" : "DRAFT";
     const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
     const newPost = {
-      id: newId, tab: "DRAFT", category: newPostCat, structure: newPostStructure,
+      id: newId, tab: targetTab, category: newPostCat, structure: newPostStructure,
       post: newPostText.trim(), notes: newPostHook ? `hook: ${newPostHook}` : "", score: "", howToFix: "", day: "",
       source: "manual", image_url: newPostImage.trim() || "", account: account, hook_type: newPostHook || "",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
@@ -2738,11 +2739,11 @@ RESPOND ONLY with JSON array, one per post in order:
       )}
 
       {/* Add Post */}
-      {isDraft && (
+      {(isDraft || isPost) && (
         <div style={{ marginBottom: 16 }}>
           {showAdd ? (
             <Card>
-              <Heading icon="✎">New Draft</Heading>
+              <Heading icon="✎">New {isPost ? "Post" : "Draft"}</Heading>
               <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textTransform: "uppercase" }}>Category</div>
@@ -2816,7 +2817,7 @@ RESPOND ONLY with JSON array, one per post in order:
               </div>
               {newPostImage && <img src={newPostImage} alt="preview" style={{ maxWidth: 200, maxHeight: 120, borderRadius: 6, marginTop: 6, objectFit: "cover", border: `1px solid ${T.border}` }} />}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <Btn color={T.green} onClick={addPost}>Add to Draft</Btn>
+                <Btn color={T.green} onClick={addPost}>Add to {activeTab === "POST" ? "Post" : "Draft"}</Btn>
                 <Btn outline onClick={() => { setShowAdd(false); setNewPostText(""); }}>Cancel</Btn>
               </div>
             </Card>
