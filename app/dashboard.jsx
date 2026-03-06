@@ -139,10 +139,14 @@ const STRUCTURES = [
   "Mindset shift",
   "Discipline story",
   "Health/productivity tip",
-  "One-liner / Hot take",
   "Meme / Relatable",
-  "Thread opener",
   "Lists",
+  "GM Post",
+  "Question → Answer",
+  "One-liner",
+  "Hot take",
+  "Observation → Pattern",
+  "Comparison / VS",
 ];
 
 const HOOKS = {
@@ -1755,6 +1759,55 @@ Respond ONLY in JSON: {"score": 7.5, "notes": "subtopic: X · One sentence why t
     } catch (err) { console.error("AutoScore error:", err); }
   };
 
+  // AI - define structure of a post
+  const [defineLoading, setDefineLoading] = useState(null);
+  const defineStructure = async (post) => {
+    if (!apiKey || !post.post) return;
+    setDefineLoading(post.id);
+    try {
+      const structList = (account === "@ghost" ? STRUCTURES_GHOST : STRUCTURES).join(", ");
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 300,
+          messages: [{ role: "user", content: `Analyze this post and determine its structure type.
+
+Post: "${post.post}"
+
+KNOWN STRUCTURES: ${structList}
+
+If the post matches one of the known structures, respond with ONLY that structure name on the first line.
+If the post uses a NEW structure not in the list, respond with a short name for it on the first line, then on the second line write "NEW: " followed by a brief description of the pattern.
+
+Examples:
+- "GM Post"
+- "Comparison / VS"
+- "Milestone celebration\nNEW: Celebrates a personal achievement/milestone with context about the journey"
+
+Respond with ONLY the structure name (and optional NEW line). Nothing else.` }]
+        }),
+      });
+      const data = await res.json();
+      const text = (data.content?.[0]?.text || "").trim();
+      const lines = text.split("\n");
+      const structName = lines[0].trim();
+      const isNew = lines[1]?.startsWith("NEW:");
+
+      // Update post structure
+      setAllPosts(p => p.map(x => x.id === post.id ? { ...x, structure: structName, notes: isNew ? `${x.notes ? x.notes + " | " : ""}${lines[1].trim()}` : x.notes } : x));
+      if (supa && post._supaId) {
+        supa.patch("posts", `id=eq.${post._supaId}`, { structure: structName });
+      }
+
+      // Alert if new structure detected
+      if (isNew) {
+        alert(`🆕 New structure detected: "${structName}"\n\n${lines[1].replace("NEW: ", "")}\n\nConsider adding it to your structures list!`);
+      }
+    } catch (err) { console.error("Define structure error:", err); }
+    setDefineLoading(null);
+  };
+
   // AI - explain post (triggered by Claude button, shows explanation)
   const askClaude = async (text, pid, category, imageUrl) => {
     if (!apiKey) { alert("Add Claude API key in Settings (⚙)"); return; }
@@ -2927,6 +2980,19 @@ RESPOND ONLY with JSON array, one per post in order:
                   {p.source === "manual" && <Badge color={T.cyan}>✍ Manual</Badge>}
                   {p.category && <Badge color={PC[p.category] || PC[p.category.charAt(0).toUpperCase() + p.category.slice(1)] || T.textSoft}>{p.category}</Badge>}
                   {p.structure && <Badge color={T.textDim}>{p.structure}</Badge>}
+                  {!p.structure && p.post && !isUsed && (
+                    <button onClick={() => defineStructure(p)} disabled={defineLoading === p.id}
+                      style={{ background: "none", border: `1px dashed ${T.border}`, borderRadius: 6, padding: "2px 8px", fontSize: 9, color: T.textDim, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {defineLoading === p.id ? "⏳" : "Define"}
+                    </button>
+                  )}
+                  {p.structure && p.post && !isUsed && (
+                    <button onClick={() => defineStructure(p)} disabled={defineLoading === p.id}
+                      style={{ background: "none", border: "none", padding: "2px 4px", fontSize: 9, color: T.textDim, cursor: "pointer", opacity: 0.5 }}
+                      title="Re-analyze structure">
+                      {defineLoading === p.id ? "⏳" : "↻"}
+                    </button>
+                  )}
                   {p.score && <Badge color={parseFloat(p.score) >= 8.5 ? T.green : parseFloat(p.score) >= 7 ? T.amber : T.textSoft}>⭐ {p.score}</Badge>}
                   {p.day && <Badge color={T.cyan}>📅 {p.day}</Badge>}
                 </div>
