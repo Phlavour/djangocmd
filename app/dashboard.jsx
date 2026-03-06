@@ -387,113 +387,80 @@ function DailyResearch({ account, apiKey, twitterApiKey, supa, allPosts, setAllP
     navigator.clipboard.writeText(text).then(() => { setCopiedPromptId(id); setTimeout(() => setCopiedPromptId(null), 2000); });
   };
 
-  // ─── 4 Research Prompt Definitions ───
-  const RESEARCH_PROMPTS = [
-    {
-      id: "crypto",
-      label: "Crypto",
-      icon: "₿",
-      color: T.amber,
-      queries: [
-        { q: "crypto news min_faves:500", label: "Crypto News" },
-        { q: "crypto scam OR rug OR hack min_faves:200", label: "Scams & Rugs" },
-        { q: "crypto drama OR controversy min_faves:300", label: "CT Drama" },
-        { q: "new token launch OR airdrop crypto min_faves:200", label: "New Trends" },
-      ],
-    },
-    {
-      id: "marketing",
-      label: "Marketing",
-      icon: "📈",
-      color: T.green,
-      queries: [
-        { q: "marketing strategy OR growth hack min_faves:500", label: "Growth Strategies" },
-        { q: "personal branding OR content creation min_faves:300", label: "Personal Brand" },
-        { q: "viral campaign OR case study marketing min_faves:300", label: "Viral Campaigns" },
-        { q: "audience building OR creator economy min_faves:200", label: "Creator Economy" },
-      ],
-    },
-    {
-      id: "trading",
-      label: "Trading",
-      icon: "📊",
-      color: T.cyan,
-      queries: [
-        { q: "from:robert_ruszala OR from:IncomeSharks OR from:omzcharts", label: "Trading Accounts" },
-        { q: "bitcoin technical analysis min_faves:300", label: "BTC Analysis" },
-        { q: "crypto trade setup OR risk management min_faves:200", label: "Trade Setups" },
-        { q: "market structure OR support resistance crypto min_faves:200", label: "Market Structure" },
-      ],
-    },
-    {
-      id: "controversy",
-      label: "Controversy",
-      icon: "🔥",
-      color: T.red,
-      queries: [
-        { q: "controversial take OR hot take min_faves:1000", label: "Hot Takes" },
-        { q: "drama OR scandal viral min_faves:2000", label: "Viral Drama" },
-        { q: "unpopular opinion min_faves:500", label: "Unpopular Opinions" },
-        { q: "ratio OR call out min_faves:1000", label: "Ratio & Callouts" },
-      ],
-    },
-  ];
+  // Prompt colors for dynamic buttons
+  const PROMPT_COLORS = [T.amber, T.green, T.cyan, T.red, T.purple, T.blue];
+  const PROMPT_ICONS = ["₿", "📈", "📊", "🔥", "🎯", "💡"];
 
   const PC = PILLAR_COLORS_FN();
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
 
-  // ─── Fetch tweets from TwitterAPI.io ───
-  const fetchFromTwitterAPI = async (prompt) => {
-    if (!twitterApiKey) { alert("Add TwitterAPI.io key in Settings (⚙)"); return; }
+  // ─── Fetch research via Grok API ───
+  const fetchFromGrok = async (prompt) => {
+    if (!twitterApiKey) { alert("Add Grok API key in Settings (⚙)"); return; }
     setFetchLoading(prompt.id);
-    setFetchStatus(`Fetching ${prompt.label}...`);
-    const allTweets = [];
+    setFetchStatus(`Sending "${prompt.name}" to Grok...`);
     try {
-      for (const q of prompt.queries) {
-        setFetchStatus(`Fetching: ${q.label}...`);
-        const url = `https://api.twitterapi.io/twitter/tweet/advanced_search?query=${encodeURIComponent(q.q)}&queryType=Top`;
-        const res = await fetch(url, { headers: { "X-API-Key": twitterApiKey } });
-        if (!res.ok) { console.error(`TwitterAPI error: ${res.status}`); continue; }
-        const data = await res.json();
-        if (data.tweets && data.tweets.length > 0) {
-          // Take top 5 per query, filter duplicates
-          const top = data.tweets.slice(0, 5).filter(t => !allTweets.some(ex => ex.id === t.id));
-          allTweets.push(...top);
-        }
-        // Small delay between calls
-        await new Promise(r => setTimeout(r, 300));
-      }
+      // Replace [DATE] placeholder with today's date
+      const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const promptText = prompt.text.replace(/\[DATE\]/g, today);
 
-      if (allTweets.length === 0) {
-        setFetchStatus("No tweets found — try different queries");
+      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${twitterApiKey}` },
+        body: JSON.stringify({
+          model: "grok-3",
+          messages: [{ role: "user", content: promptText }],
+          temperature: 0.7,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error(`Grok API error: ${res.status}`, errBody);
+        setFetchStatus(`Error: Grok API returned ${res.status}`);
         setFetchLoading(null);
         return;
       }
 
-      // Convert tweets to research items
-      const newItems = allTweets.map((tweet, i) => ({
-        id: Date.now() + i,
-        date: new Date().toISOString().slice(0, 10),
-        originalUrl: tweet.url || `https://x.com/${tweet.author?.userName}/status/${tweet.id}`,
-        author: tweet.author?.userName || "",
-        originalPost: tweet.text || "",
-        headline: (tweet.text || "").slice(0, 100).replace(/\n/g, " "),
-        description: `${(tweet.viewCount || 0).toLocaleString()} views · ${(tweet.likeCount || 0).toLocaleString()} likes · ${(tweet.replyCount || 0).toLocaleString()} replies · ${(tweet.retweetCount || 0).toLocaleString()} RTs`,
-        variants: [],
-        status: "inbox",
-        account,
-        source: prompt.id,
-        engagement: {
-          views: tweet.viewCount || 0,
-          likes: tweet.likeCount || 0,
-          replies: tweet.replyCount || 0,
-          retweets: tweet.retweetCount || 0,
-        },
-      }));
+      const data = await res.json();
+      const grokOutput = data.choices?.[0]?.message?.content || "";
+
+      if (!grokOutput.trim()) {
+        setFetchStatus("Grok returned empty response");
+        setFetchLoading(null);
+        return;
+      }
+
+      // Parse Grok output into research items (same as parseGrokInput)
+      const blocks = grokOutput.split(/(?=^\d+[\.\)]\s)/m).filter(b => b.trim().length > 10);
+      const items = blocks.length > 1 ? blocks : grokOutput.split("\n\n").filter(b => b.trim().length > 10);
+
+      const newItems = items.map((block, i) => {
+        const lines = block.trim().split("\n");
+        const headlineRaw = lines[0].replace(/^\d+[\.\)]\s*/, "").trim();
+        const bodyLines = lines.slice(1);
+        const urlMatch = block.match(/https?:\/\/[^\s\)]+/);
+        const authorMatch = block.match(/(?:Source|Author|By):\s*([^\n\(]+)/i) || block.match(/@(\w+)/);
+
+        return {
+          id: Date.now() + i,
+          date: new Date().toISOString().slice(0, 10),
+          originalUrl: urlMatch ? urlMatch[0] : "",
+          author: authorMatch ? authorMatch[1].trim() : "",
+          originalPost: bodyLines.join("\n").trim(),
+          headline: headlineRaw,
+          description: "",
+          variants: [],
+          status: "inbox",
+          account,
+          source: prompt.name.toLowerCase().replace(/\s+/g, "_"),
+        };
+      });
 
       setResearch(prev => [...newItems, ...prev]);
-      setFetchStatus(`${newItems.length} tweets added to Inbox from ${prompt.label}`);
+      setFetchStatus(`${newItems.length} items added from "${prompt.name}"`);
     } catch (err) {
+      console.error("Grok fetch error:", err);
       setFetchStatus(`Error: ${err.message}`);
     }
     setFetchLoading(null);
@@ -913,37 +880,47 @@ Respond ONLY with valid JSON array, no markdown:
   // ═══════════════════════════════════════════════
   return (
     <div>
-      {/* ─── 4 Research Prompt Buttons ─── */}
+      {/* ─── Grok Research Buttons (from saved prompts) ─── */}
       <Card style={{ marginBottom: 16 }}>
         <Heading icon="🔍" right={
           <div style={{ display: "flex", gap: 6 }}>
-            {twitterApiKey && <Badge color={T.cyan}>API connected</Badge>}
-            {!twitterApiKey && <Badge color={T.red}>add TwitterAPI key in Settings</Badge>}
+            {twitterApiKey && <Badge color={T.cyan}>Grok connected</Badge>}
+            {!twitterApiKey && <Badge color={T.red}>add Grok API key in Settings</Badge>}
           </div>
-        }>Fetch Research from X</Heading>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 }}>
-          {RESEARCH_PROMPTS.map(p => (
-            <button key={p.id} disabled={fetchLoading !== null || !twitterApiKey}
-              onClick={() => fetchFromTwitterAPI(p)}
-              style={{
-                background: fetchLoading === p.id ? `${p.color}15` : T.bg2,
-                border: `1px solid ${fetchLoading === p.id ? p.color : T.border}`,
-                borderRadius: 10, padding: "16px 12px", cursor: twitterApiKey ? "pointer" : "not-allowed",
-                opacity: (fetchLoading !== null && fetchLoading !== p.id) ? 0.4 : 1,
-                transition: "all .15s", textAlign: "center",
-              }}
-              onMouseEnter={e => { if (!fetchLoading) e.currentTarget.style.borderColor = p.color; }}
-              onMouseLeave={e => { if (fetchLoading !== p.id) e.currentTarget.style.borderColor = T.border; }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{p.icon}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: p.color, fontFamily: "'Satoshi', sans-serif" }}>
-                {fetchLoading === p.id ? "Fetching..." : p.label}
-              </div>
-              <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>
-                {p.queries.length} queries
-              </div>
-            </button>
-          ))}
-        </div>
+        }>Fetch Research via Grok</Heading>
+        {savedPrompts.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(savedPrompts.length, 4)}, 1fr)`, gap: 10, marginBottom: 10 }}>
+            {savedPrompts.map((p, i) => {
+              const color = PROMPT_COLORS[i % PROMPT_COLORS.length];
+              const icon = PROMPT_ICONS[i % PROMPT_ICONS.length];
+              return (
+                <button key={p.id} disabled={fetchLoading !== null || !twitterApiKey}
+                  onClick={() => fetchFromGrok(p)}
+                  style={{
+                    background: fetchLoading === p.id ? `${color}15` : T.bg2,
+                    border: `1px solid ${fetchLoading === p.id ? color : T.border}`,
+                    borderRadius: 10, padding: "16px 12px", cursor: twitterApiKey ? "pointer" : "not-allowed",
+                    opacity: (fetchLoading !== null && fetchLoading !== p.id) ? 0.4 : 1,
+                    transition: "all .15s", textAlign: "center",
+                  }}
+                  onMouseEnter={e => { if (!fetchLoading) e.currentTarget.style.borderColor = color; }}
+                  onMouseLeave={e => { if (fetchLoading !== p.id) e.currentTarget.style.borderColor = T.border; }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: color, fontFamily: "'Satoshi', sans-serif" }}>
+                    {fetchLoading === p.id ? "Fetching..." : p.name}
+                  </div>
+                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>
+                    {p.text.length > 100 ? "click to run" : "short prompt"}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ padding: "16px 0", textAlign: "center", color: T.textDim, fontSize: 12 }}>
+            No prompts saved yet — add prompts in the "Grok Prompts" section below
+          </div>
+        )}
         {fetchStatus && (
           <div style={{ fontSize: 11, color: fetchLoading ? T.textSoft : fetchStatus.includes("Error") ? T.red : T.green, padding: "6px 0", fontFamily: "'IBM Plex Mono', monospace" }}>
             {fetchStatus}
@@ -1156,7 +1133,7 @@ Respond ONLY with valid JSON array, no markdown:
 
       {/* ─── Footer ─── */}
       <div style={{ marginTop: 20, padding: 14, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11, color: T.textSoft, lineHeight: 1.6 }}>
-        <strong>Workflow:</strong> Click prompt button (Crypto/Marketing/Trading/Controversy) → tweets fetched to Inbox → Generate 4 variants per item → Review & edit → Best variant → Draft
+        <strong>Workflow:</strong> Save Grok prompts → Click prompt button → Grok fetches research → Items in Inbox → Generate variants → Review & edit → Best variant → Draft
       </div>
     </div>
   );
@@ -4834,15 +4811,15 @@ export default function App() {
               />
             </div>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>TwitterAPI.io Key</div>
+              <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 6 }}>Grok API Key</div>
               <div style={{ fontSize: 11, color: T.textSoft, marginBottom: 8, lineHeight: 1.5 }}>
-                For Daily Research — fetches real tweets from X. Get your key at twitterapi.io
+                For Daily Research — uses Grok to analyze X trends. Get your key at console.x.ai
               </div>
               <input
                 type="password"
                 value={twitterKeyInput}
                 onChange={e => setTwitterKeyInput(e.target.value)}
-                placeholder="your-twitterapi-io-key..."
+                placeholder="xai-..."
                 style={{
                   width: "100%", background: T.bg2, border: `1px solid ${T.border}`,
                   borderRadius: 8, padding: "10px 14px", color: T.text, fontSize: 13,
@@ -4851,7 +4828,7 @@ export default function App() {
                 onFocus={e => e.target.style.borderColor = T.cyan}
                 onBlur={e => e.target.style.borderColor = T.border}
               />
-              {twitterApiKey && <div style={{ marginTop: 6, fontSize: 11, color: T.cyan, display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.cyan} pulse /> TwitterAPI connected</div>}
+              {twitterApiKey && <div style={{ marginTop: 6, fontSize: 11, color: T.cyan, display: "flex", alignItems: "center", gap: 4 }}><Dot color={T.cyan} pulse /> Grok API connected</div>}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn color={T.green} onClick={saveKey}>Save</Btn>
