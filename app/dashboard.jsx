@@ -3087,6 +3087,29 @@ RESPOND ONLY with JSON array, one per post in order:
                   </Btn>}
                   {(isDraft || isPost) && <Btn small outline onClick={() => { setImageTargetId(p.id); postImageRef.current?.click(); }}>📎</Btn>}
                 </>}
+
+                {/* Repost / Quote toggles */}
+                {(isDraft || isPost) && <>
+                  <span style={{ width: 1, height: 16, background: T.border, margin: "0 2px" }} />
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, color: (p.notes||"").includes("🔁 repost") ? T.cyan : T.textDim }}>
+                    <input type="checkbox" checked={(p.notes||"").includes("🔁 repost")} onChange={e => {
+                      const has = (p.notes||"").includes("🔁 repost");
+                      const newNotes = has ? (p.notes||"").replace(/\s*·?\s*🔁 repost/g, "").replace(/🔁 repost\s*·?\s*/g, "").trim() : ((p.notes||"") + " · 🔁 repost").replace(/^\s*·\s*/, "").trim();
+                      setAllPosts(prev => prev.map(x => x.id === p.id ? { ...x, notes: newNotes } : x));
+                      if (supa && p._supaId) supa.patch("posts", `id=eq.${p._supaId}`, { notes: newNotes });
+                    }} style={{ accentColor: T.cyan, width: 13, height: 13, cursor: "pointer" }} />
+                    🔁
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, color: (p.notes||"").includes("💬 quote") ? T.purple : T.textDim }}>
+                    <input type="checkbox" checked={(p.notes||"").includes("💬 quote")} onChange={e => {
+                      const has = (p.notes||"").includes("💬 quote");
+                      const newNotes = has ? (p.notes||"").replace(/\s*·?\s*💬 quote/g, "").replace(/💬 quote\s*·?\s*/g, "").trim() : ((p.notes||"") + " · 💬 quote").replace(/^\s*·\s*/, "").trim();
+                      setAllPosts(prev => prev.map(x => x.id === p.id ? { ...x, notes: newNotes } : x));
+                      if (supa && p._supaId) supa.patch("posts", `id=eq.${p._supaId}`, { notes: newNotes });
+                    }} style={{ accentColor: T.purple, width: 13, height: 13, cursor: "pointer" }} />
+                    💬
+                  </label>
+                </>}
               </div>
 
               {/* Rewrite input */}
