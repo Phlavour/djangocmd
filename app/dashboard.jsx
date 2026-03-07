@@ -745,7 +745,7 @@ Respond ONLY with valid JSON array, no markdown:
         ) : (
           <div style={{ fontSize: 13, color: T.text, lineHeight: 1.65, whiteSpace: "pre-wrap", cursor: "pointer" }}
             onClick={() => { setEditing(true); setEditVal(variant.post); }}>
-            {variant.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>empty variant</span>}
+            {variant.post ? variant.post.replace(/\n{3,}/g, "\n\n").replace(/(?<!\n)\n(?!\n)/g, "\n\n") : <span style={{ color: T.textDim, fontStyle: "italic" }}>empty variant</span>}
           </div>
         )}
 
@@ -2050,9 +2050,9 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
     if (!brandVoice) { alert("Upload brand voice .txt first"); return; }
     setGenLoading(true);
 
-    // Collect BAD tab feedback
+    // Collect BAD tab feedback (all posts, compact format)
     const badPosts = accountPosts.filter(p => p.tab === "BAD");
-    const badFeedback = badPosts.slice(0, 10).map(p => `POST: "${p.post.slice(0, 100)}"\nWHY BAD: ${p.notes}`).join("\n---\n");
+    const badFeedback = badPosts.map(p => `"${p.post.slice(0, 80)}..." → ${(p.notes || "no reason").slice(0, 60)}`).join("\n");
 
     // Trim brand voice
     const bvTrimmed = brandVoice.slice(0, 6000);
@@ -2329,7 +2329,7 @@ KRYTYCZNE ZASADY:
 - sporadycznie używaj "kłaniam się nisko" jako zakończenie (max 1 na 10 postów)
 - ROTUJ subtopiki — każdy post INNY subtopic
 - ZMIENIAJ struktury — nie powtarzaj tej samej dwa razy z rzędu
-- ROZKŁAD DŁUGOŚCI: dokładnie 50% postów MUSI być poniżej 280 znaków (krótkie). reszta 300-1000 znaków
+- ROZKŁAD DŁUGOŚCI: ~30% krótkie (poniżej 280 znaków), ~40% średnie (280-600), ~30% długie (600-1200)
 - brzmi jak henryk napisał to o 2 w nocy, nie jak AI to wygenerowało
 - bądź konkretny, stanowczy, bezpośredni — żadnych generycznych porad
 - dziel się osobistym doświadczeniem gdy pasuje
@@ -2371,12 +2371,12 @@ CRITICAL RULES:
 - NO personal identity — no "I did X", no personal stories, no name
 - write universal truths, principles, observations
 - tone: stoic, direct, no-nonsense, slightly dark/edgy
-- LENGTH DISTRIBUTION: exactly 50% under 280 chars (short punchy). other 50% 300-1000 chars
+- LENGTH: ~30% short (under 280 chars), ~40% medium (280-600), ~30% long (600-1200)
 - sound like a mysterious trader who drops wisdom, not like AI
 - be specific and opinionated — no generic motivation
 
 RESPOND ONLY with valid JSON array:
-[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"}]`
+[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E", "length": "short/medium/long"}]`
       : isGhost ? `You are @borderline_lust — a 33-year-old marketing professional by day, sex tourist and journalist by night. Average looking guy who owns it. Travels to cheap countries in Asia and Latin America. Has a girlfriend who doesn't know about his other life. Treats sex workers with genuine respect — their lives interest you as a journalist.
 
 VOICE: Bukowski meets Anthony Bourdain. Raw, confessional, first-person. Humor from honesty, not from trying. Very casual — like talking to a friend at a bar at 3AM. Vulnerability 9/10. Self-deprecating about looks, performance, being average.
@@ -2444,11 +2444,30 @@ ${lastAnalysis ? `═══ LAST WEEK'S AI ANALYSIS (apply these insights) ═�
 Generate exactly ${batch.count} original posts for the "${batch.category}" pillar.
 
 HEADLINE HOOK SYSTEM — EVERY post MUST use one of these hook types for its FIRST LINE:
-H=Helpful ("here's how to...") | E=Emotion (pain/pleasure — "nothing worse than...")
-A=Ask ("is it just me or...", "why do...") | D=Do's/Don'ts ("stop doing X", "if you're X - you're wrong")
-L=Lists ("5 things...", "3 signs...") | I=Inspire ("imagine...", "the goal isn't X")
-N=Numbers ("i replied 2,200 times", "100 days ago...") | E=Empathy ("i know what you're going through")
-RULES: first line = hook, max 15 words, must stop the scroll. Vary types — don't repeat same hook type twice in a row.
+
+H = Helpful — show how you'll help. "here's how to...", "the fastest way to..."
+  BEST FOR: growth, market
+E1 = Emotion — trigger pain or pleasure. "nothing worse than...", "that feeling when..."
+  BEST FOR: lifestyle, growth, market
+A = Ask — intriguing question. "is it just me or...", "why do the same 50 accounts..."
+  BEST FOR: shitposting, growth, busting
+D = Do's/Don'ts — direct command. "stop doing X", "if your feed looks like this..."
+  BEST FOR: growth, busting
+L = Lists — signal scannable value. "5 things...", "3 signs..."
+  BEST FOR: growth, lifestyle, shitposting (funny lists)
+I = Inspire — paint desired outcome. "imagine waking up to 10 inbound dms...", "the goal isn't X"
+  BEST FOR: lifestyle, growth
+N = Numbers — specific data for credibility. "i replied 2,200 times", "100 days ago..."
+  BEST FOR: growth, market, lifestyle milestones
+E2 = Empathy — show you understand. "i know what you're going through", "probably not the greatest morning"
+  BEST FOR: market (bear market), lifestyle
+
+HOOK RULES:
+- First line = hook. Always. Must work standalone — if someone only reads line 1, they want more
+- Max 15 words. Shorter = better. Django's best hooks are 5-10 words
+- Match pillar energy: growth=confident, market=calm, shitpost=sharp, lifestyle=warm, busting=direct
+- VARY hook types across posts — never repeat same type twice in a row
+- No clickbait. Honest provocations, not manipulation
 
 CRITICAL RULES:
 - always lowercase (never caps except proper nouns or intentional emphasis)
@@ -2457,7 +2476,11 @@ CRITICAL RULES:
 - use "fam" sparingly - max 1 in 5 posts, never forced, not forced
 - ROTATE subtopics — each post DIFFERENT subtopic (no repeats)
 - VARY structures — don't use same structure twice in a row
-- LENGTH DISTRIBUTION: exactly 50% of posts MUST be under 280 characters (short, punchy). the other 50% should be 300-1000 characters (detailed breakdowns, stories, lists). alternate between short and long
+- LENGTH DISTRIBUTION (STRICT):
+  > ~30% SHORT (under 280 chars) — one-liners, hot takes, punchy observations, single insights
+  > ~40% MEDIUM (280-600 chars) — standard posts with hook + body + takeaway
+  > ~30% LONG (600-1200 chars) — stories, lists, breakdowns, frameworks
+  Mark each post in JSON: add "length": "short" / "medium" / "long"
 - FAM USAGE: use "fam" in maximum 20% of posts (about 8 out of 42). most posts should NOT contain "fam". it's a signature, not a crutch
 - sound like django wrote this at 2am, not like AI generated it
 - be specific, opinionated, direct — no generic advice
@@ -2465,7 +2488,7 @@ CRITICAL RULES:
 - if using a framework/advisor, it must be INVISIBLE — never name it
 
 RESPOND ONLY with valid JSON array:
-[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`;
+[{"post": "the actual post text", "structure": "Structure Name", "subtopic": "subtopic used", "hook_type": "H/E/A/D/L/I/N/E", "length": "short/medium/long"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`;
 
       try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2482,7 +2505,7 @@ RESPOND ONLY with valid JSON array:
             newPosts.push({
               id: idCounter++, tab: "DRAFT", category: batch.category,
               structure: p.structure || "", post: p.post || "",
-              notes: humorNote || `subtopic: ${p.subtopic || ""}${p.hook_type ? " · hook: "+p.hook_type : ""}`,
+              notes: humorNote || `subtopic: ${p.subtopic || ""}${p.hook_type ? " · hook: "+p.hook_type : ""}${p.length ? " · "+p.length : ""}`,
               score: p.humor_score ? String(p.humor_score) : "", howToFix: "", day: "",
               account: account, source: "ai", hook_type: p.hook_type || "",
               postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
@@ -3047,7 +3070,7 @@ RESPOND ONLY with JSON array, one per post in order:
                       onMouseEnter={e => e.currentTarget.style.background = `${T.cyan}08`}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                       title="Click to edit">
-                      {p.post || <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty — click to edit</span>}
+                      {p.post ? p.post.replace(/\n{3,}/g, "\n\n").replace(/(?<!\n)\n(?!\n)/g, "\n\n") : <span style={{ color: T.textDim, fontStyle: "italic" }}>Empty — click to edit</span>}
                       {p.image_url && <div style={{ marginTop: 8 }}><img src={p.image_url} alt="" style={{ maxWidth: 160, maxHeight: 100, borderRadius: 6, objectFit: "cover", border: `1px solid ${T.border}` }} onError={e => e.target.style.display = "none"} /></div>}
                     </div>
                   )}
