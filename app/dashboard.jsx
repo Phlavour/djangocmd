@@ -1218,6 +1218,8 @@ function WeeklyContent({ sheetData, loading, onRefresh, apiKey, supa, allPosts, 
     setNewPostStructure("");
   }, [account]);
   const [showAdd, setShowAdd] = useState(false);
+  const [newPostIsRepost, setNewPostIsRepost] = useState(false);
+  const [newPostIsQuote, setNewPostIsQuote] = useState(false);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiResults, setAiResults] = useState({});
   const [showGen, setShowGen] = useState(false);
@@ -1665,15 +1667,16 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
     if (!newPostText.trim()) return;
     const targetTab = activeTab === "POST" ? "POST" : "DRAFT";
     const newId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+    const notesParts = [newPostHook ? `hook: ${newPostHook}` : "", newPostIsRepost ? "🔁 repost" : "", newPostIsQuote ? "💬 quote" : ""].filter(Boolean).join(" · ");
     const newPost = {
       id: newId, tab: targetTab, category: newPostCat, structure: newPostStructure,
-      post: newPostText.trim(), notes: newPostHook ? `hook: ${newPostHook}` : "", score: "", howToFix: "", day: "",
+      post: newPostText.trim(), notes: notesParts, score: "", howToFix: "", day: "",
       source: "manual", image_url: newPostImage.trim() || "", account: account, hook_type: newPostHook || "",
       postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
       replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
     };
     setAllPosts(p => [...(p || []), newPost]);
-    setNewPostText(""); setNewPostCat((ACCOUNT_CATEGORIES[account] || CATEGORIES)[0] || "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setShowAdd(false);
+    setNewPostText(""); setNewPostCat((ACCOUNT_CATEGORIES[account] || CATEGORIES)[0] || "growth"); setNewPostStructure(""); setNewPostImage(""); setNewPostHook(""); setNewPostIsRepost(false); setNewPostIsQuote(false); setShowAdd(false);
     // Save to Supabase and get real ID
     let supaId = null;
     if (supa) {
@@ -2859,6 +2862,18 @@ RESPOND ONLY with JSON array, one per post in order:
               <textarea value={newPostText} onChange={e => setNewPostText(e.target.value)} placeholder="write your post..."
                 style={{ width: "100%", minHeight: 80, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, color: T.text, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical", lineHeight: 1.5, outline: "none", boxSizing: "border-box" }}
                 onFocus={e => e.target.style.borderColor = T.green} onBlur={e => e.target.style.borderColor = T.border} />
+              <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: T.textSoft }}>
+                  <input type="checkbox" checked={newPostIsRepost} onChange={e => setNewPostIsRepost(e.target.checked)}
+                    style={{ accentColor: T.cyan, width: 14, height: 14, cursor: "pointer" }} />
+                  🔁 Repost
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: T.textSoft }}>
+                  <input type="checkbox" checked={newPostIsQuote} onChange={e => setNewPostIsQuote(e.target.checked)}
+                    style={{ accentColor: T.purple, width: 14, height: 14, cursor: "pointer" }} />
+                  💬 Quote
+                </label>
+              </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
                 <div
                   style={{ flex: 1, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: T.textDim, cursor: "pointer", textAlign: "center", fontFamily: "'IBM Plex Mono', monospace" }}
