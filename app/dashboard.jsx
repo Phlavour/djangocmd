@@ -1465,6 +1465,59 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
     setTranslateLoading(null);
   };
 
+  // Adapt post to @faceless account (strip personal identity, make universal)
+  const [facelessLoading, setFacelessLoading] = useState(null);
+  const adaptToFaceless = async (post) => {
+    if (!apiKey) { alert("Add Claude API key in Settings"); return; }
+    setFacelessLoading(post.id);
+    const targetCats = CATEGORIES_FACELESS;
+    const mappedCategory = targetCats.includes(post.category) ? post.category : (post.category === "growth" ? "motivation" : targetCats[0]);
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 800,
+          messages: [{ role: "user", content: `Adapt this post for @faceless — a faceless trading/motivation account with NO personal identity.
+
+RULES:
+- always lowercase, no dots at end, no emoji, no hashtags
+- ">" for bullet points
+- REMOVE all personal references ("i did X", "my experience", names, personal stories)
+- NEVER use "fam" — that's Django's phrase
+- tone: stoic, direct, no-nonsense, slightly dark/edgy
+- write universal truths, principles, observations
+- keep it punchy — same length or shorter than original
+- sound like a mysterious trader dropping wisdom, not like AI
+
+ORIGINAL POST:
+"${post.post}"
+
+RESPOND ONLY with JSON: {"post": "adapted text", "category": "${mappedCategory}"}` }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "{}";
+      const result = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (result.post) {
+        const maxId = allPosts ? Math.max(0, ...allPosts.map(p => p.id)) + 1 : 1;
+        const newPost = {
+          id: maxId, tab: "DRAFT", category: result.category || mappedCategory,
+          structure: post.structure || "", post: result.post,
+          notes: `adapted from ${account}`, score: "", howToFix: "", day: "",
+          account: "@faceless", source: "adapted", image_url: post.image_url || "",
+          postLink: "", impressions: "", likes: "", engagements: "", bookmarks: "",
+          replies: "", reposts: "", profileVisits: "", newFollows: "", urlClicks: "",
+        };
+        setAllPosts(prev => [...(prev || []), newPost]);
+        if (supa) savePostsToSupa([newPost]);
+        if (apiKey) setTimeout(() => autoScore(newPost.post, newPost.id, newPost.category, newPost.image_url), 500);
+      }
+    } catch (err) { alert("Adapt error: " + err.message); }
+    setFacelessLoading(null);
+  };
+
   // Initialize from Sheets
   useEffect(() => {
     if (!loading && sheetData && allPosts === null) {
@@ -3086,6 +3139,9 @@ RESPOND ONLY with JSON array, one per post in order:
                   </Btn>}
                   {(isDraft || isPost) && (account === "@django_crypto" || account === "@henryk0x") && <Btn small color={account === "@django_crypto" ? "#3d8bfd" : "#00e87b"} outline disabled={translateLoading === p.id} onClick={() => translatePost(p)}>
                     {translateLoading === p.id ? "⏳..." : account === "@django_crypto" ? "🇵🇱 → Henryk" : "🇬🇧 → Django"}
+                  </Btn>}
+                  {(isDraft || isPost) && account === "@django_crypto" && <Btn small color="#8b5cf6" outline disabled={facelessLoading === p.id} onClick={() => adaptToFaceless(p)}>
+                    {facelessLoading === p.id ? "⏳..." : "👤 → Faceless"}
                   </Btn>}
                   {(isDraft || isPost) && <Btn small outline onClick={() => { setImageTargetId(p.id); postImageRef.current?.click(); }}>📎</Btn>}
                 </>}
