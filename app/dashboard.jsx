@@ -1512,6 +1512,8 @@ RESPOND ONLY with JSON: {"post": "translated text", "category": "${mappedCategor
   else if (sortBy === "category") sorted.sort((a, b) => (a.category || "").localeCompare(b.category || ""));
   else if (sortBy === "score-desc") sorted.sort((a, b) => parseFloat(b.score || 0) - parseFloat(a.score || 0));
   else if (sortBy === "score-asc") sorted.sort((a, b) => parseFloat(a.score || 0) - parseFloat(b.score || 0));
+  else if (sortBy === "newest") sorted.sort((a, b) => (b._supaId || b.id) - (a._supaId || a.id));
+  else if (sortBy === "oldest") sorted.sort((a, b) => (a._supaId || a.id) - (b._supaId || b.id));
   else if (sortBy === "impressions") sorted.sort((a, b) => parseInt(b.impressions || 0) - parseInt(a.impressions || 0));
   else if (sortBy === "day") {
     const D = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -2556,10 +2558,10 @@ RESPOND ONLY with JSON array, one per post in order:
   };
 
   const sortOpts = isUsed
-    ? [{ v: "default", l: "Default" }, { v: "impressions", l: "Impressions ↓" }]
+    ? [{ v: "default", l: "Default" }, { v: "newest", l: "Newest ↓" }, { v: "oldest", l: "Oldest ↓" }, { v: "impressions", l: "Impressions ↓" }]
     : isPost
-    ? [{ v: "default", l: "Default" }, { v: "day", l: "Day of Week" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }]
-    : [{ v: "mine-first", l: "✍ Mine First" }, { v: "default", l: "Default" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }, { v: "score-asc", l: "Score ↑" }];
+    ? [{ v: "default", l: "Default" }, { v: "newest", l: "Newest ↓" }, { v: "oldest", l: "Oldest ↓" }, { v: "day", l: "Day of Week" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }]
+    : [{ v: "mine-first", l: "✍ Mine First" }, { v: "default", l: "Default" }, { v: "newest", l: "Newest ↓" }, { v: "oldest", l: "Oldest ↓" }, { v: "category", l: "Category" }, { v: "score-desc", l: "Score ↓" }, { v: "score-asc", l: "Score ↑" }];
 
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
 
