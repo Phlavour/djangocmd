@@ -1603,9 +1603,9 @@ RESPOND ONLY with JSON: {"post": "adapted text", "category": "${mappedCategory}"
     if (supa && post?._supaId) supa.del("posts", `id=eq.${post._supaId}`);
   };
   const deleteAllInTab = (tab) => {
-    if (!confirm(`Delete ALL posts in ${tab}? This can't be undone.`)) return;
-    setAllPosts(p => p.filter(x => x.tab !== tab));
-    if (supa) supa.del("posts", `tab=eq.${tab}`);
+    if (!confirm(`Delete ALL ${account} posts in ${tab}? This can't be undone.`)) return;
+    setAllPosts(p => p.filter(x => !(x.tab === tab && (x.account || "@django_crypto") === account)));
+    if (supa) supa.del("posts", `tab=eq.${tab}&account=eq.${encodeURIComponent(account)}`);
   };
   const saveGoal = async (target, current) => {
     const t = Number(target) || 0, c = Number(current) || 0;
