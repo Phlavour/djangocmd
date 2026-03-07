@@ -2423,6 +2423,16 @@ RESPOND ONLY with valid JSON array:
 YOUR BRAND VOICE:
 ${bvTrimmed}
 
+${weeklyNotes ? `═══ WEEKLY CONTEXT (MANDATORY — you MUST incorporate these into your posts) ═══
+${weeklyNotes}
+
+RULES FOR WEEKLY CONTEXT:
+- HOT TOPICS: use for shitposting and busting posts. make at least 2-3 posts referencing current events
+- PERSONAL: use for lifestyle and growth posts. weave personal updates into stories naturally
+- AVOID: NEVER include anything from the avoid list. this is a hard rule
+- NOTES FOR CLAUDE: follow ALL instructions here — they override default behavior
+- SEASONAL: reference seasonal topics in lifestyle posts
+` : ""}
 ${EXAMPLE_POSTS}
 
 ═══ CATEGORY: ${batch.category.toUpperCase()} ═══
@@ -2437,7 +2447,6 @@ ${structList}
 ${batch.advisor}
 
 ${badFeedback ? `═══ POSTS THAT FAILED (avoid these patterns) ═══\n${badFeedback}\n` : ""}
-${weeklyNotes ? `═══ WEEKLY CONTEXT FROM DJANGO (use this to make posts relevant and personal) ═══\n${weeklyNotes}\nIMPORTANT: Use hot topics for shitposting/busting. Use personal context for lifestyle/growth stories. Follow AI instructions. Respect avoid list.\n` : ""}
 ${lastAnalysis ? `═══ LAST WEEK'S AI ANALYSIS (apply these insights) ═══\n${lastAnalysis.slice(0, 1500)}\n` : ""}
 
 ═══ TASK ═══
@@ -2481,7 +2490,7 @@ CRITICAL RULES:
   > ~40% MEDIUM (280-600 chars) — standard posts with hook + body + takeaway
   > ~30% LONG (600-1200 chars) — stories, lists, breakdowns, frameworks
   Mark each post in JSON: add "length": "short" / "medium" / "long"
-- FAM USAGE: use "fam" in maximum 20% of posts (about 8 out of 42). most posts should NOT contain "fam". it's a signature, not a crutch
+- FAM USAGE: use "fam" in maximum 20% of posts (about 6 out of 30). most posts should NOT contain "fam". it's a signature, not a crutch
 - sound like django wrote this at 2am, not like AI generated it
 - be specific, opinionated, direct — no generic advice
 - share personal experience when relevant ("i did X" not "you should X")
