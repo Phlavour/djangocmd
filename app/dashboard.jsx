@@ -2254,34 +2254,34 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
       },
     ] : [
       {
-        category: "growth", count: 17,
+        category: "growth", count: 12,
         subtopics: ["growing X account", "X analytics progress", "X algorithm tips", "marketing frameworks", "building personal brand", "importance of visuals", "replying strategies", "storytelling", "making money in web3", "writing/copywriting", "AI and automation", "cold reach and BD", "productivity hacks", "learning tips", "importance of uniqueness"],
         structures: ["Problem → Solution", "Tutorial / How-to", "Listicle", "Framework / System", "Hook → Body → Conclusion", "Story / Narrative", "Before → After", "Mindset Shift", "Mistake → Lesson", "Question → Answer", "Case Study", "Contrarian View", "Single Insight"],
         advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. mix Hormozi (general) and Abboud (web3). NEVER name the framework.`,
       },
       {
-        category: "market", count: 6,
+        category: "market", count: 2,
         subtopics: ["market analysis", "potential trade setups", "trading mentality", "winner mentality", "technical analysis simplified", "long-term game", "risk management", "no fomo approach", "patience"],
         structures: ["Hook → Body → Conclusion", "Data Dump / Research", "Framework / System", "Prediction / Forecast", "Breakdown / Analysis", "Contrarian View", "Single Insight", "Observation → Pattern"],
         advisor: `${TRADING_ADVISOR}\n\nAPPLY: ALL market posts must embed Xpreay trading psychology as backbone. show genuine market understanding. balance conviction with humility (probability mindset). NEVER sound like a trading course.`,
       },
       {
-        category: "lifestyle", count: 6,
+        category: "lifestyle", count: 5,
         subtopics: ["healthy food/carnivore/keto", "mentality of a winner", "sports (running/gym/tennis)", "passion (travel/music/groundhopping)", "quitting smoking milestones", "yerba mate lifestyle", "travel tips", "learning Spanish"],
         structures: ["Story / Narrative", "Question → Answer", "Mistake → Lesson", "Single Insight", "Before → After", "Mindset Shift"],
         advisor: "LIFESTYLE: show personality, help audience identify with django. showcase healthy lifestyle, passions, beauty of life. motivational but real, not fake positivity.",
       },
       {
-        category: "busting", count: 6,
+        category: "busting", count: 5,
         subtopics: ["bad content and AI slop", "scam profiles and shillers", "attention whores", "false prophets who flip-flop", "scam projects and rugs"],
         structures: ["Myth Busting", "Controversy / Hot Take", "Data Dump / Research", "Contrarian View", "Observation → Pattern", "Breakdown / Analysis"],
         advisor: "BUSTING: point out bad content, catch liars, showcase human stupidity. be direct, controversial, honest. use evidence. 'volunteer sheriff's deputy' energy. never punch down on small accounts.",
       },
       {
-        category: "shitposting", count: 7,
+        category: "shitposting", count: 6,
         subtopics: ["reactions to crypto news", "teasing CT culture", "smart observations", "jokes using humor structures", "random vibes/internet culture"],
         structures: ["Controversy / Hot Take", "Myth Busting", "Single Insight", "Observation → Pattern", "Comparison / VS"],
-        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 2 out of 7 posts MUST use a humor structure (randomly pick). tag which structure used. other 5 are standard hot takes/observations. score each humor post 1-10, if below 7 mark for rewrite.`,
+        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 2 out of 6 posts MUST use a humor structure (randomly pick). tag which structure used. other 4 are standard hot takes/observations. score each humor post 1-10, if below 7 mark for rewrite.`,
       },
     ];
 
@@ -2762,7 +2762,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 </label>
               )}
               <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-                {genLoading ? "⏳ Generating..." : `⚡ Generate ${account === "@ghost" ? 21 : account === "@faceless" ? 21 : account === "@henryk0x" ? 42 : 42} Posts`}
+                {genLoading ? "⏳ Generating..." : `⚡ Generate ${account === "@ghost" ? 21 : account === "@faceless" ? 21 : account === "@henryk0x" ? 42 : 30} Posts`}
               </Btn>
             </div>
           </div>
