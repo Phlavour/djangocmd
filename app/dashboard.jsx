@@ -3263,18 +3263,20 @@ const STRUCT_LABELS = {
 };
 
 // CSV Date parser (handles X export format: "Thu, Feb 12, 2026")
+// Uses UTC to avoid timezone shifting (CET → UTC would lose a day)
+const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 function parseXDate(raw) {
   if (!raw) return null;
   const c = raw.replace(/^["']|["']$/g, "").replace(/\n/g, " ").trim();
   // "Fri, Feb 27, 2026" or "Sun, Mar 1, 2026"
   const m1 = c.match(/[A-Z][a-z]{2},?\s+([A-Z][a-z]{2})\s+(\d{1,2}),?\s+(\d{4})/);
-  if (m1) { const d = new Date(m1[1]+" "+m1[2]+", "+m1[3]); if (!isNaN(d)) return d; }
+  if (m1 && MONTHS[m1[1]] !== undefined) return new Date(Date.UTC(parseInt(m1[3]), MONTHS[m1[1]], parseInt(m1[2])));
   // "Feb 27, 2026"
   const m2 = c.match(/([A-Z][a-z]{2})\s+(\d{1,2}),?\s+(\d{4})/);
-  if (m2) { const d = new Date(m2[1]+" "+m2[2]+", "+m2[3]); if (!isNaN(d)) return d; }
+  if (m2 && MONTHS[m2[1]] !== undefined) return new Date(Date.UTC(parseInt(m2[3]), MONTHS[m2[1]], parseInt(m2[2])));
   // "2026-02-27"
   const m3 = c.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (m3) return new Date(parseInt(m3[1]), parseInt(m3[2])-1, parseInt(m3[3]));
+  if (m3) return new Date(Date.UTC(parseInt(m3[1]), parseInt(m3[2])-1, parseInt(m3[3])));
   const d = new Date(c); return isNaN(d) ? null : d;
 }
 function getISOWeek(date) {
