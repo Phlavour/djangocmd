@@ -2173,37 +2173,37 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
 
     const batches = isHenryk ? [
       {
-        category: "market", count: 13,
+        category: "market", count: 7,
         subtopics: ["analiza rynku crypto", "tłumaczenie zagranicznych newsów", "mentalność tradera", "dlaczego projekty upadają", "scamy i manipulacje", "no fomo approach", "cierpliwość", "nowe narracje i trendy", "porównanie crypto vs tradycyjne aktywa", "komentarz do wydarzeń rynkowych", "czym różni się ten cykl", "płynność i struktura rynku"],
         structures: ["Hook → Body → Conclusion", "Breakdown / Analysis", "Contrarian View", "Single Insight", "Observation → Pattern", "Comparison / VS", "Question → Answer"],
         advisor: `MARKET: tłumacz i komentuj międzynarodowe newsy crypto dla polskiej publiki. bądź racjonalny, bez hype, punktuj scamy. NIE robimy analizy technicznej ani trade setupów - komentujemy newsy, trendy, mentalność.`,
       },
       {
-        category: "busting", count: 6,
+        category: "busting", count: 3,
         subtopics: ["scamy i fałszywe projekty", "fałszywi prorocy i flip-floperzy", "ludzka głupota w internecie", "AI slop i złe treści", "polityka i absurdy świata"],
         structures: ["Controversy / Hot Take", "Breakdown / Analysis", "Contrarian View", "Observation → Pattern", "Myth Busting"],
         advisor: "BUSTING: punktuj głupotę, scamy, fałszywych proroków. bezpośrednio, z dowodami. agresywny ton, ale oparty na faktach. 'doktor rehabilitowany kryptografii' energy.",
       },
       {
-        category: "shitposting", count: 6,
+        category: "shitposting", count: 3,
         subtopics: ["reakcje na bieżące wydarzenia", "obserwacje ze świata", "żarty z internetu i kultury", "komentarze do polityki (lekkie)", "absurdy codzienności"],
         structures: ["Controversy / Hot Take", "Single Insight", "Observation → Pattern", "Comparison / VS", "Myth Busting"],
-        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 2 out of 6 posts MUST use a humor structure (randomly pick). lekki ton, zabawne obserwacje. NIE agresywne jak busting — tu się bawimy.`,
+        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 1 out of 3 posts MUST use a humor structure (randomly pick). lekki ton, zabawne obserwacje. NIE agresywne jak busting — tu się bawimy.`,
       },
       {
-        category: "growth", count: 6,
+        category: "growth", count: 3,
         subtopics: ["rozwój profilu na X", "budowanie marki osobistej", "strategie replying", "storytelling i hooki", "zarabianie w web3", "marketing i pozycjonowanie"],
         structures: ["Problem → Solution", "Story / Narrative", "Listicle", "Framework / System", "Mindset Shift", "Contrarian View"],
         advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. NIGDY nie nazywaj frameworka.`,
       },
       {
-        category: "ai", count: 6,
+        category: "ai", count: 3,
         subtopics: ["AI zastępuje pracowników", "praktyczne narzędzia AI", "przyszłość marketingu z AI", "zagrożenia AI dla biznesu", "jak przygotować się na AI", "AI monopolizacja platform"],
         structures: ["Hook → Body → Conclusion", "Story / Narrative", "Contrarian View", "Single Insight", "Breakdown / Analysis", "Prediction / Forecast"],
         advisor: "AI: pokazuj praktyczne zastosowania, dyskutuj wpływ na rynek pracy. balansuj ekscytację z realistycznymi obawami. ton preppersa - 'przygotuj się teraz, zanim będzie za późno'.",
       },
       {
-        category: "lifestyle", count: 5,
+        category: "lifestyle", count: 2,
         subtopics: ["biohacking i sen", "sport i siłownia", "motywacja i mindset", "polska jest piękna", "zdrowie jako priorytet"],
         structures: ["Story / Narrative", "Single Insight", "Observation → Pattern", "Mindset Shift"],
         advisor: "LIFESTYLE: osobisty, autentyczny, praktyczny. nie wymuszony optymizm. pokaż pasje, zdrowy tryb życia, dumę z Polski.",
@@ -2260,10 +2260,10 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
       },
     ] : [
       {
-        category: "growth", count: 12,
+        category: "growth", count: 9,
         subtopics: ["growing X account", "X analytics progress", "X algorithm tips", "marketing frameworks", "building personal brand", "importance of visuals", "replying strategies", "storytelling", "making money in web3", "writing/copywriting", "AI and automation", "cold reach and BD", "productivity hacks", "learning tips", "importance of uniqueness", "profile optimization", "content balance strategy", "networking tactics"],
         structures: ["Problem → Solution", "Tutorial / How-to", "Listicle", "Framework / System", "Hook → Body → Conclusion", "Story / Narrative", "Before → After", "Mindset Shift", "Mistake → Lesson", "Question → Answer", "Case Study", "Contrarian View", "Single Insight", "Lists"],
-        advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. mix Hormozi (general) and Abboud (web3). NEVER name the framework.\n\nTEACHER POSTS (MANDATORY): exactly 2-3 out of 12 growth posts MUST be LONG TEACHER POSTS (600-1500 chars). these are django's highest-value format: detailed guides with ">" bullet lists, actionable steps from personal experience, practical tips that readers can apply immediately. end with a CTA (bookmark it, try it, drop your handle, etc). study the [growth - long/teacher] examples. these posts use "How I" not "How To" — share what YOU did, not generic advice.`,
+        advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. mix Hormozi (general) and Abboud (web3). NEVER name the framework.\n\nTEACHER POSTS (MANDATORY): exactly 2 out of 9 growth posts MUST be LONG TEACHER POSTS (600-1500 chars). these are django's highest-value format: detailed guides with ">" bullet lists, actionable steps from personal experience, practical tips that readers can apply immediately. end with a CTA (bookmark it, try it, drop your handle, etc). study the [growth - long/teacher] examples. these posts use "How I" not "How To" — share what YOU did, not generic advice.`,
       },
       {
         category: "market", count: 2,
@@ -2272,22 +2272,22 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
         advisor: `${TRADING_ADVISOR}\n\nAPPLY: ALL market posts must embed Xpreay trading psychology as backbone. show genuine market understanding. balance conviction with humility (probability mindset). NEVER sound like a trading course.`,
       },
       {
-        category: "lifestyle", count: 5,
+        category: "lifestyle", count: 3,
         subtopics: ["healthy food/carnivore/keto", "mentality of a winner", "sports (running/gym/tennis)", "passion (travel/music/groundhopping)", "quitting smoking milestones", "yerba mate lifestyle", "travel tips", "learning Spanish"],
         structures: ["Story / Narrative", "Question → Answer", "Mistake → Lesson", "Single Insight", "Before → After", "Mindset Shift"],
         advisor: "LIFESTYLE: show personality, help audience identify with django. showcase healthy lifestyle, passions, beauty of life. motivational but real, not fake positivity.",
       },
       {
-        category: "busting", count: 5,
+        category: "busting", count: 3,
         subtopics: ["bad content and AI slop", "scam profiles and shillers", "attention whores", "false prophets who flip-flop", "scam projects and rugs"],
         structures: ["Myth Busting", "Controversy / Hot Take", "Data Dump / Research", "Contrarian View", "Observation → Pattern", "Breakdown / Analysis"],
         advisor: "BUSTING: point out bad content, catch liars, showcase human stupidity. be direct, controversial, honest. use evidence. 'volunteer sheriff's deputy' energy. never punch down on small accounts.",
       },
       {
-        category: "shitposting", count: 6,
+        category: "shitposting", count: 4,
         subtopics: ["reactions to crypto news", "teasing CT culture", "smart observations", "jokes using humor structures", "random vibes/internet culture"],
         structures: ["Controversy / Hot Take", "Myth Busting", "Single Insight", "Observation → Pattern", "Comparison / VS"],
-        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 2 out of 6 posts MUST use a humor structure (randomly pick). tag which structure used. other 4 are standard hot takes/observations. score each humor post 1-10, if below 7 mark for rewrite.`,
+        advisor: `${HUMOR_ADVISOR}\n\nAPPLY: 1 out of 4 posts MUST use a humor structure (randomly pick). tag which structure used. other 3 are standard hot takes/observations. score each humor post 1-10, if below 7 mark for rewrite.`,
       },
     ];
 
@@ -2525,7 +2525,7 @@ CRITICAL RULES:
   > ~40% MEDIUM (280-600 chars) — standard posts with hook + body + takeaway
   > ~30% LONG (600-1200 chars) — stories, lists, breakdowns, frameworks
   Mark each post in JSON: add "length": "short" / "medium" / "long"
-- FAM USAGE: use "fam" in maximum 20% of posts (about 6 out of 30). most posts should NOT contain "fam". it's a signature, not a crutch
+- FAM USAGE: use "fam" in maximum 20% of posts (about 4 out of 21). most posts should NOT contain "fam". it's a signature, not a crutch
 - sound like django wrote this at 2am, not like AI generated it
 - be specific, opinionated, direct — no generic advice
 - share personal experience when relevant ("i did X" not "you should X")
@@ -2806,7 +2806,7 @@ RESPOND ONLY with JSON array, one per post in order:
                 </label>
               )}
               <Btn small color={T.green} disabled={genLoading || !brandVoice || !apiKey} onClick={generateWeekly}>
-                {genLoading ? "⏳ Generating..." : `⚡ Generate ${account === "@ghost" ? 21 : account === "@faceless" ? 21 : account === "@henryk0x" ? 42 : 30} Posts`}
+                {genLoading ? "⏳ Generating..." : "⚡ Generate 21 Posts"}
               </Btn>
             </div>
           </div>
