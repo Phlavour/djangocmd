@@ -2094,17 +2094,23 @@ Respond ONLY with JSON: {"post": "fixed text", "changes": "brief note what you c
 [confrontational] "the guys who criticize me are the same guys who jerk off on pornhub 5 times a week. at least i look them in the eyes"
 [confrontational] "spending money on prostitutes is actually way cheaper than all this nonsense with dating - dinner, uber, supper, breakfast, cinema, you name it. and in the end she still might ghost you. ironic"
 [philosophical] "spending a whole sex life with one partner is like visiting one country. beautiful - but you'll always wonder"
-[philosophical] "i try to be a good human every single day. and every single night i prove to myself that good and bad live in the same body"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary):
+[philosophical] "i try to be a good human every single day. and every single night i prove to myself that good and bad live in the same body"` : `EXAMPLE DJANGO POSTS (study tone, length, vocabulary — mix of SHORT punchy and LONG educational):
 
-[growth] "next time someone tells you stealing a post is a thing - do yourself a favor and mute this fella. if you want to be average - sure, go for it. but if you are here to play a long term game - you should avoid being like everyone else at all costs"
-[growth] "locked in more than ever. time for a deep clean of inactive accounts that won't make it (quitoooors). i'm putting together a list of true onchain, web3 independent thinkers over the weekend. who wants in? drop your handle below"
+[growth - short] "next time someone tells you stealing a post is a thing - do yourself a favor and mute this fella. if you want to be average - sure, go for it. but if you are here to play a long term game - you should avoid being like everyone else at all costs"
+[growth - short] "locked in more than ever. time for a deep clean of inactive accounts that won't make it (quitoooors). i'm putting together a list of true onchain, web3 independent thinkers over the weekend. who wants in? drop your handle below"
+[growth - long/teacher] "your profile is the reason people don't follow you\n\ntheir first impression on your profile decides if they stay or leave\n\nif your profile is messed up, most people will never follow you\n\nbut you can fix it easily\n\nhere's how to make a strong first impression that makes people follow you:\n\n> get a clean pfp. you can use ai for it, but make sure it doesn't look sloppy\n> get a good banner, if you don't know how to make it look good, then just keep it minimalistic\n> make a clean bio, and never use these words in your bio 'airdrop', 'farmer', 'yapper'. also don't tag too many projects, you're not a billboard\n> make sure your username is short, unique, and easy to remember\n> your followers:following ratio should not be worse than 2:1 or 3:1\n> get a strong pinned post - big wins, strong achievements or educational content\n\nnow go fix it"
+[growth - long/teacher] "one of the main mistakes creators make is\n\noverposting\n\n'more posts = better results' is the L advice\n\ni personally see many small accounts making 5+ posts a day\n\nand none of those posts get more than 10 likes\n\nso the best tip i can give you:\n\n> don't post too much\n\neven if you think your post ideas are great, don't post them all in one day\n\nif you're a small account reading this, i would recommend doing 70-100 replies a day\n\nfor example: 3 posts and 220 replies a day\n\ngib it a try\n\nand stop overposting or i will cry"
+[growth - long/teacher] "give me 5 mins and you will never ask 'what to post?' again\n\nif you want to grow as an expert, not 'social media superstar'\n\nthen you need to balance your content\n\nposting only one type of content won't work\n\nso this is how i try to balance my content:\n\n50% expert content\n- educational stuff with focus on your main niche, takes/thoughts and your experience\n\n30% shitposts\n- to entertain & make ppl laugh, but make sure your shitposts are not shit\n\n20% flex wins\n- the most uncommon one, but flexing wins is important\n\nbookmark it, so you dont forget"
+[growth - long/teacher] "many creators make the same mistake:\n\nthey ignore small accounts\n\nif you only support big influencers and dont care about small ones\n\nthen you're losing\n\nto build the real network you have to:\n\n> engage with accounts your size\n> engage with your active followers\n> turn notis on their posts\n\nand the main thing is to always add new ppl to your network circle\n\nyou simply can't grow if you don't build new connections\n\ndont be a 'fan boy' of big kols only"
 [market] "not catching falling knives. we're not there yet - let's wipe out the leveraged traders first. then i'll consider longs around 74-76k. no fomo approach whatsoever. zen is my second name. stay safe fam"
 [market] "hot take: bear market is awesome. people feel frustrated now, but when you think about it - these crashes are a gift. thanks to them, you get a chance to buy coins cheap and sell them high. isn't that why we're all here?"
 [shitpost] "the list of 8 things you can do now instead of writing infofi slop: > read a book about estonia > reply gm 500 times > visit tallinn > write an article no one will care about > learn estonian > write an article in estonian > watch curling > make up your own #8"
 [shitpost] "crypto vocabulary update: > DYOR - reading one tweet and going all in > long term hold - i'm down 80% and can't sell > community - 47 bots and a dog > alpha - information that was alpha 3 weeks ago > not financial advice - financial advice"
 [busting] "bro, 15 hours ago you were calling 'the crypto bottom'. something changed? can you decide what's your statement? or maybe you have no idea and you're just farming attention by posting whatever comes to your mind?"
 [lifestyle] "100 days ago i chose freedom and stopped smoking. quitting the worst addiction i've ever had turned out to be the best investment i made last year. no return from this point, django is a free man now!"
-[gm] "gm and happy wednesday to everyone except: 1) those who don't say gm back 2) those who spam others' dms with 'let's connect' 3) kickz. see you on the timeline, xoxo"`;
+[gm] "gm and happy wednesday to everyone except: 1) those who don't say gm back 2) those who spam others' dms with 'let's connect' 3) kickz. see you on the timeline, xoxo"
+
+NOTE FOR AI: ~20% of growth posts should be LONG TEACHER POSTS (600-1500 chars) like the [growth - long/teacher] examples above. These are detailed guides with ">" bullet lists, actionable steps, personal experience, and a CTA at the end. They are Django's highest-value content.`;
 
     const GROWTH_ADVISOR = `GROWTH ADVISOR (apply 1-2 frameworks per post, INVISIBLY - never name them):
 - Volume Negates Luck: the gap isn't 2x, it's 100x. 7 posts/week vs 80. 50 replies vs 2200
@@ -2255,9 +2261,9 @@ RULES: humor must be lowercase, casual, self-deprecating > mocking others, smart
     ] : [
       {
         category: "growth", count: 12,
-        subtopics: ["growing X account", "X analytics progress", "X algorithm tips", "marketing frameworks", "building personal brand", "importance of visuals", "replying strategies", "storytelling", "making money in web3", "writing/copywriting", "AI and automation", "cold reach and BD", "productivity hacks", "learning tips", "importance of uniqueness"],
-        structures: ["Problem → Solution", "Tutorial / How-to", "Listicle", "Framework / System", "Hook → Body → Conclusion", "Story / Narrative", "Before → After", "Mindset Shift", "Mistake → Lesson", "Question → Answer", "Case Study", "Contrarian View", "Single Insight"],
-        advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. mix Hormozi (general) and Abboud (web3). NEVER name the framework.`,
+        subtopics: ["growing X account", "X analytics progress", "X algorithm tips", "marketing frameworks", "building personal brand", "importance of visuals", "replying strategies", "storytelling", "making money in web3", "writing/copywriting", "AI and automation", "cold reach and BD", "productivity hacks", "learning tips", "importance of uniqueness", "profile optimization", "content balance strategy", "networking tactics"],
+        structures: ["Problem → Solution", "Tutorial / How-to", "Listicle", "Framework / System", "Hook → Body → Conclusion", "Story / Narrative", "Before → After", "Mindset Shift", "Mistake → Lesson", "Question → Answer", "Case Study", "Contrarian View", "Single Insight", "Lists"],
+        advisor: `${GROWTH_ADVISOR}\n\n${MARKETING_KB}\n\nAPPLY: ~40% of posts should use a framework INVISIBLY. mix Hormozi (general) and Abboud (web3). NEVER name the framework.\n\nTEACHER POSTS (MANDATORY): exactly 2-3 out of 12 growth posts MUST be LONG TEACHER POSTS (600-1500 chars). these are django's highest-value format: detailed guides with ">" bullet lists, actionable steps from personal experience, practical tips that readers can apply immediately. end with a CTA (bookmark it, try it, drop your handle, etc). study the [growth - long/teacher] examples. these posts use "How I" not "How To" — share what YOU did, not generic advice.`,
       },
       {
         category: "market", count: 2,
@@ -2320,6 +2326,30 @@ ${lastAnalysis ? `═══ ANALIZA AI Z OSTATNIEGO TYGODNIA (zastosuj wnioski) 
 ═══ ZADANIE ═══
 Wygeneruj dokładnie ${batch.count} oryginalnych postów dla filaru "${batch.category}".
 
+SYSTEM HOOKÓW (HEADLINE) — KAŻDY post MUSI użyć jednego z tych typów dla PIERWSZEJ LINII:
+
+H = Helpful — pokaż jak pomożesz. "oto jak...", "najszybszy sposób na..."
+  NAJLEPSZE DLA: growth, market, ai
+E1 = Emotion — ból lub przyjemność. "nic gorszego niż...", "to uczucie gdy..."
+  NAJLEPSZE DLA: lifestyle, growth, market
+A = Ask — intrygujące pytanie. "czy tylko mi się wydaje że...", "dlaczego..."
+  NAJLEPSZE DLA: shitposting, busting, growth
+D = Do's/Don'ts — bezpośredni rozkaz. "przestań robić X", "jeśli twój feed wygląda tak..."
+  NAJLEPSZE DLA: growth, busting
+L = Lists — zapowiedź listy. "5 rzeczy...", "3 znaki że..."
+  NAJLEPSZE DLA: growth, lifestyle, shitposting
+I = Inspire — namaluj wizję. "wyobraź sobie...", "cel to nie X"
+  NAJLEPSZE DLA: lifestyle, growth
+N = Numbers — konkretne dane. "odpowiedziałem 2200 razy", "100 dni temu..."
+  NAJLEPSZE DLA: growth, market, ai
+E2 = Empathy — pokaż zrozumienie. "wiem co czujesz", "pewnie nie najlepszy poranek"
+  NAJLEPSZE DLA: market, lifestyle
+
+ZASADY HOOKÓW:
+- Pierwsza linia = hook. Zawsze. Musi działać samodzielnie
+- Max 15 słów. Krócej = lepiej
+- Różnicuj typy — nie powtarzaj tego samego dwa razy z rzędu
+
 KRYTYCZNE ZASADY:
 - ZAWSZE PISZ PO POLSKU (wyjątek: crypto/AI terminy bez polskiego odpowiednika)
 - zawsze małe litery (nigdy caps, chyba że celowo)
@@ -2335,7 +2365,7 @@ KRYTYCZNE ZASADY:
 - dziel się osobistym doświadczeniem gdy pasuje
 
 ODPOWIEDZ TYLKO poprawnym JSON:
-[{"post": "treść posta po polsku", "structure": "Nazwa struktury", "subtopic": "użyty subtopic"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`
+[{"post": "treść posta po polsku", "structure": "Nazwa struktury", "subtopic": "użyty subtopic", "hook_type": "H/E/A/D/L/I/N/E", "length": "short/medium/long"${batch.category === "shitposting" ? ', "humor_structure": "name or null", "humor_score": 0' : ""}}]`
       : isFaceless ? `You are a faceless trading/motivation account on Twitter/X. No personal identity — universal truths only.
 
 ${brandVoice ? `YOUR BRAND VOICE:\n${bvTrimmed}\n` : ""}
