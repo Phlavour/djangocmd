@@ -4787,12 +4787,14 @@ function TradingPanel({ apiKey, supa }) {
   const [tf, setTf] = useState({
     description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0",
     sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
-    trend: "", rsi: "", notes: "",
+    pair: "BTC", timeframe: "15m", notes: "",
   });
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
   const BOUNCE_OPTIONS = ["1", "2", "3"];
+  const PAIRS = ["BTC", "ETH", "DAX", "NAS100", "SP500", "GOLD", "EUR/USD", "GBP/USD"];
+  const TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d", "1w"];
 
   // Load from Supabase
   useEffect(() => {
@@ -4851,8 +4853,7 @@ function TradingPanel({ apiKey, supa }) {
       meets_requirements: tf.meetsRequirements, screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
-      bounce: parseInt(tf.bounce) || 1, trend: tf.trend, rsi: tf.rsi, notes: tf.notes,
-      created_at: new Date().toISOString(),
+      bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
     };
     if (supa) {
       try {
@@ -4860,7 +4861,7 @@ function TradingPanel({ apiKey, supa }) {
         if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
       } catch (e) { console.error("Save trade:", e); }
     }
-    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
+    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" });
     setShowAddTrade(false);
   };
 
@@ -4878,7 +4879,7 @@ function TradingPanel({ apiKey, supa }) {
       screenshot: t.screenshot || "", profit: String(t.profit || 0),
       sl_wick: t.sl_wick || "WIN", potential_wick: String(t.potential_wick || 1),
       sl_band: t.sl_band || "WIN", potential_band: String(t.potential_band || 1),
-      bounce: String(t.bounce || 1), trend: t.trend || "", rsi: t.rsi || "", notes: t.notes || "",
+      bounce: String(t.bounce || 1), pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
     });
     setEditingTradeId(t.id);
     setShowAddTrade(true);
@@ -4891,11 +4892,11 @@ function TradingPanel({ apiKey, supa }) {
       screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
-      bounce: parseInt(tf.bounce) || 1, trend: tf.trend, rsi: tf.rsi, notes: tf.notes,
+      bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
     };
     if (supa) { try { await supa.patch("trading_journal", `id=eq.${editingTradeId}`, updates); } catch {} }
     setTrades(prev => prev.map(t => t.id === editingTradeId ? { ...t, ...updates } : t));
-    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
+    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" });
     setEditingTradeId(null);
     setShowAddTrade(false);
   };
@@ -4935,7 +4936,7 @@ function TradingPanel({ apiKey, supa }) {
     try {
       const tradesData = filteredTrades.slice(0, 50).map(t => ({
         result: t.result, meets_req: t.meets_requirements, sl_wick: t.sl_wick, pot_wick: t.potential_wick,
-        sl_band: t.sl_band, pot_band: t.potential_band, bounce: t.bounce, trend: t.trend, rsi: t.rsi, notes: t.notes,
+        sl_band: t.sl_band, pot_band: t.potential_band, bounce: t.bounce, pair: t.pair, timeframe: t.timeframe, notes: t.notes,
       }));
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -4960,7 +4961,7 @@ ${activeStratObj?.description || "No description"}
 
 Provide:
 1. Overall assessment — is this strategy profitable? what's the edge?
-2. Pattern analysis — when do wins cluster? when do losses cluster? any correlation with bounce level, trend, or RSI?
+2. Pattern analysis — when do wins cluster? when do losses cluster? any correlation with bounce level, pair, or timeframe?
 3. SL placement analysis — wick vs band: which is more reliable? which gives better R?
 4. Risk/reward analysis — are you taking high enough R trades? are losses cutting at the right level?
 5. Specific actionable recommendations — what to change, what to keep
@@ -5114,12 +5115,16 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
-                  <div style={label}>Trend (opcjonalnie)</div>
-                  <input value={tf.trend} onChange={e => setTf(p => ({...p, trend: e.target.value}))} placeholder="np. m1 ▲, H1 ▼" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                  <div style={label}>Para</div>
+                  <select value={tf.pair} onChange={e => setTf(p => ({...p, pair: e.target.value}))} style={sel}>
+                    {PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <div style={label}>RSI (opcjonalnie)</div>
-                  <input value={tf.rsi} onChange={e => setTf(p => ({...p, rsi: e.target.value}))} placeholder="np. 37.6" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                  <div style={label}>Time-frame</div>
+                  <select value={tf.timeframe} onChange={e => setTf(p => ({...p, timeframe: e.target.value}))} style={sel}>
+                    {TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -5148,7 +5153,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
               <div style={{ display: "flex", gap: 8 }}>
                 <Btn color={T.green} onClick={editingTradeId ? updateTrade : saveTrade}>{editingTradeId ? "✓ Update Trade" : "💾 Save Trade"}</Btn>
-                <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" }); }}>Cancel</Btn>
+                <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" }); }}>Cancel</Btn>
               </div>
             </Card>
           ) : (
@@ -5163,6 +5168,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <Badge color={t.result === "WIN" ? T.green : T.red}>{t.result}</Badge>
                     <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>
+                    {t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
+                    {t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
                     <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>
                     <Badge color={T.textDim}>B{t.bounce}</Badge>
                   </div>
@@ -5170,8 +5177,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
                     <span>SL wick: <strong style={{ color: t.sl_wick === "WIN" ? T.green : T.red }}>{t.sl_wick}</strong> ({t.potential_wick}R)</span>
                     <span>SL band: <strong style={{ color: t.sl_band === "WIN" ? T.green : T.red }}>{t.sl_band}</strong> ({t.potential_band}R)</span>
-                    {t.trend && <span>Trend: {t.trend}</span>}
-                    {t.rsi && <span>RSI: {t.rsi}</span>}
                   </div>
                   {t.notes && <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, fontStyle: "italic" }}>💡 {t.notes}</div>}
                 </div>
