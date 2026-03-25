@@ -278,6 +278,7 @@ const LoadingDots = () => {
 
 const NAV = [
   { id: "twitter", icon: "𝕏", label: "Twitter" },
+  { id: "trading", icon: "📊", label: "Trading" },
   { id: "health", icon: "♥", label: "Health", disabled: true },
   { id: "bots", icon: "⬡", label: "Bots", disabled: true },
 ];
@@ -4765,6 +4766,502 @@ const HEALTH_TABS = [
   { id: "progress", label: "📈 Progress" },
 ];
 
+// ═══════════════════════════════════════════════════════════════
+// TRADING JOURNAL PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function TradingPanel({ apiKey, supa }) {
+  const [trades, setTrades] = useState([]);
+  const [strategies, setStrategies] = useState([]);
+  const [activeStrategy, setActiveStrategy] = useState(null);
+  const [subTab, setSubTab] = useState("journal"); // journal | stats | ai
+  const [showAddTrade, setShowAddTrade] = useState(false);
+  const [showAddStrategy, setShowAddStrategy] = useState(false);
+  const [newStratName, setNewStratName] = useState("");
+  const [newStratDesc, setNewStratDesc] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReport, setAiReport] = useState("");
+
+  // Trade form state
+  const [tf, setTf] = useState({
+    description: "", result: "WIN", meetsRequirements: true, screenshot: "",
+    sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
+    trend: "", rsi: "", notes: "",
+  });
+
+  const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
+  const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
+  const BOUNCE_OPTIONS = ["1", "2", "3"];
+
+  // Load from Supabase
+  useEffect(() => {
+    if (!supa?.url || !supa?.key) return;
+    fetch(`${supa.url}/rest/v1/trading_strategies?order=created_at.asc`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } })
+      .then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows) && rows.length) { setStrategies(rows); setActiveStrategy(rows[0].id); } }).catch(() => {});
+    fetch(`${supa.url}/rest/v1/trading_journal?order=created_at.desc&limit=500`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } })
+      .then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows)) setTrades(rows); }).catch(() => {});
+  }, [supa?.url, supa?.key]);
+
+  // Save strategy
+  const saveStrategy = async () => {
+    if (!newStratName.trim()) return;
+    const row = { name: newStratName.trim(), description: newStratDesc.trim(), created_at: new Date().toISOString() };
+    if (supa) {
+      try {
+        const res = await supa.post("trading_strategies", [row]);
+        if (Array.isArray(res) && res[0]) { setStrategies(prev => [...prev, res[0]]); if (!activeStrategy) setActiveStrategy(res[0].id); }
+      } catch (e) { console.error("Save strategy:", e); }
+    }
+    setNewStratName(""); setNewStratDesc(""); setShowAddStrategy(false);
+  };
+
+  // Delete strategy
+  const deleteStrategy = async (id) => {
+    if (!confirm("Delete this strategy and ALL its trades?")) return;
+    if (supa) { try { await supa.del("trading_journal", `strategy_id=eq.${id}`); await supa.del("trading_strategies", `id=eq.${id}`); } catch {} }
+    setStrategies(prev => prev.filter(s => s.id !== id));
+    setTrades(prev => prev.filter(t => t.strategy_id !== id));
+    if (activeStrategy === id) setActiveStrategy(strategies.find(s => s.id !== id)?.id || null);
+  };
+
+  // Screenshot paste
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file || !supa) return;
+        const filename = `trade_${Date.now()}.png`;
+        try {
+          const url = await supa.uploadImage(file, filename);
+          setTf(prev => ({ ...prev, screenshot: url }));
+        } catch { alert("Image upload failed"); }
+      }
+    }
+  };
+
+  // Save trade
+  const saveTrade = async () => {
+    if (!activeStrategy) { alert("Select or create a strategy first"); return; }
+    const row = {
+      strategy_id: activeStrategy, description: tf.description, result: tf.result,
+      meets_requirements: tf.meetsRequirements, screenshot: tf.screenshot,
+      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
+      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
+      bounce: parseInt(tf.bounce) || 1, trend: tf.trend, rsi: tf.rsi, notes: tf.notes,
+      created_at: new Date().toISOString(),
+    };
+    if (supa) {
+      try {
+        const res = await supa.post("trading_journal", [row]);
+        if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
+      } catch (e) { console.error("Save trade:", e); }
+    }
+    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
+    setShowAddTrade(false);
+  };
+
+  // Delete trade
+  const deleteTrade = async (id) => {
+    if (!confirm("Delete this trade?")) return;
+    if (supa) { try { await supa.del("trading_journal", `id=eq.${id}`); } catch {} }
+    setTrades(prev => prev.filter(t => t.id !== id));
+  };
+
+  // Filter trades by active strategy
+  const filteredTrades = activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
+  const activeStratObj = strategies.find(s => s.id === activeStrategy);
+
+  // Stats
+  const wins = filteredTrades.filter(t => t.result === "WIN").length;
+  const losses = filteredTrades.filter(t => t.result === "LOSS").length;
+  const total = filteredTrades.length;
+  const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : "0";
+  const meetsReq = filteredTrades.filter(t => t.meets_requirements).length;
+  const reqRate = total > 0 ? ((meetsReq / total) * 100).toFixed(1) : "0";
+
+  // HTS-specific stats
+  const wickWins = filteredTrades.filter(t => t.sl_wick === "WIN").length;
+  const bandWins = filteredTrades.filter(t => t.sl_band === "WIN").length;
+  const avgPotWick = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_wick || 0), 0) / total).toFixed(1) : "0";
+  const avgPotBand = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_band || 0), 0) / total).toFixed(1) : "0";
+  const bounceDistrib = [0, 0, 0];
+  filteredTrades.forEach(t => { const b = (t.bounce || 1) - 1; if (b >= 0 && b < 3) bounceDistrib[b]++; });
+
+  // Win/Loss streak
+  let maxWinStreak = 0, maxLossStreak = 0, curWin = 0, curLoss = 0;
+  [...filteredTrades].reverse().forEach(t => {
+    if (t.result === "WIN") { curWin++; curLoss = 0; maxWinStreak = Math.max(maxWinStreak, curWin); }
+    else { curLoss++; curWin = 0; maxLossStreak = Math.max(maxLossStreak, curLoss); }
+  });
+
+  // AI Analysis
+  const runAiAnalysis = async () => {
+    if (!apiKey || total < 3) { alert(total < 3 ? "Need at least 3 trades for analysis" : "Add Claude API key"); return; }
+    setAiLoading(true);
+    try {
+      const tradesData = filteredTrades.slice(0, 50).map(t => ({
+        result: t.result, meets_req: t.meets_requirements, sl_wick: t.sl_wick, pot_wick: t.potential_wick,
+        sl_band: t.sl_band, pot_band: t.potential_band, bounce: t.bounce, trend: t.trend, rsi: t.rsi, notes: t.notes,
+      }));
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 2000,
+          messages: [{ role: "user", content: `Analyze this trading journal for the "${activeStratObj?.name || "HTS"}" strategy.
+
+STATS:
+- Total trades: ${total}, Wins: ${wins}, Losses: ${losses}, Win rate: ${winRate}%
+- Meets requirements: ${meetsReq}/${total} (${reqRate}%)
+- SL to wick wins: ${wickWins}/${total}, SL to band wins: ${bandWins}/${total}
+- Avg potential (wick): ${avgPotWick}R, Avg potential (band): ${avgPotBand}R
+- Bounce distribution: B1=${bounceDistrib[0]}, B2=${bounceDistrib[1]}, B3=${bounceDistrib[2]}
+- Max win streak: ${maxWinStreak}, Max loss streak: ${maxLossStreak}
+
+RAW TRADES (newest first):
+${JSON.stringify(tradesData, null, 1)}
+
+STRATEGY DESCRIPTION:
+${activeStratObj?.description || "No description"}
+
+Provide:
+1. Overall assessment — is this strategy profitable? what's the edge?
+2. Pattern analysis — when do wins cluster? when do losses cluster? any correlation with bounce level, trend, or RSI?
+3. SL placement analysis — wick vs band: which is more reliable? which gives better R?
+4. Risk/reward analysis — are you taking high enough R trades? are losses cutting at the right level?
+5. Specific actionable recommendations — what to change, what to keep
+6. Psychological observations — any signs of revenge trading, overtrading, or deviation from strategy?
+
+Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
+        }),
+      });
+      const data = await res.json();
+      setAiReport(data.content?.map(c => c.text || "").join("") || "No response");
+    } catch (err) { setAiReport("Error: " + err.message); }
+    setAiLoading(false);
+  };
+
+  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", color: T.text, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace", outline: "none", cursor: "pointer" };
+  const label = { fontSize: 10, color: T.textSoft, textTransform: "uppercase", marginBottom: 4, letterSpacing: ".04em" };
+
+  return (
+    <div>
+      {/* Strategy selector */}
+      <Card style={{ marginBottom: 16 }}>
+        <Heading icon="📊" right={
+          <div style={{ display: "flex", gap: 6 }}>
+            <Btn small color={T.green} onClick={() => setShowAddStrategy(!showAddStrategy)}>{showAddStrategy ? "Cancel" : "+ Strategy"}</Btn>
+          </div>
+        }>Trading Journal</Heading>
+
+        {showAddStrategy && (
+          <div style={{ marginBottom: 16, padding: 12, background: T.bg2, borderRadius: 8, border: `1px dashed ${T.border}` }}>
+            <input value={newStratName} onChange={e => setNewStratName(e.target.value)} placeholder="Strategy name (e.g. HTS)" style={{ ...sel, width: "100%", marginBottom: 8, boxSizing: "border-box", fontWeight: 600 }} />
+            <textarea value={newStratDesc} onChange={e => setNewStratDesc(e.target.value)} placeholder="Describe the strategy rules, entry conditions, SL placement..."
+              style={{ ...sel, width: "100%", minHeight: 80, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
+            <Btn small color={T.green} onClick={saveStrategy} style={{ marginTop: 8 }}>💾 Save Strategy</Btn>
+          </div>
+        )}
+
+        {strategies.length > 0 ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            {strategies.map(s => (
+              <div key={s.id} style={{ display: "flex", gap: 0 }}>
+                <button onClick={() => setActiveStrategy(s.id)} style={{
+                  background: activeStrategy === s.id ? `${T.cyan}15` : T.bg2,
+                  border: `1px solid ${activeStrategy === s.id ? T.cyan : T.border}`,
+                  borderRadius: "8px 0 0 8px", padding: "8px 14px", cursor: "pointer",
+                  fontSize: 12, fontWeight: activeStrategy === s.id ? 700 : 500,
+                  color: activeStrategy === s.id ? T.cyan : T.textSoft, fontFamily: "'Satoshi', sans-serif",
+                }}>{s.name}</button>
+                <button onClick={() => deleteStrategy(s.id)} style={{
+                  background: T.bg2, border: `1px solid ${T.border}`, borderLeft: "none",
+                  borderRadius: "0 8px 8px 0", padding: "8px 6px", cursor: "pointer",
+                  fontSize: 10, color: T.textDim,
+                }} title="Delete strategy">✕</button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: 16, textAlign: "center", color: T.textDim, fontSize: 12 }}>No strategies yet — click "+ Strategy" to add one</div>
+        )}
+
+        {activeStratObj?.description && (
+          <div style={{ fontSize: 11, color: T.textSoft, background: T.bg2, padding: "8px 12px", borderRadius: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{activeStratObj.description}</div>
+        )}
+      </Card>
+
+      {/* Sub tabs */}
+      {activeStrategy && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+          {[{id:"journal",l:"📝 Journal"},{id:"stats",l:"📊 Stats"},{id:"ai",l:"🤖 AI Analysis"}].map(t => (
+            <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
+          ))}
+          <div style={{ marginLeft: "auto", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", display: "flex", alignItems: "center" }}>
+            {total} trades · {winRate}% WR
+          </div>
+        </div>
+      )}
+
+      {/* ═══ JOURNAL TAB ═══ */}
+      {subTab === "journal" && activeStrategy && (
+        <div>
+          {/* Add trade */}
+          {showAddTrade ? (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="✎">New Trade</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Result</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
+                    <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Meets Requirements</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, meetsRequirements: true}))} style={{ ...sel, flex: 1, background: tf.meetsRequirements ? `${T.green}20` : T.bg2, color: tf.meetsRequirements ? T.green : T.textSoft, fontWeight: tf.meetsRequirements ? 700 : 400, borderColor: tf.meetsRequirements ? T.green : T.border }}>YES</button>
+                    <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NO</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* HTS specific fields */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>SL do wicka</div>
+                  <select value={tf.sl_wick} onChange={e => setTf(p => ({...p, sl_wick: e.target.value}))} style={sel}>
+                    <option value="WIN">WIN</option><option value="LOSS">LOSS</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Potential (wick)</div>
+                  <select value={tf.potential_wick} onChange={e => setTf(p => ({...p, potential_wick: e.target.value}))} style={sel}>
+                    {R_OPTIONS_20.map(r => <option key={r} value={r}>{r}R</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>SL do wstęgi</div>
+                  <select value={tf.sl_band} onChange={e => setTf(p => ({...p, sl_band: e.target.value}))} style={sel}>
+                    <option value="WIN">WIN</option><option value="LOSS">LOSS</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Potential (band)</div>
+                  <select value={tf.potential_band} onChange={e => setTf(p => ({...p, potential_band: e.target.value}))} style={sel}>
+                    {R_OPTIONS_10.map(r => <option key={r} value={r}>{r}R</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Odbicie</div>
+                  <select value={tf.bounce} onChange={e => setTf(p => ({...p, bounce: e.target.value}))} style={sel}>
+                    {BOUNCE_OPTIONS.map(b => <option key={b} value={b}>B{b}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Trend (opcjonalnie)</div>
+                  <input value={tf.trend} onChange={e => setTf(p => ({...p, trend: e.target.value}))} placeholder="np. m1 ▲, H1 ▼" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>RSI (opcjonalnie)</div>
+                  <input value={tf.rsi} onChange={e => setTf(p => ({...p, rsi: e.target.value}))} placeholder="np. 37.6" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Opis trade'a</div>
+                <textarea value={tf.description} onChange={e => setTf(p => ({...p, description: e.target.value}))} placeholder="opisz setup, entry, co widziałeś na wykresie..."
+                  style={{ ...sel, width: "100%", minHeight: 60, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Notatki</div>
+                <textarea value={tf.notes} onChange={e => setTf(p => ({...p, notes: e.target.value}))} placeholder="dodatkowe obserwacje, co byś zmienił..."
+                  style={{ ...sel, width: "100%", minHeight: 40, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
+              </div>
+
+              {/* Screenshot paste area */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Screenshot (Ctrl+V)</div>
+                <div onPaste={handlePaste} tabIndex={0}
+                  style={{ border: `1px dashed ${tf.screenshot ? T.green : T.border}`, borderRadius: 8, padding: tf.screenshot ? 8 : "20px 12px", textAlign: "center", cursor: "pointer", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg2 }}
+                  onClick={e => e.currentTarget.focus()}>
+                  {tf.screenshot ? <img src={tf.screenshot} alt="trade" style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 6, objectFit: "contain" }} /> : "📎 click here and paste screenshot (Ctrl+V)"}
+                </div>
+                {tf.screenshot && <Btn small outline onClick={() => setTf(p => ({...p, screenshot: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>}
+              </div>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn color={T.green} onClick={saveTrade}>💾 Save Trade</Btn>
+                <Btn outline onClick={() => setShowAddTrade(false)}>Cancel</Btn>
+              </div>
+            </Card>
+          ) : (
+            <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
+          )}
+
+          {/* Trade list */}
+          {filteredTrades.map(t => (
+            <Card key={t.id} style={{ marginBottom: 8 }} hover>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                    <Badge color={t.result === "WIN" ? T.green : T.red}>{t.result}</Badge>
+                    <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ meets req" : "✕ no req"}</Badge>
+                    <Badge color={T.textDim}>B{t.bounce}</Badge>
+                    <span style={{ fontSize: 9, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{t.created_at?.slice(0, 10)}</span>
+                  </div>
+                  {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
+                  <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
+                    <span>SL wick: <strong style={{ color: t.sl_wick === "WIN" ? T.green : T.red }}>{t.sl_wick}</strong> ({t.potential_wick}R)</span>
+                    <span>SL band: <strong style={{ color: t.sl_band === "WIN" ? T.green : T.red }}>{t.sl_band}</strong> ({t.potential_band}R)</span>
+                    {t.trend && <span>Trend: {t.trend}</span>}
+                    {t.rsi && <span>RSI: {t.rsi}</span>}
+                  </div>
+                  {t.notes && <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, fontStyle: "italic" }}>💡 {t.notes}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
+                  {t.screenshot && <img src={t.screenshot} alt="" style={{ width: 120, height: 70, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, cursor: "pointer" }} onClick={() => window.open(t.screenshot, "_blank")} />}
+                  <Btn small outline onClick={() => deleteTrade(t.id)} style={{ color: T.red }}>🗑</Btn>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {filteredTrades.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades yet — click "+ New Trade" to start journaling</div>}
+        </div>
+      )}
+
+      {/* ═══ STATS TAB ═══ */}
+      {subTab === "stats" && activeStrategy && (
+        <div>
+          {/* Overview stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+            <Stat label="Total Trades" value={total} color={T.cyan} />
+            <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L`} />
+            <Stat label="Meets Req" value={reqRate} suffix="%" color={parseFloat(reqRate) >= 80 ? T.green : T.amber} sub={`${meetsReq} / ${total}`} />
+            <Stat label="Streaks" value={`${maxWinStreak}W`} color={T.green} sub={`${maxLossStreak}L max loss`} />
+          </div>
+
+          {/* HTS specific stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+            <Stat label="SL Wick WR" value={total > 0 ? ((wickWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.cyan} sub={`${wickWins} / ${total}`} />
+            <Stat label="Avg Pot Wick" value={avgPotWick} suffix="R" color={T.green} />
+            <Stat label="SL Band WR" value={total > 0 ? ((bandWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.purple} sub={`${bandWins} / ${total}`} />
+            <Stat label="Avg Pot Band" value={avgPotBand} suffix="R" color={T.green} />
+          </div>
+
+          {/* Bounce distribution */}
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📊">Bounce Distribution</Heading>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-end", height: 120 }}>
+              {bounceDistrib.map((count, i) => {
+                const max = Math.max(...bounceDistrib, 1);
+                const h = (count / max) * 100;
+                const wins_b = filteredTrades.filter(t => t.bounce === i+1 && t.result === "WIN").length;
+                const wr = count > 0 ? ((wins_b / count) * 100).toFixed(0) : "0";
+                return (
+                  <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 4 }}>{count}</div>
+                    <div style={{ height: `${h}%`, minHeight: 4, background: `linear-gradient(180deg, ${T.cyan}, ${T.cyan}60)`, borderRadius: "4px 4px 0 0", marginBottom: 4 }} />
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.cyan }}>B{i+1}</div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>{wr}% WR</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Win rate over time (last 20 trades rolling) */}
+          {total >= 5 && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="📈">Win Rate Trend (rolling 5 trades)</Heading>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100 }}>
+                {(() => {
+                  const reversed = [...filteredTrades].reverse();
+                  const points = [];
+                  for (let i = 4; i < reversed.length; i++) {
+                    const window = reversed.slice(i - 4, i + 1);
+                    const wr = (window.filter(t => t.result === "WIN").length / 5) * 100;
+                    points.push(wr);
+                  }
+                  const max = 100;
+                  return points.map((wr, i) => (
+                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                      <div style={{ width: "100%", height: `${wr}%`, minHeight: 2, background: wr >= 50 ? T.green : T.red, borderRadius: "2px 2px 0 0", opacity: 0.7 + (i / points.length) * 0.3 }} title={`${wr.toFixed(0)}%`} />
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                <span style={{ fontSize: 9, color: T.textDim }}>oldest</span>
+                <span style={{ fontSize: 9, color: T.textDim }}>newest</span>
+              </div>
+            </Card>
+          )}
+
+          {/* Result by meets requirements */}
+          <Card>
+            <Heading icon="✓">Meets Requirements vs Result</Heading>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: T.green, fontWeight: 600, marginBottom: 8 }}>✓ MEETS REQ</div>
+                {(() => {
+                  const met = filteredTrades.filter(t => t.meets_requirements);
+                  const mWin = met.filter(t => t.result === "WIN").length;
+                  const mWR = met.length > 0 ? ((mWin / met.length) * 100).toFixed(1) : "0";
+                  return <>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: T.text }}>{mWR}%</div>
+                    <div style={{ fontSize: 10, color: T.textDim }}>{mWin}W / {met.length - mWin}L out of {met.length}</div>
+                  </>;
+                })()}
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: T.red, fontWeight: 600, marginBottom: 8 }}>✕ NO REQ</div>
+                {(() => {
+                  const nomet = filteredTrades.filter(t => !t.meets_requirements);
+                  const nWin = nomet.filter(t => t.result === "WIN").length;
+                  const nWR = nomet.length > 0 ? ((nWin / nomet.length) * 100).toFixed(1) : "0";
+                  return <>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: T.text }}>{nWR}%</div>
+                    <div style={{ fontSize: 10, color: T.textDim }}>{nWin}W / {nomet.length - nWin}L out of {nomet.length}</div>
+                  </>;
+                })()}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══ AI TAB ═══ */}
+      {subTab === "ai" && activeStrategy && (
+        <div>
+          <Card>
+            <Heading icon="🤖" right={
+              <Btn small color={T.purple} disabled={aiLoading || total < 3} onClick={runAiAnalysis}>
+                {aiLoading ? "⏳ Analyzing..." : "🤖 Run AI Analysis"}
+              </Btn>
+            }>AI Trading Analysis</Heading>
+            {total < 3 && <div style={{ fontSize: 11, color: T.amber, marginBottom: 8 }}>Need at least 3 trades for meaningful analysis</div>}
+            {aiReport && <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7, color: T.text, padding: 14, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>{aiReport}</div>}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEALTH PANEL (placeholder)
+// ═══════════════════════════════════════════════════════════════
+
 function HealthPanel({ T: theme }) {
   const [tab, setTab] = useState("overview");
 
@@ -4989,6 +5486,7 @@ export default function App() {
       {/* CONTENT */}
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
         {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} twitterApiKey={twitterApiKey} />}
+        {nav === "trading" && <TradingPanel apiKey={apiKey} supa={supa} />}
         {nav === "health" && <HealthPanel T={T} />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
