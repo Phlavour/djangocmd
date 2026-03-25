@@ -4776,6 +4776,7 @@ function TradingPanel({ apiKey, supa }) {
   const [activeStrategy, setActiveStrategy] = useState(null);
   const [subTab, setSubTab] = useState("journal"); // journal | stats | ai
   const [showAddTrade, setShowAddTrade] = useState(false);
+  const [editingTradeId, setEditingTradeId] = useState(null);
   const [showAddStrategy, setShowAddStrategy] = useState(false);
   const [newStratName, setNewStratName] = useState("");
   const [newStratDesc, setNewStratDesc] = useState("");
@@ -4784,7 +4785,7 @@ function TradingPanel({ apiKey, supa }) {
 
   // Trade form state
   const [tf, setTf] = useState({
-    description: "", result: "WIN", meetsRequirements: true, screenshot: "",
+    description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0",
     sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
     trend: "", rsi: "", notes: "",
   });
@@ -4847,7 +4848,7 @@ function TradingPanel({ apiKey, supa }) {
     if (!activeStrategy) { alert("Select or create a strategy first"); return; }
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result,
-      meets_requirements: tf.meetsRequirements, screenshot: tf.screenshot,
+      meets_requirements: tf.meetsRequirements, screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1, trend: tf.trend, rsi: tf.rsi, notes: tf.notes,
@@ -4859,7 +4860,7 @@ function TradingPanel({ apiKey, supa }) {
         if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
       } catch (e) { console.error("Save trade:", e); }
     }
-    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
+    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
     setShowAddTrade(false);
   };
 
@@ -4870,6 +4871,35 @@ function TradingPanel({ apiKey, supa }) {
     setTrades(prev => prev.filter(t => t.id !== id));
   };
 
+  // Edit trade
+  const startEdit = (t) => {
+    setTf({
+      description: t.description || "", result: t.result || "WIN", meetsRequirements: t.meets_requirements !== false,
+      screenshot: t.screenshot || "", profit: String(t.profit || 0),
+      sl_wick: t.sl_wick || "WIN", potential_wick: String(t.potential_wick || 1),
+      sl_band: t.sl_band || "WIN", potential_band: String(t.potential_band || 1),
+      bounce: String(t.bounce || 1), trend: t.trend || "", rsi: t.rsi || "", notes: t.notes || "",
+    });
+    setEditingTradeId(t.id);
+    setShowAddTrade(true);
+  };
+
+  const updateTrade = async () => {
+    if (!editingTradeId) return;
+    const updates = {
+      description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements,
+      screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
+      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
+      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
+      bounce: parseInt(tf.bounce) || 1, trend: tf.trend, rsi: tf.rsi, notes: tf.notes,
+    };
+    if (supa) { try { await supa.patch("trading_journal", `id=eq.${editingTradeId}`, updates); } catch {} }
+    setTrades(prev => prev.map(t => t.id === editingTradeId ? { ...t, ...updates } : t));
+    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" });
+    setEditingTradeId(null);
+    setShowAddTrade(false);
+  };
+
   // Filter trades by active strategy
   const filteredTrades = activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
   const activeStratObj = strategies.find(s => s.id === activeStrategy);
@@ -4878,6 +4908,7 @@ function TradingPanel({ apiKey, supa }) {
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
   const losses = filteredTrades.filter(t => t.result === "LOSS").length;
   const total = filteredTrades.length;
+  const totalProfit = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
   const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : "0";
   const meetsReq = filteredTrades.filter(t => t.meets_requirements).length;
   const reqRate = total > 0 ? ((meetsReq / total) * 100).toFixed(1) : "0";
@@ -5012,13 +5043,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           {/* Add trade */}
           {showAddTrade ? (
             <Card style={{ marginBottom: 16 }}>
-              <Heading icon="✎">New Trade</Heading>
+              <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Result</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
-                    <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
+                    <button onClick={() => setTf(p => ({...p, result: "LOSS", sl_wick: "LOSS", sl_band: "LOSS"}))} style={{ ...sel, flex: 1, background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
                 <div>
@@ -5027,6 +5058,22 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, meetsRequirements: true}))} style={{ ...sel, flex: 1, background: tf.meetsRequirements ? `${T.green}20` : T.bg2, color: tf.meetsRequirements ? T.green : T.textSoft, fontWeight: tf.meetsRequirements ? 700 : 400, borderColor: tf.meetsRequirements ? T.green : T.border }}>YES</button>
                     <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NO</button>
                   </div>
+                </div>
+              </div>
+
+              {/* Profit */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Profit</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {Array.from({length: 26}, (_, i) => i - 5).map(r => {
+                    const active = tf.profit === String(r);
+                    const color = r > 0 ? T.green : r < 0 ? T.red : T.textDim;
+                    return <button key={r} onClick={() => setTf(p => ({...p, profit: String(r)}))} style={{
+                      ...sel, padding: "4px 8px", fontSize: 10, minWidth: 32, textAlign: "center",
+                      background: active ? `${color}20` : T.bg2, color: active ? color : T.textSoft,
+                      fontWeight: active ? 700 : 400, borderColor: active ? color : T.border,
+                    }}>{r > 0 ? "+" : ""}{r}R</button>;
+                  })}
                 </div>
               </div>
 
@@ -5100,8 +5147,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
-                <Btn color={T.green} onClick={saveTrade}>💾 Save Trade</Btn>
-                <Btn outline onClick={() => setShowAddTrade(false)}>Cancel</Btn>
+                <Btn color={T.green} onClick={editingTradeId ? updateTrade : saveTrade}>{editingTradeId ? "✓ Update Trade" : "💾 Save Trade"}</Btn>
+                <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", trend: "", rsi: "", notes: "" }); }}>Cancel</Btn>
               </div>
             </Card>
           ) : (
@@ -5115,9 +5162,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <Badge color={t.result === "WIN" ? T.green : T.red}>{t.result}</Badge>
-                    <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ meets req" : "✕ no req"}</Badge>
+                    <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>
+                    <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>
                     <Badge color={T.textDim}>B{t.bounce}</Badge>
-                    <span style={{ fontSize: 9, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace" }}>{t.created_at?.slice(0, 10)}</span>
                   </div>
                   {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
@@ -5130,6 +5177,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
                 <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
                   {t.screenshot && <img src={t.screenshot} alt="" style={{ width: 120, height: 70, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, cursor: "pointer" }} onClick={() => window.open(t.screenshot, "_blank")} />}
+                  <Btn small outline onClick={() => startEdit(t)}>✎</Btn>
                   <Btn small outline onClick={() => deleteTrade(t.id)} style={{ color: T.red }}>🗑</Btn>
                 </div>
               </div>
@@ -5143,9 +5191,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {subTab === "stats" && activeStrategy && (
         <div>
           {/* Overview stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
             <Stat label="Total Trades" value={total} color={T.cyan} />
             <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L`} />
+            <Stat label="Total Profit" value={`${totalProfit > 0 ? "+" : ""}${totalProfit}`} suffix="R" color={totalProfit >= 0 ? T.green : T.red} />
             <Stat label="Meets Req" value={reqRate} suffix="%" color={parseFloat(reqRate) >= 80 ? T.green : T.amber} sub={`${meetsReq} / ${total}`} />
             <Stat label="Streaks" value={`${maxWinStreak}W`} color={T.green} sub={`${maxLossStreak}L max loss`} />
           </div>
