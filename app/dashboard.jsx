@@ -4785,16 +4785,21 @@ function TradingPanel({ apiKey, supa }) {
 
   // Trade form state
   const [tf, setTf] = useState({
-    description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0",
+    description: "", result: "WIN", direction: "LONG", meetsRequirements: true,
+    screenshot_before: "", screenshot_after: "", reason: "", profit: "0",
     sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
     pair: "BTC", timeframe: "15m", notes: "",
+    // Auto-filled from Vision
+    trends: {}, rsi: "", pivots: {},
   });
+  const [visionLoading, setVisionLoading] = useState(false);
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
   const BOUNCE_OPTIONS = ["1", "2", "3"];
   const PAIRS = ["BTC", "ETH", "DAX", "NAS100", "SP500", "GOLD", "EUR/USD", "GBP/USD"];
   const TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d", "1w"];
+  const TREND_TFS = ["m1", "m5", "m15", "H1", "H2", "H4", "D1"];
 
   // Load from Supabase
   useEffect(() => {
@@ -4827,33 +4832,128 @@ function TradingPanel({ apiKey, supa }) {
     if (activeStrategy === id) setActiveStrategy(strategies.find(s => s.id !== id)?.id || null);
   };
 
-  // Screenshot paste
-  const handlePaste = async (e) => {
+  // Upload image helper
+  const uploadImage = async (file) => {
+    if (!supa) return null;
+    const filename = `trade_${Date.now()}.png`;
+    try { return await supa.uploadImage(file, filename); } catch { alert("Image upload failed"); return null; }
+  };
+
+  // Paste handler for BEFORE screenshot (with Vision analysis)
+  const handlePasteBefore = async (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
       if (item.type.startsWith("image/")) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (!file || !supa) return;
-        const filename = `trade_${Date.now()}.png`;
-        try {
-          const url = await supa.uploadImage(file, filename);
-          setTf(prev => ({ ...prev, screenshot: url }));
-        } catch { alert("Image upload failed"); }
+        if (!file) return;
+        const url = await uploadImage(file);
+        if (url) {
+          setTf(prev => ({ ...prev, screenshot_before: url }));
+          // Run Vision analysis
+          if (apiKey) analyzeScreenshot(file, url);
+        }
       }
     }
+  };
+
+  // Paste handler for AFTER screenshot (simple)
+  const handlePasteAfter = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        const url = await uploadImage(file);
+        if (url) setTf(prev => ({ ...prev, screenshot_after: url }));
+      }
+    }
+  };
+
+  // Claude Vision — analyze HTS table from screenshot
+  const analyzeScreenshot = async (file, url) => {
+    if (!apiKey) return;
+    setVisionLoading(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = () => rej("Read failed");
+        r.readAsDataURL(file);
+      });
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 500,
+          messages: [{ role: "user", content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: base64 } },
+            { type: "text", text: `Look at this trading chart screenshot. In the bottom-right corner there should be an HTS table with trend indicators and values.
+
+Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "trends": {
+    "m1": "up" or "down",
+    "m5": "up" or "down",
+    "m15": "up" or "down",
+    "H1": "up" or "down",
+    "H2": "up" or "down",
+    "H4": "up" or "down",
+    "D1": "up" or "down"
+  },
+  "rsi": "the RSI value for the ${tf.timeframe} timeframe (number as string, e.g. '37.6')",
+  "pivots": {
+    "PP": "price or empty",
+    "R1": "price or empty",
+    "R2": "price or empty",
+    "R3": "price or empty",
+    "S1": "price or empty",
+    "S2": "price or empty",
+    "S3": "price or empty"
+  }
+}
+
+Rules:
+- "up" = green arrow/triangle pointing up, "down" = red arrow/triangle pointing down
+- If you can't read a value, use "" (empty string)
+- If the HTS table is not visible, return {"trends":{},"rsi":"","pivots":{}}
+- RSI: look for the RSI column value that corresponds to the ${tf.timeframe} row
+- Pivots: look for pivot point values (PP, R1, R2, R3, S1, S2, S3) if visible in the table
+- Respond ONLY with JSON, nothing else` }
+          ] }]
+        }),
+      });
+
+      const data = await res.json();
+      const text = (data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim();
+      try {
+        const parsed = JSON.parse(text);
+        setTf(prev => ({
+          ...prev,
+          trends: parsed.trends || {},
+          rsi: parsed.rsi || "",
+          pivots: parsed.pivots || {},
+        }));
+      } catch { console.error("Vision parse error:", text); }
+    } catch (err) { console.error("Vision analysis error:", err); }
+    setVisionLoading(false);
   };
 
   // Save trade
   const saveTrade = async () => {
     if (!activeStrategy) { alert("Select or create a strategy first"); return; }
     const row = {
-      strategy_id: activeStrategy, description: tf.description, result: tf.result,
-      meets_requirements: tf.meetsRequirements, screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
+      strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
+      meets_requirements: tf.meetsRequirements, screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after,
+      reason: tf.reason, profit: parseInt(tf.profit) || 0,
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
+      trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
     };
     if (supa) {
       try {
@@ -4861,7 +4961,7 @@ function TradingPanel({ apiKey, supa }) {
         if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
       } catch (e) { console.error("Save trade:", e); }
     }
-    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" });
+    setTf({ description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {} });
     setShowAddTrade(false);
   };
 
@@ -4874,29 +4974,40 @@ function TradingPanel({ apiKey, supa }) {
 
   // Edit trade
   const startEdit = (t) => {
+    let trends = t.trends || {};
+    let pivots = t.pivots || {};
+    try { if (typeof trends === "string") trends = JSON.parse(trends); } catch { trends = {}; }
+    try { if (typeof pivots === "string") pivots = JSON.parse(pivots); } catch { pivots = {}; }
     setTf({
-      description: t.description || "", result: t.result || "WIN", meetsRequirements: t.meets_requirements !== false,
-      screenshot: t.screenshot || "", profit: String(t.profit || 0),
+      description: t.description || "", result: t.result || "WIN", direction: t.direction || "LONG",
+      meetsRequirements: t.meets_requirements !== false,
+      screenshot_before: t.screenshot_before || t.screenshot || "", screenshot_after: t.screenshot_after || "",
+      reason: t.reason || "", profit: String(t.profit || 0),
       sl_wick: t.sl_wick || "WIN", potential_wick: String(t.potential_wick || 1),
       sl_band: t.sl_band || "WIN", potential_band: String(t.potential_band || 1),
       bounce: String(t.bounce || 1), pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
+      trends, rsi: t.rsi || "", pivots,
     });
     setEditingTradeId(t.id);
     setShowAddTrade(true);
   };
 
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {} };
+
   const updateTrade = async () => {
     if (!editingTradeId) return;
     const updates = {
-      description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements,
-      screenshot: tf.screenshot, profit: parseInt(tf.profit) || 0,
+      description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
+      screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after, reason: tf.reason,
+      profit: parseInt(tf.profit) || 0,
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
+      trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
     };
     if (supa) { try { await supa.patch("trading_journal", `id=eq.${editingTradeId}`, updates); } catch {} }
     setTrades(prev => prev.map(t => t.id === editingTradeId ? { ...t, ...updates } : t));
-    setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" });
+    setTf(EMPTY_TF);
     setEditingTradeId(null);
     setShowAddTrade(false);
   };
@@ -5045,7 +5156,16 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           {showAddTrade ? (
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+
+              {/* Row 1: Direction, Result, Meets Req */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Direction</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, direction: "LONG"}))} style={{ ...sel, flex: 1, background: tf.direction === "LONG" ? `${T.green}20` : T.bg2, color: tf.direction === "LONG" ? T.green : T.textSoft, fontWeight: tf.direction === "LONG" ? 700 : 400, borderColor: tf.direction === "LONG" ? T.green : T.border }}>LONG ▲</button>
+                    <button onClick={() => setTf(p => ({...p, direction: "SHORT"}))} style={{ ...sel, flex: 1, background: tf.direction === "SHORT" ? `${T.red}20` : T.bg2, color: tf.direction === "SHORT" ? T.red : T.textSoft, fontWeight: tf.direction === "SHORT" ? 700 : 400, borderColor: tf.direction === "SHORT" ? T.red : T.border }}>SHORT ▼</button>
+                  </div>
+                </div>
                 <div>
                   <div style={label}>Result</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5062,21 +5182,77 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Profit */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={label}>Profit</div>
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {Array.from({length: 26}, (_, i) => i - 5).map(r => {
-                    const active = tf.profit === String(r);
-                    const color = r > 0 ? T.green : r < 0 ? T.red : T.textDim;
-                    return <button key={r} onClick={() => setTf(p => ({...p, profit: String(r)}))} style={{
-                      ...sel, padding: "4px 8px", fontSize: 10, minWidth: 32, textAlign: "center",
-                      background: active ? `${color}20` : T.bg2, color: active ? color : T.textSoft,
-                      fontWeight: active ? 700 : 400, borderColor: active ? color : T.border,
-                    }}>{r > 0 ? "+" : ""}{r}R</button>;
-                  })}
+              {/* Row 2: Pair, TF, Profit */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Para</div>
+                  <select value={tf.pair} onChange={e => setTf(p => ({...p, pair: e.target.value}))} style={sel}>
+                    {PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Time-frame</div>
+                  <select value={tf.timeframe} onChange={e => setTf(p => ({...p, timeframe: e.target.value}))} style={sel}>
+                    {TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Profit</div>
+                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                    {Array.from({length: 26}, (_, i) => i - 5).map(r => {
+                      const active = tf.profit === String(r);
+                      const color = r > 0 ? T.green : r < 0 ? T.red : T.textDim;
+                      return <button key={r} onClick={() => setTf(p => ({...p, profit: String(r)}))} style={{
+                        ...sel, padding: "3px 6px", fontSize: 9, minWidth: 28, textAlign: "center",
+                        background: active ? `${color}20` : T.bg2, color: active ? color : T.textSoft,
+                        fontWeight: active ? 700 : 400, borderColor: active ? color : T.border,
+                      }}>{r > 0 ? "+" : ""}{r}R</button>;
+                    })}
+                  </div>
                 </div>
               </div>
+
+              {/* Screenshot BEFORE + reason */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>📸 Before Trade (z tabelką HTS)</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div onPaste={handlePasteBefore} tabIndex={0}
+                    style={{ border: `1px dashed ${tf.screenshot_before ? T.purple : T.border}`, borderRadius: 8, padding: tf.screenshot_before ? 8 : "20px 12px", textAlign: "center", cursor: "pointer", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", minHeight: 100, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg2 }}
+                    onClick={e => e.currentTarget.focus()}>
+                    {tf.screenshot_before ? <img src={tf.screenshot_before} alt="before" style={{ maxWidth: "100%", maxHeight: 250, borderRadius: 6, objectFit: "contain" }} /> : "📎 Ctrl+V — wklej screenshot PRZED trade'em"}
+                  </div>
+                  {tf.screenshot_before && <Btn small outline onClick={() => setTf(p => ({...p, screenshot_before: "", trends: {}, rsi: "", pivots: {}}))} style={{ marginTop: 6 }}>✕ Remove</Btn>}
+                  {visionLoading && <div style={{ marginTop: 6, fontSize: 10, color: T.purple }}>⏳ Analizuję tabelkę HTS...</div>}
+                </div>
+                <div>
+                  <div style={label}>Dlaczego wziąłem ten trade?</div>
+                  <textarea value={tf.reason} onChange={e => setTf(p => ({...p, reason: e.target.value}))} placeholder="co widziałeś na wykresie, dlaczego entry tutaj, jaka konfluencja..."
+                    style={{ ...sel, width: "100%", minHeight: 100, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
+                </div>
+              </div>
+
+              {/* Vision results: Trends + RSI + Pivots */}
+              {Object.keys(tf.trends).length > 0 && (
+                <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.cyan, marginBottom: 6, textTransform: "uppercase" }}>📊 Dane z HTS (auto-detected)</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                    {TREND_TFS.map(k => {
+                      const v = tf.trends[k];
+                      if (!v) return null;
+                      const isUp = v === "up";
+                      return <span key={k} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: isUp ? `${T.green}15` : `${T.red}15`, color: isUp ? T.green : T.red, fontFamily: "'IBM Plex Mono', monospace" }}>
+                        {k} {isUp ? "▲" : "▼"}
+                      </span>;
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: 16, fontSize: 10, color: T.textSoft }}>
+                    {tf.rsi && <span>RSI ({tf.timeframe}): <strong style={{ color: parseFloat(tf.rsi) > 70 ? T.red : parseFloat(tf.rsi) < 30 ? T.green : T.text }}>{tf.rsi}</strong></span>}
+                    {tf.pivots && Object.keys(tf.pivots).filter(k => tf.pivots[k]).length > 0 && (
+                      <span>Pivots: {Object.entries(tf.pivots).filter(([,v]) => v).map(([k,v]) => `${k}=${v}`).join(" · ")}</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* HTS specific fields */}
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
@@ -5113,21 +5289,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Para</div>
-                  <select value={tf.pair} onChange={e => setTf(p => ({...p, pair: e.target.value}))} style={sel}>
-                    {PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={label}>Time-frame</div>
-                  <select value={tf.timeframe} onChange={e => setTf(p => ({...p, timeframe: e.target.value}))} style={sel}>
-                    {TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-
               <div style={{ marginBottom: 12 }}>
                 <div style={label}>Opis trade'a</div>
                 <textarea value={tf.description} onChange={e => setTf(p => ({...p, description: e.target.value}))} placeholder="opisz setup, entry, co widziałeś na wykresie..."
@@ -5140,20 +5301,20 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   style={{ ...sel, width: "100%", minHeight: 40, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
               </div>
 
-              {/* Screenshot paste area */}
+              {/* Screenshot AFTER */}
               <div style={{ marginBottom: 12 }}>
-                <div style={label}>Screenshot (Ctrl+V)</div>
-                <div onPaste={handlePaste} tabIndex={0}
-                  style={{ border: `1px dashed ${tf.screenshot ? T.green : T.border}`, borderRadius: 8, padding: tf.screenshot ? 8 : "20px 12px", textAlign: "center", cursor: "pointer", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg2 }}
+                <div style={label}>📸 Screenshot PO trade'ie (Ctrl+V)</div>
+                <div onPaste={handlePasteAfter} tabIndex={0}
+                  style={{ border: `1px dashed ${tf.screenshot_after ? T.green : T.border}`, borderRadius: 8, padding: tf.screenshot_after ? 8 : "16px 12px", textAlign: "center", cursor: "pointer", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center", background: T.bg2 }}
                   onClick={e => e.currentTarget.focus()}>
-                  {tf.screenshot ? <img src={tf.screenshot} alt="trade" style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 6, objectFit: "contain" }} /> : "📎 click here and paste screenshot (Ctrl+V)"}
+                  {tf.screenshot_after ? <img src={tf.screenshot_after} alt="after" style={{ maxWidth: "100%", maxHeight: 250, borderRadius: 6, objectFit: "contain" }} /> : "📎 Ctrl+V — wklej screenshot PO trade'ie"}
                 </div>
-                {tf.screenshot && <Btn small outline onClick={() => setTf(p => ({...p, screenshot: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>}
+                {tf.screenshot_after && <Btn small outline onClick={() => setTf(p => ({...p, screenshot_after: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>}
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
                 <Btn color={T.green} onClick={editingTradeId ? updateTrade : saveTrade}>{editingTradeId ? "✓ Update Trade" : "💾 Save Trade"}</Btn>
-                <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf({ description: "", result: "WIN", meetsRequirements: true, screenshot: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "" }); }}>Cancel</Btn>
+                <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>Cancel</Btn>
               </div>
             </Card>
           ) : (
@@ -5161,11 +5322,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* Trade list */}
-          {filteredTrades.map(t => (
+          {filteredTrades.map(t => {
+            let trends = t.trends || {};
+            try { if (typeof trends === "string") trends = JSON.parse(trends); } catch { trends = {}; }
+            let pivots = t.pivots || {};
+            try { if (typeof pivots === "string") pivots = JSON.parse(pivots); } catch { pivots = {}; }
+            return (
             <Card key={t.id} style={{ marginBottom: 8 }} hover>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                    <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"} {t.direction === "SHORT" ? "▼" : "▲"}</Badge>
                     <Badge color={t.result === "WIN" ? T.green : T.red}>{t.result}</Badge>
                     <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>
                     {t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
@@ -5173,21 +5340,29 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>
                     <Badge color={T.textDim}>B{t.bounce}</Badge>
                   </div>
+                  {t.reason && <div style={{ fontSize: 11, color: T.purple, marginBottom: 4 }}>📝 {t.reason}</div>}
                   {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
                     <span>SL wick: <strong style={{ color: t.sl_wick === "WIN" ? T.green : T.red }}>{t.sl_wick}</strong> ({t.potential_wick}R)</span>
                     <span>SL band: <strong style={{ color: t.sl_band === "WIN" ? T.green : T.red }}>{t.sl_band}</strong> ({t.potential_band}R)</span>
+                    {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
                   </div>
+                  {Object.keys(trends).length > 0 && (
+                    <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                      {TREND_TFS.map(k => { const v = trends[k]; if (!v) return null; return <span key={k} style={{ fontSize: 9, fontWeight: 600, padding: "1px 5px", borderRadius: 3, background: v === "up" ? `${T.green}12` : `${T.red}12`, color: v === "up" ? T.green : T.red }}>{k}{v === "up" ? "▲" : "▼"}</span>; })}
+                    </div>
+                  )}
                   {t.notes && <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, fontStyle: "italic" }}>💡 {t.notes}</div>}
                 </div>
-                <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
-                  {t.screenshot && <img src={t.screenshot} alt="" style={{ width: 120, height: 70, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, cursor: "pointer" }} onClick={() => window.open(t.screenshot, "_blank")} />}
+                <div style={{ display: "flex", gap: 4, alignItems: "flex-start", flexShrink: 0 }}>
+                  {(t.screenshot_before || t.screenshot) && <img src={t.screenshot_before || t.screenshot} alt="" style={{ width: 100, height: 60, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.purple}40`, cursor: "pointer" }} onClick={() => window.open(t.screenshot_before || t.screenshot, "_blank")} title="Before" />}
+                  {t.screenshot_after && <img src={t.screenshot_after} alt="" style={{ width: 100, height: 60, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.green}40`, cursor: "pointer" }} onClick={() => window.open(t.screenshot_after, "_blank")} title="After" />}
                   <Btn small outline onClick={() => startEdit(t)}>✎</Btn>
                   <Btn small outline onClick={() => deleteTrade(t.id)} style={{ color: T.red }}>🗑</Btn>
                 </div>
               </div>
             </Card>
-          ))}
+          ); })}
           {filteredTrades.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades yet — click "+ New Trade" to start journaling</div>}
         </div>
       )}
