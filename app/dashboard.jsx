@@ -4818,11 +4818,34 @@ function TradingPanel({ apiKey, supa }) {
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
-    const row = { name: newStratName.trim(), description: newStratDesc.trim(), type: newStratType, created_at: new Date().toISOString() };
+    const row = { name: newStratName.trim(), description: newStratDesc.trim(), type: newStratType };
     if (supa) {
       try {
-        const res = await supa.post("trading_strategies", [row]);
-        if (Array.isArray(res) && res[0]) { setStrategies(prev => [...prev, res[0]]); if (!activeStrategy) setActiveStrategy(res[0].id); }
+        console.log("📊 Saving strategy:", row);
+        const res = await fetch(`${supa.url}/rest/v1/trading_strategies`, {
+          method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
+          body: JSON.stringify([row]),
+        });
+        const body = await res.json();
+        console.log("📊 Strategy save response:", res.status, body);
+        if (res.ok && Array.isArray(body) && body[0]) {
+          setStrategies(prev => [...prev, body[0]]);
+          if (!activeStrategy) setActiveStrategy(body[0].id);
+        } else {
+          // Retry without type column in case it doesn't exist
+          console.log("📊 Retrying without type column...");
+          const row2 = { name: newStratName.trim(), description: newStratDesc.trim() };
+          const res2 = await fetch(`${supa.url}/rest/v1/trading_strategies`, {
+            method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
+            body: JSON.stringify([row2]),
+          });
+          const body2 = await res2.json();
+          console.log("📊 Strategy save retry:", res2.status, body2);
+          if (res2.ok && Array.isArray(body2) && body2[0]) {
+            setStrategies(prev => [...prev, { ...body2[0], type: newStratType }]);
+            if (!activeStrategy) setActiveStrategy(body2[0].id);
+          }
+        }
       } catch (e) { console.error("Save strategy:", e); }
     }
     setNewStratName(""); setNewStratDesc(""); setNewStratType("HTS"); setShowAddStrategy(false);
@@ -4971,8 +4994,27 @@ Rules:
     };
     if (supa) {
       try {
-        const res = await supa.post("trading_journal", [row]);
-        if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
+        console.log("📊 Saving trade:", JSON.stringify(row).slice(0, 200));
+        const res = await fetch(`${supa.url}/rest/v1/trading_journal`, {
+          method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
+          body: JSON.stringify([row]),
+        });
+        const body = await res.json();
+        console.log("📊 Trade save response:", res.status, body);
+        if (res.ok && Array.isArray(body) && body[0]) {
+          setTrades(prev => [body[0], ...prev]);
+        } else {
+          // Fallback: only send columns that exist for sure
+          console.log("📊 Retrying with minimal columns...");
+          const minRow = { strategy_id: activeStrategy, description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements, profit: parseInt(tf.profit) || 0, notes: tf.notes, strategy_data: JSON.stringify(stratData) };
+          const res2 = await fetch(`${supa.url}/rest/v1/trading_journal`, {
+            method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
+            body: JSON.stringify([minRow]),
+          });
+          const body2 = await res2.json();
+          console.log("📊 Trade save retry:", res2.status, body2);
+          if (res2.ok && Array.isArray(body2) && body2[0]) setTrades(prev => [body2[0], ...prev]);
+        }
       } catch (e) { console.error("Save trade:", e); }
     }
     setTf(EMPTY_TF);
