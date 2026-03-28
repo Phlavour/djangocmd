@@ -4811,16 +4811,21 @@ function TradingPanel({ apiKey, supa }) {
   }, [supa?.url, supa?.key]);
 
   // Save strategy
+  const [newStratType, setNewStratType] = useState("HTS");
+  const STRATEGY_TYPES = [
+    { id: "HTS", label: "HTS", desc: "SL wick/band, bounce, potentials" },
+    { id: "V_SHAPE", label: "V-Shape Recovery", desc: "Candle entry, engulfing, V quality" },
+  ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
-    const row = { name: newStratName.trim(), description: newStratDesc.trim(), created_at: new Date().toISOString() };
+    const row = { name: newStratName.trim(), description: newStratDesc.trim(), type: newStratType, created_at: new Date().toISOString() };
     if (supa) {
       try {
         const res = await supa.post("trading_strategies", [row]);
         if (Array.isArray(res) && res[0]) { setStrategies(prev => [...prev, res[0]]); if (!activeStrategy) setActiveStrategy(res[0].id); }
       } catch (e) { console.error("Save strategy:", e); }
     }
-    setNewStratName(""); setNewStratDesc(""); setShowAddStrategy(false);
+    setNewStratName(""); setNewStratDesc(""); setNewStratType("HTS"); setShowAddStrategy(false);
   };
 
   // Delete strategy
@@ -4946,14 +4951,23 @@ Rules:
   // Save trade
   const saveTrade = async () => {
     if (!activeStrategy) { alert("Select or create a strategy first"); return; }
+    const stratType = activeStratObj?.type || "HTS";
+    const stratData = stratType === "HTS" ? {
+      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
+      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
+      bounce: parseInt(tf.bounce) || 1,
+    } : stratType === "V_SHAPE" ? {
+      entry_candle: parseInt(tf.entry_candle) || 1,
+      has_engulfing: tf.has_engulfing || false,
+      v_quality: tf.v_quality || "clear",
+    } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
       meets_requirements: tf.meetsRequirements, screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after,
       reason: tf.reason, profit: parseInt(tf.profit) || 0,
-      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
-      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
-      bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
+      pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
+      strategy_data: JSON.stringify(stratData),
     };
     if (supa) {
       try {
@@ -4961,7 +4975,7 @@ Rules:
         if (Array.isArray(res) && res[0]) setTrades(prev => [res[0], ...prev]);
       } catch (e) { console.error("Save trade:", e); }
     }
-    setTf({ description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {} });
+    setTf(EMPTY_TF);
     setShowAddTrade(false);
   };
 
@@ -4976,34 +4990,46 @@ Rules:
   const startEdit = (t) => {
     let trends = t.trends || {};
     let pivots = t.pivots || {};
+    let sd = t.strategy_data || {};
     try { if (typeof trends === "string") trends = JSON.parse(trends); } catch { trends = {}; }
     try { if (typeof pivots === "string") pivots = JSON.parse(pivots); } catch { pivots = {}; }
+    try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
     setTf({
       description: t.description || "", result: t.result || "WIN", direction: t.direction || "LONG",
       meetsRequirements: t.meets_requirements !== false,
       screenshot_before: t.screenshot_before || t.screenshot || "", screenshot_after: t.screenshot_after || "",
       reason: t.reason || "", profit: String(t.profit || 0),
-      sl_wick: t.sl_wick || "WIN", potential_wick: String(t.potential_wick || 1),
-      sl_band: t.sl_band || "WIN", potential_band: String(t.potential_band || 1),
-      bounce: String(t.bounce || 1), pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
+      sl_wick: sd.sl_wick || t.sl_wick || "WIN", potential_wick: String(sd.potential_wick || t.potential_wick || 1),
+      sl_band: sd.sl_band || t.sl_band || "WIN", potential_band: String(sd.potential_band || t.potential_band || 1),
+      bounce: String(sd.bounce || t.bounce || 1), pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
+      entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
     });
     setEditingTradeId(t.id);
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {} };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
+    const stratType = activeStratObj?.type || "HTS";
+    const stratData = stratType === "HTS" ? {
+      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
+      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
+      bounce: parseInt(tf.bounce) || 1,
+    } : stratType === "V_SHAPE" ? {
+      entry_candle: parseInt(tf.entry_candle) || 1,
+      has_engulfing: tf.has_engulfing || false,
+      v_quality: tf.v_quality || "clear",
+    } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
       screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after, reason: tf.reason,
       profit: parseInt(tf.profit) || 0,
-      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
-      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
-      bounce: parseInt(tf.bounce) || 1, pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
+      pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
+      strategy_data: JSON.stringify(stratData),
     };
     if (supa) { try { await supa.patch("trading_journal", `id=eq.${editingTradeId}`, updates); } catch {} }
     setTrades(prev => prev.map(t => t.id === editingTradeId ? { ...t, ...updates } : t));
@@ -5102,7 +5128,19 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         {showAddStrategy && (
           <div style={{ marginBottom: 16, padding: 12, background: T.bg2, borderRadius: 8, border: `1px dashed ${T.border}` }}>
-            <input value={newStratName} onChange={e => setNewStratName(e.target.value)} placeholder="Strategy name (e.g. HTS)" style={{ ...sel, width: "100%", marginBottom: 8, boxSizing: "border-box", fontWeight: 600 }} />
+            <input value={newStratName} onChange={e => setNewStratName(e.target.value)} placeholder="Strategy name (e.g. HTS, V-Shape)" style={{ ...sel, width: "100%", marginBottom: 8, boxSizing: "border-box", fontWeight: 600 }} />
+            <div style={{ marginBottom: 8 }}>
+              <div style={label}>Type</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {STRATEGY_TYPES.map(st => (
+                  <button key={st.id} onClick={() => setNewStratType(st.id)} style={{
+                    ...sel, background: newStratType === st.id ? `${T.cyan}20` : T.bg2,
+                    borderColor: newStratType === st.id ? T.cyan : T.border,
+                    color: newStratType === st.id ? T.cyan : T.textSoft, fontWeight: newStratType === st.id ? 700 : 400,
+                  }}>{st.label}</button>
+                ))}
+              </div>
+            </div>
             <textarea value={newStratDesc} onChange={e => setNewStratDesc(e.target.value)} placeholder="Describe the strategy rules, entry conditions, SL placement..."
               style={{ ...sel, width: "100%", minHeight: 80, resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }} />
             <Btn small color={T.green} onClick={saveStrategy} style={{ marginTop: 8 }}>💾 Save Strategy</Btn>
@@ -5254,7 +5292,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               )}
 
-              {/* HTS specific fields */}
+              {/* Strategy-specific fields */}
+              {(activeStratObj?.type || "HTS") === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
@@ -5288,6 +5327,33 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </select>
                 </div>
               </div>
+              </>}
+
+              {(activeStratObj?.type) === "V_SHAPE" && <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>V-Shape Recovery Fields</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Świeczka wejścia</div>
+                  <select value={tf.entry_candle} onChange={e => setTf(p => ({...p, entry_candle: e.target.value}))} style={sel}>
+                    {["1","2","3","4","5"].map(c => <option key={c} value={c}>Świeczka {c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Engulfing candle?</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, has_engulfing: true}))} style={{ ...sel, flex: 1, background: tf.has_engulfing ? `${T.green}20` : T.bg2, color: tf.has_engulfing ? T.green : T.textSoft, fontWeight: tf.has_engulfing ? 700 : 400, borderColor: tf.has_engulfing ? T.green : T.border }}>TAK</button>
+                    <button onClick={() => setTf(p => ({...p, has_engulfing: false}))} style={{ ...sel, flex: 1, background: !tf.has_engulfing ? `${T.red}20` : T.bg2, color: !tf.has_engulfing ? T.red : T.textSoft, fontWeight: !tf.has_engulfing ? 700 : 400, borderColor: !tf.has_engulfing ? T.red : T.border }}>NIE</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Jakość V</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, v_quality: "clear"}))} style={{ ...sel, flex: 1, background: tf.v_quality === "clear" ? `${T.green}20` : T.bg2, color: tf.v_quality === "clear" ? T.green : T.textSoft, fontWeight: tf.v_quality === "clear" ? 700 : 400, borderColor: tf.v_quality === "clear" ? T.green : T.border }}>Wyraźny</button>
+                    <button onClick={() => setTf(p => ({...p, v_quality: "messy"}))} style={{ ...sel, flex: 1, background: tf.v_quality === "messy" ? `${T.amber}20` : T.bg2, color: tf.v_quality === "messy" ? T.amber : T.textSoft, fontWeight: tf.v_quality === "messy" ? 700 : 400, borderColor: tf.v_quality === "messy" ? T.amber : T.border }}>Rozjechany</button>
+                  </div>
+                </div>
+              </div>
+              </>}
 
               <div style={{ marginBottom: 12 }}>
                 <div style={label}>Opis trade'a</div>
@@ -5343,8 +5409,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   {t.reason && <div style={{ fontSize: 11, color: T.purple, marginBottom: 4 }}>📝 {t.reason}</div>}
                   {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
-                    <span>SL wick: <strong style={{ color: t.sl_wick === "WIN" ? T.green : T.red }}>{t.sl_wick}</strong> ({t.potential_wick}R)</span>
-                    <span>SL band: <strong style={{ color: t.sl_band === "WIN" ? T.green : T.red }}>{t.sl_band}</strong> ({t.potential_band}R)</span>
+                    {(() => { let sd = t.strategy_data || {}; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } const st = activeStratObj?.type || "HTS";
+                      return st === "HTS" ? <>
+                        <span>SL wick: <strong style={{ color: (sd.sl_wick||t.sl_wick) === "WIN" ? T.green : T.red }}>{sd.sl_wick||t.sl_wick}</strong> ({sd.potential_wick||t.potential_wick}R)</span>
+                        <span>SL band: <strong style={{ color: (sd.sl_band||t.sl_band) === "WIN" ? T.green : T.red }}>{sd.sl_band||t.sl_band}</strong> ({sd.potential_band||t.potential_band}R)</span>
+                        <span>B{sd.bounce||t.bounce}</span>
+                      </> : st === "V_SHAPE" ? <>
+                        <span>Świeczka: <strong>{sd.entry_candle || "?"}</strong></span>
+                        <span>Engulfing: <strong style={{ color: sd.has_engulfing ? T.green : T.red }}>{sd.has_engulfing ? "TAK" : "NIE"}</strong></span>
+                        <span>V: <strong style={{ color: sd.v_quality === "clear" ? T.green : T.amber }}>{sd.v_quality === "clear" ? "wyraźny" : "rozjechany"}</strong></span>
+                      </> : null;
+                    })()}
                     {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
                   </div>
                   {Object.keys(trends).length > 0 && (
