@@ -4986,7 +4986,7 @@ Rules:
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
-      meets_requirements: tf.meetsRequirements, with_trend: tf.with_trend,
+      meets_requirements: tf.meetsRequirements,
       screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after,
       reason: tf.reason, profit: parseInt(tf.profit) || 0,
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
@@ -5039,7 +5039,7 @@ Rules:
     try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
     setTf({
       description: t.description || "", result: t.result || "WIN", direction: t.direction || "LONG",
-      meetsRequirements: t.meets_requirements !== false, with_trend: t.with_trend !== false,
+      meetsRequirements: t.meets_requirements !== false,
       screenshot_before: t.screenshot_before || t.screenshot || "", screenshot_after: t.screenshot_after || "",
       reason: t.reason || "", profit: String(t.profit || 0),
       sl_wick: sd.sl_wick || t.sl_wick || "WIN", potential_wick: String(sd.potential_wick || t.potential_wick || 1),
@@ -5052,7 +5052,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, with_trend: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5068,7 +5068,6 @@ Rules:
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
-      with_trend: tf.with_trend,
       screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after, reason: tf.reason,
       profit: parseInt(tf.profit) || 0,
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
@@ -5239,8 +5238,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
-              {/* Row 1: Direction, Result, Meets Req, With Trend */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              {/* Row 1: Direction, Result, Meets Req */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5260,13 +5259,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => setTf(p => ({...p, meetsRequirements: true}))} style={{ ...sel, flex: 1, background: tf.meetsRequirements ? `${T.green}20` : T.bg2, color: tf.meetsRequirements ? T.green : T.textSoft, fontWeight: tf.meetsRequirements ? 700 : 400, borderColor: tf.meetsRequirements ? T.green : T.border }}>YES</button>
                     <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NO</button>
-                  </div>
-                </div>
-                <div>
-                  <div style={label}>Zgodnie z trendem</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, with_trend: true}))} style={{ ...sel, flex: 1, background: tf.with_trend ? `${T.green}20` : T.bg2, color: tf.with_trend ? T.green : T.textSoft, fontWeight: tf.with_trend ? 700 : 400, borderColor: tf.with_trend ? T.green : T.border }}>TAK</button>
-                    <button onClick={() => setTf(p => ({...p, with_trend: false}))} style={{ ...sel, flex: 1, background: !tf.with_trend ? `${T.amber}20` : T.bg2, color: !tf.with_trend ? T.amber : T.textSoft, fontWeight: !tf.with_trend ? 700 : 400, borderColor: !tf.with_trend ? T.amber : T.border }}>NIE</button>
                   </div>
                 </div>
               </div>
@@ -5455,7 +5447,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     {t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
                     {t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
                     <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>
-                    <Badge color={t.with_trend !== false ? T.green : T.amber}>{t.with_trend !== false ? "↗ trend" : "↘ counter"}</Badge>
                     <Badge color={T.textDim}>B{t.bounce}</Badge>
                   </div>
                   {t.reason && <div style={{ fontSize: 11, color: T.purple, marginBottom: 4 }}>📝 {t.reason}</div>}
