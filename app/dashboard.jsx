@@ -4815,6 +4815,7 @@ function TradingPanel({ apiKey, supa }) {
   const STRATEGY_TYPES = [
     { id: "HTS", label: "HTS", desc: "SL wick/band, bounce, potentials" },
     { id: "V_SHAPE", label: "V-Shape Recovery", desc: "Candle entry, engulfing, V quality" },
+    { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
@@ -5082,8 +5083,8 @@ Rules:
   };
 
   // Filter trades by active strategy
-  const filteredTrades = activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
-  const activeStratObj = strategies.find(s => s.id === activeStrategy);
+  const filteredTrades = activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
+  const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
 
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
@@ -5192,6 +5193,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         {strategies.length > 0 ? (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <button onClick={() => setActiveStrategy("ALL")} style={{
+              background: activeStrategy === "ALL" ? `${T.purple}15` : T.bg2,
+              border: `1px solid ${activeStrategy === "ALL" ? T.purple : T.border}`,
+              borderRadius: 8, padding: "8px 14px", cursor: "pointer",
+              fontSize: 12, fontWeight: activeStrategy === "ALL" ? 700 : 500,
+              color: activeStrategy === "ALL" ? T.purple : T.textSoft, fontFamily: "'Satoshi', sans-serif",
+            }}>📊 All</button>
             {strategies.map(s => (
               <div key={s.id} style={{ display: "flex", gap: 0 }}>
                 <button onClick={() => setActiveStrategy(s.id)} style={{
@@ -5221,7 +5229,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {/* Sub tabs */}
       {activeStrategy && (
         <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
-          {[{id:"journal",l:"📝 Journal"},{id:"stats",l:"📊 Stats"},{id:"ai",l:"🤖 AI Analysis"}].map(t => (
+          {[
+            ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
+            {id:"stats",l:"📊 Stats"},
+            {id:"ai",l:"🤖 AI Analysis"},
+          ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
           <div style={{ marginLeft: "auto", fontSize: 11, color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", display: "flex", alignItems: "center" }}>
@@ -5231,7 +5243,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ JOURNAL TAB ═══ */}
-      {subTab === "journal" && activeStrategy && (
+      {subTab === "journal" && activeStrategy && activeStrategy !== "ALL" && (
         <div>
           {/* Add trade */}
           {showAddTrade ? (
@@ -5497,15 +5509,64 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Stat label="Streaks" value={`${maxWinStreak}W`} color={T.green} sub={`${maxLossStreak}L max loss`} />
           </div>
 
-          {/* HTS specific stats */}
+          {/* HTS specific stats — only show for HTS strategy */}
+          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
             <Stat label="SL Wick WR" value={total > 0 ? ((wickWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.cyan} sub={`${wickWins} / ${total}`} />
             <Stat label="Avg Pot Wick" value={avgPotWick} suffix="R" color={T.green} />
             <Stat label="SL Band WR" value={total > 0 ? ((bandWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.purple} sub={`${bandWins} / ${total}`} />
             <Stat label="Avg Pot Band" value={avgPotBand} suffix="R" color={T.green} />
           </div>
+          )}
 
-          {/* Bounce distribution */}
+          {/* Timeframe Performance */}
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="⏱">Performance by Time-frame</Heading>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${TIMEFRAMES.length}, 1fr)`, gap: 8 }}>
+              {TIMEFRAMES.map(tfr => {
+                const tfTrades = filteredTrades.filter(t => t.timeframe === tfr);
+                const tfWins = tfTrades.filter(t => t.result === "WIN").length;
+                const tfTotal = tfTrades.length;
+                const tfWR = tfTotal > 0 ? ((tfWins / tfTotal) * 100).toFixed(0) : "-";
+                const tfProfit = tfTrades.reduce((s, t) => s + (t.profit || 0), 0);
+                return (
+                  <div key={tfr} style={{ textAlign: "center", padding: "10px 4px", background: tfTotal > 0 ? `${parseFloat(tfWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>{tfr}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: tfTotal > 0 ? (parseFloat(tfWR) >= 50 ? T.green : T.red) : T.textDim }}>{tfWR}{tfTotal > 0 ? "%" : ""}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{tfWins}W/{tfTotal - tfWins}L · {tfTotal}</div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: tfProfit >= 0 ? T.green : T.red, marginTop: 2 }}>{tfProfit > 0 ? "+" : ""}{tfProfit}R</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Per-strategy breakdown (only in ALL mode) */}
+          {activeStrategy === "ALL" && strategies.length > 1 && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="📋">Performance by Strategy</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${strategies.length}, 1fr)`, gap: 8 }}>
+                {strategies.map(s => {
+                  const sTrades = trades.filter(t => t.strategy_id === s.id);
+                  const sWins = sTrades.filter(t => t.result === "WIN").length;
+                  const sTotal = sTrades.length;
+                  const sWR = sTotal > 0 ? ((sWins / sTotal) * 100).toFixed(0) : "-";
+                  const sProfit = sTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+                  return (
+                    <div key={s.id} style={{ textAlign: "center", padding: 12, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>{s.name}</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: sTotal > 0 ? (parseFloat(sWR) >= 50 ? T.green : T.red) : T.textDim }}>{sWR}{sTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 9, color: T.textDim }}>{sWins}W/{sTotal - sWins}L · {sTotal} trades</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: sProfit >= 0 ? T.green : T.red, marginTop: 4 }}>{sProfit > 0 ? "+" : ""}{sProfit}R</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Bounce distribution — HTS only */}
+          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="📊">Bounce Distribution</Heading>
             <div style={{ display: "flex", gap: 16, alignItems: "flex-end", height: 120 }}>
@@ -5525,6 +5586,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               })}
             </div>
           </Card>
+          )}
 
           {/* Win rate over time (last 20 trades rolling) */}
           {total >= 5 && (
