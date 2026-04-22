@@ -5099,8 +5099,37 @@ Rules:
   const decisive = wins + losses; // for WR calculation - excludes BE
   const totalProfit = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
   const winRate = decisive > 0 ? ((wins / decisive) * 100).toFixed(1) : "0";
-  const meetsReq = filteredTrades.filter(t => t.meets_requirements).length;
-  const reqRate = total > 0 ? ((meetsReq / total) * 100).toFixed(1) : "0";
+
+  // LONG vs SHORT stats
+  const longTrades = filteredTrades.filter(t => t.direction === "LONG");
+  const shortTrades = filteredTrades.filter(t => t.direction === "SHORT");
+  const longWins = longTrades.filter(t => t.result === "WIN").length;
+  const longLosses = longTrades.filter(t => t.result === "LOSS").length;
+  const longDecisive = longWins + longLosses;
+  const longWR = longDecisive > 0 ? ((longWins / longDecisive) * 100).toFixed(0) : "-";
+  const longProfit = longTrades.reduce((s, t) => s + (t.profit || 0), 0);
+  const shortWins = shortTrades.filter(t => t.result === "WIN").length;
+  const shortLosses = shortTrades.filter(t => t.result === "LOSS").length;
+  const shortDecisive = shortWins + shortLosses;
+  const shortWR = shortDecisive > 0 ? ((shortWins / shortDecisive) * 100).toFixed(0) : "-";
+  const shortProfit = shortTrades.reduce((s, t) => s + (t.profit || 0), 0);
+
+  // Setup type stats (HTS)
+  const setupStats = ["3A", "2A", "A"].map(setup => {
+    const setupTrades = filteredTrades.filter(t => {
+      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      return (sd?.setup_type || "") === setup;
+    });
+    const sWins = setupTrades.filter(t => t.result === "WIN").length;
+    const sLosses = setupTrades.filter(t => t.result === "LOSS").length;
+    const sBEs = setupTrades.filter(t => t.result === "BE").length;
+    const sDecisive = sWins + sLosses;
+    const sTotal = setupTrades.length;
+    const sWR = sDecisive > 0 ? ((sWins / sDecisive) * 100).toFixed(0) : "-";
+    const sProfit = setupTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+    const sAvgR = sTotal > 0 ? (sProfit / sTotal).toFixed(2) : "0";
+    return { setup, total: sTotal, wins: sWins, losses: sLosses, bes: sBEs, wr: sWR, profit: sProfit, avgR: sAvgR };
+  });
 
   // HTS-specific stats
   const wickWins = filteredTrades.filter(t => t.sl_wick === "WIN").length;
@@ -5108,14 +5137,16 @@ Rules:
   const avgPotWick = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_wick || 0), 0) / total).toFixed(1) : "0";
   const avgPotBand = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_band || 0), 0) / total).toFixed(1) : "0";
   const bounceDistrib = [0, 0, 0];
-  filteredTrades.forEach(t => { const b = (t.bounce || 1) - 1; if (b >= 0 && b < 3) bounceDistrib[b]++; });
-
-  // Win/Loss streak (BE doesn't break or extend streaks — it's skipped)
-  let maxWinStreak = 0, maxLossStreak = 0, curWin = 0, curLoss = 0;
-  [...filteredTrades].reverse().forEach(t => {
-    if (t.result === "WIN") { curWin++; curLoss = 0; maxWinStreak = Math.max(maxWinStreak, curWin); }
-    else if (t.result === "LOSS") { curLoss++; curWin = 0; maxLossStreak = Math.max(maxLossStreak, curLoss); }
-    // BE skipped - neither breaks nor extends
+  const bounceProfit = [0, 0, 0];
+  const bounceWins = [0, 0, 0];
+  filteredTrades.forEach(t => {
+    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+    const b = ((sd?.bounce || t.bounce) || 1) - 1;
+    if (b >= 0 && b < 3) {
+      bounceDistrib[b]++;
+      bounceProfit[b] += (t.profit || 0);
+      if (t.result === "WIN") bounceWins[b]++;
+    }
   });
 
   // AI Analysis
@@ -5135,12 +5166,13 @@ Rules:
           messages: [{ role: "user", content: `Analyze this trading journal for the "${activeStratObj?.name || "HTS"}" strategy.
 
 STATS:
-- Total trades: ${total}, Wins: ${wins}, Losses: ${losses}, Win rate: ${winRate}%
-- Meets requirements: ${meetsReq}/${total} (${reqRate}%)
+- Total trades: ${total}, Wins: ${wins}, Losses: ${losses}, BE: ${breakEvens}, Win rate (excl BE): ${winRate}%
+- LONG: ${longWins}W/${longLosses}L (${longWR}% WR), profit: ${longProfit}R
+- SHORT: ${shortWins}W/${shortLosses}L (${shortWR}% WR), profit: ${shortProfit}R
 - SL to wick wins: ${wickWins}/${total}, SL to band wins: ${bandWins}/${total}
 - Avg potential (wick): ${avgPotWick}R, Avg potential (band): ${avgPotBand}R
-- Bounce distribution: B1=${bounceDistrib[0]}, B2=${bounceDistrib[1]}, B3=${bounceDistrib[2]}
-- Max win streak: ${maxWinStreak}, Max loss streak: ${maxLossStreak}
+- Bounce distribution: B1=${bounceDistrib[0]} (${bounceWins[0]}W, ${bounceProfit[0]}R), B2=${bounceDistrib[1]} (${bounceWins[1]}W, ${bounceProfit[1]}R), B3=${bounceDistrib[2]} (${bounceWins[2]}W, ${bounceProfit[2]}R)
+- Setup types: ${setupStats.map(s => `${s.setup}=${s.total}t/${s.wr}%WR/${s.profit}R`).join(", ")}
 
 RAW TRADES (newest first):
 ${JSON.stringify(tradesData, null, 1)}
@@ -5258,8 +5290,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
-              {/* Row 1: Direction, Result, Meets Req */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              {/* Row 1: Direction, Result, (Meets Req — not for HTS) */}
+              <div style={{ display: "grid", gridTemplateColumns: (activeStratObj?.type || "HTS") === "HTS" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5275,6 +5307,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, result: "LOSS", sl_wick: "LOSS", sl_band: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
+                {(activeStratObj?.type || "HTS") !== "HTS" && (
                 <div>
                   <div style={label}>Meets Requirements</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5282,6 +5315,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NO</button>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Row 2: Pair, TF, Profit */}
@@ -5542,8 +5576,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L (decisive)`} />
             <Stat label="Break Even" value={breakEvens} color={T.amber} sub={total > 0 ? `${((breakEvens / total) * 100).toFixed(0)}% of all` : ""} />
             <Stat label="Total Profit" value={`${totalProfit > 0 ? "+" : ""}${totalProfit}`} suffix="R" color={totalProfit >= 0 ? T.green : T.red} />
-            <Stat label="Meets Req" value={reqRate} suffix="%" color={parseFloat(reqRate) >= 80 ? T.green : T.amber} sub={`${meetsReq} / ${total}`} />
-            <Stat label="Streaks" value={`${maxWinStreak}W`} color={T.green} sub={`${maxLossStreak}L max loss`} />
+            <Stat label="LONG ▲ WR" value={longWR} suffix={longDecisive > 0 ? "%" : ""} color={longDecisive > 0 && parseFloat(longWR) >= 50 ? T.green : T.red} sub={`${longWins}W/${longLosses}L · ${longProfit > 0 ? "+" : ""}${longProfit}R`} />
+            <Stat label="SHORT ▼ WR" value={shortWR} suffix={shortDecisive > 0 ? "%" : ""} color={shortDecisive > 0 && parseFloat(shortWR) >= 50 ? T.green : T.red} sub={`${shortWins}W/${shortLosses}L · ${shortProfit > 0 ? "+" : ""}${shortProfit}R`} />
           </div>
 
           {/* HTS specific stats — only show for HTS strategy */}
@@ -5608,22 +5642,24 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
-          {/* Bounce distribution — HTS only */}
+          {/* Bounce distribution with R info — HTS only */}
           {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="📊">Bounce Distribution</Heading>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-end", height: 120 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
               {bounceDistrib.map((count, i) => {
-                const max = Math.max(...bounceDistrib, 1);
-                const h = (count / max) * 100;
-                const wins_b = filteredTrades.filter(t => t.bounce === i+1 && t.result === "WIN").length;
-                const wr = count > 0 ? ((wins_b / count) * 100).toFixed(0) : "0";
+                const wins_b = bounceWins[i];
+                const losses_b = count - wins_b;
+                const profit_b = bounceProfit[i];
+                const wr = count > 0 ? ((wins_b / count) * 100).toFixed(0) : "-";
+                const avgR = count > 0 ? (profit_b / count).toFixed(2) : "0";
                 return (
-                  <div key={i} style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 4 }}>{count}</div>
-                    <div style={{ height: `${h}%`, minHeight: 4, background: `linear-gradient(180deg, ${T.cyan}, ${T.cyan}60)`, borderRadius: "4px 4px 0 0", marginBottom: 4 }} />
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.cyan }}>B{i+1}</div>
-                    <div style={{ fontSize: 9, color: T.textDim }}>{wr}% WR</div>
+                  <div key={i} style={{ textAlign: "center", padding: 14, background: count > 0 ? `${parseFloat(wr) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>B{i+1}</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: count > 0 ? (parseFloat(wr) >= 50 ? T.green : T.red) : T.textDim }}>{wr}{count > 0 ? "%" : ""}</div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{wins_b}W / {losses_b}L · {count} trades</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: profit_b >= 0 ? T.green : T.red, marginTop: 6 }}>{profit_b > 0 ? "+" : ""}{profit_b}R</div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>avg {avgR}R / trade</div>
                   </div>
                 );
               })}
@@ -5631,64 +5667,23 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           </Card>
           )}
 
-          {/* Win rate over time (last 20 trades rolling) */}
-          {total >= 5 && (
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="📈">Win Rate Trend (rolling 5 trades)</Heading>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100 }}>
-                {(() => {
-                  const reversed = [...filteredTrades].reverse();
-                  const points = [];
-                  for (let i = 4; i < reversed.length; i++) {
-                    const window = reversed.slice(i - 4, i + 1);
-                    const wr = (window.filter(t => t.result === "WIN").length / 5) * 100;
-                    points.push(wr);
-                  }
-                  const max = 100;
-                  return points.map((wr, i) => (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-                      <div style={{ width: "100%", height: `${wr}%`, minHeight: 2, background: wr >= 50 ? T.green : T.red, borderRadius: "2px 2px 0 0", opacity: 0.7 + (i / points.length) * 0.3 }} title={`${wr.toFixed(0)}%`} />
-                    </div>
-                  ));
-                })()}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                <span style={{ fontSize: 9, color: T.textDim }}>oldest</span>
-                <span style={{ fontSize: 9, color: T.textDim }}>newest</span>
-              </div>
-            </Card>
-          )}
-
-          {/* Result by meets requirements */}
-          <Card>
-            <Heading icon="✓">Meets Requirements vs Result</Heading>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: T.green, fontWeight: 600, marginBottom: 8 }}>✓ MEETS REQ</div>
-                {(() => {
-                  const met = filteredTrades.filter(t => t.meets_requirements);
-                  const mWin = met.filter(t => t.result === "WIN").length;
-                  const mWR = met.length > 0 ? ((mWin / met.length) * 100).toFixed(1) : "0";
-                  return <>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: T.text }}>{mWR}%</div>
-                    <div style={{ fontSize: 10, color: T.textDim }}>{mWin}W / {met.length - mWin}L out of {met.length}</div>
-                  </>;
-                })()}
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: T.red, fontWeight: 600, marginBottom: 8 }}>✕ NO REQ</div>
-                {(() => {
-                  const nomet = filteredTrades.filter(t => !t.meets_requirements);
-                  const nWin = nomet.filter(t => t.result === "WIN").length;
-                  const nWR = nomet.length > 0 ? ((nWin / nomet.length) * 100).toFixed(1) : "0";
-                  return <>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: T.text }}>{nWR}%</div>
-                    <div style={{ fontSize: 10, color: T.textDim }}>{nWin}W / {nomet.length - nWin}L out of {nomet.length}</div>
-                  </>;
-                })()}
-              </div>
+          {/* Setup type performance — HTS only */}
+          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="🎯">Setup Type Performance</Heading>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {setupStats.map(s => (
+                <div key={s.setup} style={{ textAlign: "center", padding: 14, background: s.total > 0 ? `${parseFloat(s.wr) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>{s.setup}</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: s.total > 0 ? (parseFloat(s.wr) >= 50 ? T.green : T.red) : T.textDim }}>{s.wr}{s.total > 0 ? "%" : ""}</div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{s.wins}W / {s.losses}L{s.bes > 0 ? ` / ${s.bes}BE` : ""} · {s.total} trades</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: s.profit >= 0 ? T.green : T.red, marginTop: 6 }}>{s.profit > 0 ? "+" : ""}{s.profit}R</div>
+                  <div style={{ fontSize: 9, color: T.textDim }}>avg {s.avgR}R / trade</div>
+                </div>
+              ))}
             </div>
           </Card>
+          )}
         </div>
       )}
 
