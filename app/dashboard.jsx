@@ -5402,7 +5402,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                 </div>
                 <div>
-                  <div style={label}>Rodzaj Set-upu</div>
+                  <div style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Rodzaj Set-upu</span>
+                    <span
+                      title={"Rodzaje setupów:\n\n3A — Pierwsze odbicie od wstęgi / wstęgi się rozchodzą (najbardziej prawdopodobny, profitowy scenariusz)\n\n2A — Odbicie od wolnej zgodnie z trendem / 2,3,4 odbicie od szybkiej / łapanie bez odbicia\n\nA — Od wstęgi do wstęgi (wstęgi się zwężają) / Powrót do wstęgi (V-shape) / Trend boczny - wstęgi się nachodzą"}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", border: `1px solid ${T.cyan}`, color: T.cyan, fontSize: 9, fontWeight: 700, cursor: "help", userSelect: "none", textTransform: "none", letterSpacing: 0 }}
+                    >i</span>
+                  </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     {["3A", "2A", "A"].map(su => (
                       <button key={su} onClick={() => setTf(p => ({...p, setup_type: su}))} style={{ ...sel, flex: 1, background: tf.setup_type === su ? `${T.cyan}20` : T.bg2, color: tf.setup_type === su ? T.cyan : T.textSoft, fontWeight: tf.setup_type === su ? 700 : 400, borderColor: tf.setup_type === su ? T.cyan : T.border }}>{su}</button>
