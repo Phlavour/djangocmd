@@ -4788,6 +4788,7 @@ function TradingPanel({ apiKey, supa }) {
     description: "", result: "WIN", direction: "LONG", meetsRequirements: true,
     screenshot_before: "", screenshot_after: "", reason: "", profit: "0",
     sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
+    band_type: "fast", setup_type: "A",
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4798,7 +4799,7 @@ function TradingPanel({ apiKey, supa }) {
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
   const BOUNCE_OPTIONS = ["1", "2", "3"];
   const PAIRS = ["BTC", "ETH", "DAX", "NAS100", "SP500", "GOLD", "EUR/USD", "GBP/USD"];
-  const TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d", "1w"];
+  const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
   const TREND_TFS = ["m1", "m5", "m15", "H1", "H2", "H4", "D1"];
 
   // Load from Supabase
@@ -4980,6 +4981,7 @@ Rules:
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1,
+      band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
     } : stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -5045,7 +5047,9 @@ Rules:
       reason: t.reason || "", profit: String(t.profit || 0),
       sl_wick: sd.sl_wick || t.sl_wick || "WIN", potential_wick: String(sd.potential_wick || t.potential_wick || 1),
       sl_band: sd.sl_band || t.sl_band || "WIN", potential_band: String(sd.potential_band || t.potential_band || 1),
-      bounce: String(sd.bounce || t.bounce || 1), pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
+      bounce: String(sd.bounce || t.bounce || 1),
+      band_type: sd.band_type || "fast", setup_type: sd.setup_type || "A",
+      pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
     });
@@ -5053,7 +5057,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", band_type: "fast", setup_type: "A", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5062,6 +5066,7 @@ Rules:
       sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
       sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1,
+      band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
     } : stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -5089,9 +5094,11 @@ Rules:
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
   const losses = filteredTrades.filter(t => t.result === "LOSS").length;
+  const breakEvens = filteredTrades.filter(t => t.result === "BE").length;
   const total = filteredTrades.length;
+  const decisive = wins + losses; // for WR calculation - excludes BE
   const totalProfit = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
-  const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : "0";
+  const winRate = decisive > 0 ? ((wins / decisive) * 100).toFixed(1) : "0";
   const meetsReq = filteredTrades.filter(t => t.meets_requirements).length;
   const reqRate = total > 0 ? ((meetsReq / total) * 100).toFixed(1) : "0";
 
@@ -5103,11 +5110,12 @@ Rules:
   const bounceDistrib = [0, 0, 0];
   filteredTrades.forEach(t => { const b = (t.bounce || 1) - 1; if (b >= 0 && b < 3) bounceDistrib[b]++; });
 
-  // Win/Loss streak
+  // Win/Loss streak (BE doesn't break or extend streaks — it's skipped)
   let maxWinStreak = 0, maxLossStreak = 0, curWin = 0, curLoss = 0;
   [...filteredTrades].reverse().forEach(t => {
     if (t.result === "WIN") { curWin++; curLoss = 0; maxWinStreak = Math.max(maxWinStreak, curWin); }
-    else { curLoss++; curWin = 0; maxLossStreak = Math.max(maxLossStreak, curLoss); }
+    else if (t.result === "LOSS") { curLoss++; curWin = 0; maxLossStreak = Math.max(maxLossStreak, curLoss); }
+    // BE skipped - neither breaks nor extends
   });
 
   // AI Analysis
@@ -5261,9 +5269,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
                 <div>
                   <div style={label}>Result</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
-                    <button onClick={() => setTf(p => ({...p, result: "LOSS", sl_wick: "LOSS", sl_band: "LOSS"}))} style={{ ...sel, flex: 1, background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
+                    <button onClick={() => setTf(p => ({...p, result: "BE", profit: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "BE" ? `${T.amber}20` : T.bg2, color: tf.result === "BE" ? T.amber : T.textSoft, fontWeight: tf.result === "BE" ? 700 : 400, borderColor: tf.result === "BE" ? T.amber : T.border }}>BE</button>
+                    <button onClick={() => setTf(p => ({...p, result: "LOSS", sl_wick: "LOSS", sl_band: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
                 <div>
@@ -5382,6 +5391,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </select>
                 </div>
               </div>
+
+              {/* HTS: Band type + Setup type */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Wstęga (odbicie od)</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, band_type: "fast"}))} style={{ ...sel, flex: 1, background: tf.band_type === "fast" ? "#3B82F620" : T.bg2, color: tf.band_type === "fast" ? "#3B82F6" : T.textSoft, fontWeight: tf.band_type === "fast" ? 700 : 400, borderColor: tf.band_type === "fast" ? "#3B82F6" : T.border }}>Szybka</button>
+                    <button onClick={() => setTf(p => ({...p, band_type: "slow"}))} style={{ ...sel, flex: 1, background: tf.band_type === "slow" ? "#EC489920" : T.bg2, color: tf.band_type === "slow" ? "#EC4899" : T.textSoft, fontWeight: tf.band_type === "slow" ? 700 : 400, borderColor: tf.band_type === "slow" ? "#EC4899" : T.border }}>Wolna</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Rodzaj Set-upu</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["3A", "2A", "A"].map(su => (
+                      <button key={su} onClick={() => setTf(p => ({...p, setup_type: su}))} style={{ ...sel, flex: 1, background: tf.setup_type === su ? `${T.cyan}20` : T.bg2, color: tf.setup_type === su ? T.cyan : T.textSoft, fontWeight: tf.setup_type === su ? 700 : 400, borderColor: tf.setup_type === su ? T.cyan : T.border }}>{su}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               </>}
 
               {(activeStratObj?.type) === "V_SHAPE" && <>
@@ -5454,7 +5482,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"} {t.direction === "SHORT" ? "▼" : "▲"}</Badge>
-                    <Badge color={t.result === "WIN" ? T.green : T.red}>{t.result}</Badge>
+                    <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
                     <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>
                     {t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
                     {t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
@@ -5469,6 +5497,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>SL wick: <strong style={{ color: (sd.sl_wick||t.sl_wick) === "WIN" ? T.green : T.red }}>{sd.sl_wick||t.sl_wick}</strong> ({sd.potential_wick||t.potential_wick}R)</span>
                         <span>SL band: <strong style={{ color: (sd.sl_band||t.sl_band) === "WIN" ? T.green : T.red }}>{sd.sl_band||t.sl_band}</strong> ({sd.potential_band||t.potential_band}R)</span>
                         <span>B{sd.bounce||t.bounce}</span>
+                        {sd.band_type && <span>Wstęga: <strong style={{ color: sd.band_type === "fast" ? "#3B82F6" : "#EC4899" }}>{sd.band_type === "fast" ? "szybka" : "wolna"}</strong></span>}
+                        {sd.setup_type && <span>Setup: <strong style={{ color: T.cyan }}>{sd.setup_type}</strong></span>}
                       </> : st === "V_SHAPE" ? <>
                         <span>Świeczka: <strong>{sd.entry_candle || "?"}</strong></span>
                         <span>Engulfing: <strong style={{ color: sd.has_engulfing ? T.green : T.red }}>{sd.has_engulfing ? "TAK" : "NIE"}</strong></span>
@@ -5501,9 +5531,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {subTab === "stats" && activeStrategy && (
         <div>
           {/* Overview stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
             <Stat label="Total Trades" value={total} color={T.cyan} />
-            <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L`} />
+            <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L (decisive)`} />
+            <Stat label="Break Even" value={breakEvens} color={T.amber} sub={total > 0 ? `${((breakEvens / total) * 100).toFixed(0)}% of all` : ""} />
             <Stat label="Total Profit" value={`${totalProfit > 0 ? "+" : ""}${totalProfit}`} suffix="R" color={totalProfit >= 0 ? T.green : T.red} />
             <Stat label="Meets Req" value={reqRate} suffix="%" color={parseFloat(reqRate) >= 80 ? T.green : T.amber} sub={`${meetsReq} / ${total}`} />
             <Stat label="Streaks" value={`${maxWinStreak}W`} color={T.green} sub={`${maxLossStreak}L max loss`} />
@@ -5526,14 +5557,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {TIMEFRAMES.map(tfr => {
                 const tfTrades = filteredTrades.filter(t => t.timeframe === tfr);
                 const tfWins = tfTrades.filter(t => t.result === "WIN").length;
+                const tfLosses = tfTrades.filter(t => t.result === "LOSS").length;
+                const tfBEs = tfTrades.filter(t => t.result === "BE").length;
                 const tfTotal = tfTrades.length;
-                const tfWR = tfTotal > 0 ? ((tfWins / tfTotal) * 100).toFixed(0) : "-";
+                const tfDecisive = tfWins + tfLosses;
+                const tfWR = tfDecisive > 0 ? ((tfWins / tfDecisive) * 100).toFixed(0) : "-";
                 const tfProfit = tfTrades.reduce((s, t) => s + (t.profit || 0), 0);
                 return (
                   <div key={tfr} style={{ textAlign: "center", padding: "10px 4px", background: tfTotal > 0 ? `${parseFloat(tfWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>{tfr}</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: tfTotal > 0 ? (parseFloat(tfWR) >= 50 ? T.green : T.red) : T.textDim }}>{tfWR}{tfTotal > 0 ? "%" : ""}</div>
-                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{tfWins}W/{tfTotal - tfWins}L · {tfTotal}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: tfDecisive > 0 ? (parseFloat(tfWR) >= 50 ? T.green : T.red) : T.textDim }}>{tfWR}{tfDecisive > 0 ? "%" : ""}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{tfWins}W/{tfLosses}L{tfBEs > 0 ? `/${tfBEs}BE` : ""} · {tfTotal}</div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: tfProfit >= 0 ? T.green : T.red, marginTop: 2 }}>{tfProfit > 0 ? "+" : ""}{tfProfit}R</div>
                   </div>
                 );
@@ -5549,14 +5583,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 {strategies.map(s => {
                   const sTrades = trades.filter(t => t.strategy_id === s.id);
                   const sWins = sTrades.filter(t => t.result === "WIN").length;
+                  const sLosses = sTrades.filter(t => t.result === "LOSS").length;
+                  const sBEs = sTrades.filter(t => t.result === "BE").length;
                   const sTotal = sTrades.length;
-                  const sWR = sTotal > 0 ? ((sWins / sTotal) * 100).toFixed(0) : "-";
+                  const sDecisive = sWins + sLosses;
+                  const sWR = sDecisive > 0 ? ((sWins / sDecisive) * 100).toFixed(0) : "-";
                   const sProfit = sTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
                   return (
                     <div key={s.id} style={{ textAlign: "center", padding: 12, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>{s.name}</div>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: sTotal > 0 ? (parseFloat(sWR) >= 50 ? T.green : T.red) : T.textDim }}>{sWR}{sTotal > 0 ? "%" : ""}</div>
-                      <div style={{ fontSize: 9, color: T.textDim }}>{sWins}W/{sTotal - sWins}L · {sTotal} trades</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: sDecisive > 0 ? (parseFloat(sWR) >= 50 ? T.green : T.red) : T.textDim }}>{sWR}{sDecisive > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 9, color: T.textDim }}>{sWins}W/{sLosses}L{sBEs > 0 ? `/${sBEs}BE` : ""} · {sTotal} trades</div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: sProfit >= 0 ? T.green : T.red, marginTop: 4 }}>{sProfit > 0 ? "+" : ""}{sProfit}R</div>
                     </div>
                   );
