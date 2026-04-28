@@ -5128,14 +5128,23 @@ Rules:
     return { setup, total: sTotal, wins: sWins, losses: sLosses, bes: sBEs, wr: sWR, profit: sProfit, avgR: sAvgR };
   });
 
-  // HTS-specific stats
-  const bounceDistrib = [0, 0, 0];
+  // HTS-specific stats — split by trade_type (standard / between_bands)
+  const bounceDistrib = [0, 0, 0];   // Standard
   const bounceProfit = [0, 0, 0];
   const bounceWins = [0, 0, 0];
+  const bounceDistribBB = [0, 0, 0]; // Between Bands
+  const bounceProfitBB = [0, 0, 0];
+  const bounceWinsBB = [0, 0, 0];
   filteredTrades.forEach(t => {
     let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
     const b = ((sd?.bounce || t.bounce) || 1) - 1;
-    if (b >= 0 && b < 3) {
+    if (b < 0 || b >= 3) return;
+    const isBB = sd?.trade_type === "between_bands";
+    if (isBB) {
+      bounceDistribBB[b]++;
+      bounceProfitBB[b] += (t.profit || 0);
+      if (t.result === "WIN") bounceWinsBB[b]++;
+    } else {
       bounceDistrib[b]++;
       bounceProfit[b] += (t.profit || 0);
       if (t.result === "WIN") bounceWins[b]++;
@@ -5166,7 +5175,8 @@ STATS:
 - Total trades: ${total}, Wins: ${wins}, Losses: ${losses}, BE: ${breakEvens}, Win rate (excl BE): ${winRate}%
 - LONG: ${longWins}W/${longLosses}L (${longWR}% WR), profit: ${longProfit}R
 - SHORT: ${shortWins}W/${shortLosses}L (${shortWR}% WR), profit: ${shortProfit}R
-- Bounce distribution: B1=${bounceDistrib[0]} (${bounceWins[0]}W, ${bounceProfit[0]}R), B2=${bounceDistrib[1]} (${bounceWins[1]}W, ${bounceProfit[1]}R), B3=${bounceDistrib[2]} (${bounceWins[2]}W, ${bounceProfit[2]}R)
+- Bounce distribution STANDARD (first bounce expected best): B1=${bounceDistrib[0]} (${bounceWins[0]}W, ${bounceProfit[0]}R), B2=${bounceDistrib[1]} (${bounceWins[1]}W, ${bounceProfit[1]}R), B3=${bounceDistrib[2]} (${bounceWins[2]}W, ${bounceProfit[2]}R)
+- Bounce distribution BETWEEN BANDS (later bounces expected better): B1=${bounceDistribBB[0]} (${bounceWinsBB[0]}W, ${bounceProfitBB[0]}R), B2=${bounceDistribBB[1]} (${bounceWinsBB[1]}W, ${bounceProfitBB[1]}R), B3=${bounceDistribBB[2]} (${bounceWinsBB[2]}W, ${bounceProfitBB[2]}R)
 - Setup types: ${setupStats.map(s => `${s.setup}=${s.total}t/${s.wr}%WR/${s.profit}R`).join(", ")}
 
 RAW TRADES (newest first):
@@ -5392,7 +5402,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
-                  <div style={label}>Trade Type</div>
+                  <div style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Trade Type</span>
+                    <span
+                      title={"Between Bands — zasady:\n\n• Min. 0.25% w momencie wejścia\n• SL — (jeszcze określimy)\n• PA — wyraźny powrót\n• Dobrze, jeśli odbiliśmy się wcześniej od jakiegoś ważnego miejsca"}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", border: `1px solid ${T.purple}`, color: T.purple, fontSize: 9, fontWeight: 700, cursor: "help", userSelect: "none", textTransform: "none", letterSpacing: 0 }}
+                    >i</span>
+                  </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => setTf(p => ({...p, trade_type: "standard"}))} style={{ ...sel, flex: 1, background: (tf.trade_type || "standard") === "standard" ? `${T.cyan}20` : T.bg2, color: (tf.trade_type || "standard") === "standard" ? T.cyan : T.textSoft, fontWeight: (tf.trade_type || "standard") === "standard" ? 700 : 400, borderColor: (tf.trade_type || "standard") === "standard" ? T.cyan : T.border }}>Standard</button>
                     <button onClick={() => setTf(p => ({...p, trade_type: "between_bands"}))} style={{ ...sel, flex: 1, background: tf.trade_type === "between_bands" ? `${T.purple}20` : T.bg2, color: tf.trade_type === "between_bands" ? T.purple : T.textSoft, fontWeight: tf.trade_type === "between_bands" ? 700 : 400, borderColor: tf.trade_type === "between_bands" ? T.purple : T.border }}>Between Bands</button>
@@ -5646,10 +5662,12 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
-          {/* Bounce distribution with R info — HTS only */}
+          {/* Bounce distribution — Standard (HTS only) */}
           {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
-            <Heading icon="📊">Bounce Distribution</Heading>
+            <Heading icon="📊">Bounce Distribution — Standard
+              <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(pierwsze odbicie najlepsze)</span>
+            </Heading>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
               {bounceDistrib.map((count, i) => {
                 const wins_b = bounceWins[i];
@@ -5662,7 +5680,34 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>B{i+1}</div>
                     <div style={{ fontSize: 26, fontWeight: 800, color: count > 0 ? (parseFloat(wr) >= 50 ? T.green : T.red) : T.textDim }}>{wr}{count > 0 ? "%" : ""}</div>
                     <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{wins_b}W / {losses_b}L · {count} trades</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: profit_b >= 0 ? T.green : T.red, marginTop: 6 }}>{profit_b > 0 ? "+" : ""}{profit_b}R</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: profit_b >= 0 ? T.green : T.red, marginTop: 6 }}>{profit_b > 0 ? "+" : ""}{profit_b.toFixed(2)}R</div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>avg {avgR}R / trade</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+          )}
+
+          {/* Bounce distribution — Between Bands (HTS only) */}
+          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📊">Bounce Distribution — Between Bands
+              <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(późniejsze odbicia powinny być skuteczniejsze)</span>
+            </Heading>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {bounceDistribBB.map((count, i) => {
+                const wins_b = bounceWinsBB[i];
+                const losses_b = count - wins_b;
+                const profit_b = bounceProfitBB[i];
+                const wr = count > 0 ? ((wins_b / count) * 100).toFixed(0) : "-";
+                const avgR = count > 0 ? (profit_b / count).toFixed(2) : "0";
+                return (
+                  <div key={i} style={{ textAlign: "center", padding: 14, background: count > 0 ? `${parseFloat(wr) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.purple, marginBottom: 4 }}>B{i+1}</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: count > 0 ? (parseFloat(wr) >= 50 ? T.green : T.red) : T.textDim }}>{wr}{count > 0 ? "%" : ""}</div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{wins_b}W / {losses_b}L · {count} trades</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: profit_b >= 0 ? T.green : T.red, marginTop: 6 }}>{profit_b > 0 ? "+" : ""}{profit_b.toFixed(2)}R</div>
                     <div style={{ fontSize: 9, color: T.textDim }}>avg {avgR}R / trade</div>
                   </div>
                 );
