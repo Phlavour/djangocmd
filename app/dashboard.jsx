@@ -4787,8 +4787,8 @@ function TradingPanel({ apiKey, supa }) {
   const [tf, setTf] = useState({
     description: "", result: "WIN", direction: "LONG", meetsRequirements: true,
     screenshot_before: "", screenshot_after: "", reason: "", profit: "0",
-    sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1",
-    band_type: "fast", setup_type: "A",
+    bounce: "1",
+    band_type: "fast", setup_type: "A", trade_type: "standard",
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4978,10 +4978,9 @@ Rules:
     if (!activeStrategy) { alert("Select or create a strategy first"); return; }
     const stratType = activeStratObj?.type || "HTS";
     const stratData = stratType === "HTS" ? {
-      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
-      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
+      trade_type: tf.trade_type || "standard",
     } : stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -4991,7 +4990,7 @@ Rules:
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
       meets_requirements: tf.meetsRequirements,
       screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after,
-      reason: tf.reason, profit: parseInt(tf.profit) || 0,
+      reason: tf.reason, profit: parseFloat(tf.profit) || 0,
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
       strategy_data: JSON.stringify(stratData),
@@ -5010,7 +5009,7 @@ Rules:
         } else {
           // Fallback: only send columns that exist for sure
           console.log("📊 Retrying with minimal columns...");
-          const minRow = { strategy_id: activeStrategy, description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements, profit: parseInt(tf.profit) || 0, notes: tf.notes, strategy_data: JSON.stringify(stratData) };
+          const minRow = { strategy_id: activeStrategy, description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements, profit: parseFloat(tf.profit) || 0, notes: tf.notes, strategy_data: JSON.stringify(stratData) };
           const res2 = await fetch(`${supa.url}/rest/v1/trading_journal`, {
             method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
             body: JSON.stringify([minRow]),
@@ -5045,10 +5044,9 @@ Rules:
       meetsRequirements: t.meets_requirements !== false,
       screenshot_before: t.screenshot_before || t.screenshot || "", screenshot_after: t.screenshot_after || "",
       reason: t.reason || "", profit: String(t.profit || 0),
-      sl_wick: sd.sl_wick || t.sl_wick || "WIN", potential_wick: String(sd.potential_wick || t.potential_wick || 1),
-      sl_band: sd.sl_band || t.sl_band || "WIN", potential_band: String(sd.potential_band || t.potential_band || 1),
       bounce: String(sd.bounce || t.bounce || 1),
       band_type: sd.band_type || "fast", setup_type: sd.setup_type || "A",
+      trade_type: sd.trade_type || "standard",
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5057,16 +5055,15 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", sl_wick: "WIN", potential_wick: "1", sl_band: "WIN", potential_band: "1", bounce: "1", band_type: "fast", setup_type: "A", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
     const stratType = activeStratObj?.type || "HTS";
     const stratData = stratType === "HTS" ? {
-      sl_wick: tf.sl_wick, potential_wick: parseInt(tf.potential_wick) || 1,
-      sl_band: tf.sl_band, potential_band: parseInt(tf.potential_band) || 1,
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
+      trade_type: tf.trade_type || "standard",
     } : stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -5075,7 +5072,7 @@ Rules:
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
       screenshot_before: tf.screenshot_before, screenshot_after: tf.screenshot_after, reason: tf.reason,
-      profit: parseInt(tf.profit) || 0,
+      profit: parseFloat(tf.profit) || 0,
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
       strategy_data: JSON.stringify(stratData),
@@ -5132,10 +5129,6 @@ Rules:
   });
 
   // HTS-specific stats
-  const wickWins = filteredTrades.filter(t => t.sl_wick === "WIN").length;
-  const bandWins = filteredTrades.filter(t => t.sl_band === "WIN").length;
-  const avgPotWick = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_wick || 0), 0) / total).toFixed(1) : "0";
-  const avgPotBand = total > 0 ? (filteredTrades.reduce((s, t) => s + (t.potential_band || 0), 0) / total).toFixed(1) : "0";
   const bounceDistrib = [0, 0, 0];
   const bounceProfit = [0, 0, 0];
   const bounceWins = [0, 0, 0];
@@ -5154,10 +5147,14 @@ Rules:
     if (!apiKey || total < 3) { alert(total < 3 ? "Need at least 3 trades for analysis" : "Add Claude API key"); return; }
     setAiLoading(true);
     try {
-      const tradesData = filteredTrades.slice(0, 50).map(t => ({
-        result: t.result, meets_req: t.meets_requirements, sl_wick: t.sl_wick, pot_wick: t.potential_wick,
-        sl_band: t.sl_band, pot_band: t.potential_band, bounce: t.bounce, pair: t.pair, timeframe: t.timeframe, notes: t.notes,
-      }));
+      const tradesData = filteredTrades.slice(0, 50).map(t => {
+        let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+        return {
+          result: t.result, direction: t.direction, profit: t.profit,
+          bounce: sd?.bounce || t.bounce, band_type: sd?.band_type, setup_type: sd?.setup_type, trade_type: sd?.trade_type,
+          pair: t.pair, timeframe: t.timeframe, notes: t.notes,
+        };
+      });
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -5169,8 +5166,6 @@ STATS:
 - Total trades: ${total}, Wins: ${wins}, Losses: ${losses}, BE: ${breakEvens}, Win rate (excl BE): ${winRate}%
 - LONG: ${longWins}W/${longLosses}L (${longWR}% WR), profit: ${longProfit}R
 - SHORT: ${shortWins}W/${shortLosses}L (${shortWR}% WR), profit: ${shortProfit}R
-- SL to wick wins: ${wickWins}/${total}, SL to band wins: ${bandWins}/${total}
-- Avg potential (wick): ${avgPotWick}R, Avg potential (band): ${avgPotBand}R
 - Bounce distribution: B1=${bounceDistrib[0]} (${bounceWins[0]}W, ${bounceProfit[0]}R), B2=${bounceDistrib[1]} (${bounceWins[1]}W, ${bounceProfit[1]}R), B3=${bounceDistrib[2]} (${bounceWins[2]}W, ${bounceProfit[2]}R)
 - Setup types: ${setupStats.map(s => `${s.setup}=${s.total}t/${s.wr}%WR/${s.profit}R`).join(", ")}
 
@@ -5183,7 +5178,7 @@ ${activeStratObj?.description || "No description"}
 Provide:
 1. Overall assessment — is this strategy profitable? what's the edge?
 2. Pattern analysis — when do wins cluster? when do losses cluster? any correlation with bounce level, pair, or timeframe?
-3. SL placement analysis — wick vs band: which is more reliable? which gives better R?
+3. Trade type analysis — Standard vs Between Bands: which gives better edge? band type (szybka vs wolna) impact?
 4. Risk/reward analysis — are you taking high enough R trades? are losses cutting at the right level?
 5. Specific actionable recommendations — what to change, what to keep
 6. Psychological observations — any signs of revenge trading, overtrading, or deviation from strategy?
@@ -5304,7 +5299,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 4 }}>
                     <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
                     <button onClick={() => setTf(p => ({...p, result: "BE", profit: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "BE" ? `${T.amber}20` : T.bg2, color: tf.result === "BE" ? T.amber : T.textSoft, fontWeight: tf.result === "BE" ? 700 : 400, borderColor: tf.result === "BE" ? T.amber : T.border }}>BE</button>
-                    <button onClick={() => setTf(p => ({...p, result: "LOSS", sl_wick: "LOSS", sl_band: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
+                    <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
                 {(activeStratObj?.type || "HTS") !== "HTS" && (
@@ -5333,18 +5328,20 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </select>
                 </div>
                 <div>
-                  <div style={label}>Profit</div>
-                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                    {Array.from({length: 26}, (_, i) => i - 5).map(r => {
-                      const active = tf.profit === String(r);
-                      const color = r > 0 ? T.green : r < 0 ? T.red : T.textDim;
-                      return <button key={r} onClick={() => setTf(p => ({...p, profit: String(r)}))} style={{
-                        ...sel, padding: "3px 6px", fontSize: 9, minWidth: 28, textAlign: "center",
-                        background: active ? `${color}20` : T.bg2, color: active ? color : T.textSoft,
-                        fontWeight: active ? 700 : 400, borderColor: active ? color : T.border,
-                      }}>{r > 0 ? "+" : ""}{r}R</button>;
-                    })}
-                  </div>
+                  <div style={label}>Profit (R)</div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={tf.profit}
+                    onChange={e => setTf(p => ({...p, profit: e.target.value}))}
+                    placeholder="np. 2.5, -1.5, 0.3"
+                    style={{
+                      ...sel, width: "100%", boxSizing: "border-box", textAlign: "center",
+                      fontWeight: 700, fontSize: 13,
+                      color: parseFloat(tf.profit) > 0 ? T.green : parseFloat(tf.profit) < 0 ? T.red : T.textSoft,
+                      borderColor: parseFloat(tf.profit) > 0 ? T.green : parseFloat(tf.profit) < 0 ? T.red : T.border,
+                    }}
+                  />
                 </div>
               </div>
 
@@ -5393,30 +5390,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {/* Strategy-specific fields */}
               {(activeStratObj?.type || "HTS") === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
-                  <div style={label}>SL do wicka</div>
-                  <select value={tf.sl_wick} onChange={e => setTf(p => ({...p, sl_wick: e.target.value}))} style={sel}>
-                    <option value="WIN">WIN</option><option value="LOSS">LOSS</option>
-                  </select>
-                </div>
-                <div>
-                  <div style={label}>Potential (wick)</div>
-                  <select value={tf.potential_wick} onChange={e => setTf(p => ({...p, potential_wick: e.target.value}))} style={sel}>
-                    {R_OPTIONS_20.map(r => <option key={r} value={r}>{r}R</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={label}>SL do wstęgi</div>
-                  <select value={tf.sl_band} onChange={e => setTf(p => ({...p, sl_band: e.target.value}))} style={sel}>
-                    <option value="WIN">WIN</option><option value="LOSS">LOSS</option>
-                  </select>
-                </div>
-                <div>
-                  <div style={label}>Potential (band)</div>
-                  <select value={tf.potential_band} onChange={e => setTf(p => ({...p, potential_band: e.target.value}))} style={sel}>
-                    {R_OPTIONS_10.map(r => <option key={r} value={r}>{r}R</option>)}
-                  </select>
+                  <div style={label}>Trade Type</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, trade_type: "standard"}))} style={{ ...sel, flex: 1, background: (tf.trade_type || "standard") === "standard" ? `${T.cyan}20` : T.bg2, color: (tf.trade_type || "standard") === "standard" ? T.cyan : T.textSoft, fontWeight: (tf.trade_type || "standard") === "standard" ? 700 : 400, borderColor: (tf.trade_type || "standard") === "standard" ? T.cyan : T.border }}>Standard</button>
+                    <button onClick={() => setTf(p => ({...p, trade_type: "between_bands"}))} style={{ ...sel, flex: 1, background: tf.trade_type === "between_bands" ? `${T.purple}20` : T.bg2, color: tf.trade_type === "between_bands" ? T.purple : T.textSoft, fontWeight: tf.trade_type === "between_bands" ? 700 : 400, borderColor: tf.trade_type === "between_bands" ? T.purple : T.border }}>Between Bands</button>
+                  </div>
                 </div>
                 <div>
                   <div style={label}>Odbicie</div>
@@ -5424,10 +5404,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     {BOUNCE_OPTIONS.map(b => <option key={b} value={b}>B{b}</option>)}
                   </select>
                 </div>
-              </div>
-
-              {/* HTS: Band type + Setup type */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Wstęga (odbicie od)</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5435,6 +5411,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, band_type: "slow"}))} style={{ ...sel, flex: 1, background: tf.band_type === "slow" ? "#EC489920" : T.bg2, color: tf.band_type === "slow" ? "#EC4899" : T.textSoft, fontWeight: tf.band_type === "slow" ? 700 : 400, borderColor: tf.band_type === "slow" ? "#EC4899" : T.border }}>Wolna</button>
                   </div>
                 </div>
+              </div>
+
+              {/* HTS: Setup type */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>
                     <span>Rodzaj Set-upu</span>
@@ -5534,8 +5514,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
                     {(() => { let sd = t.strategy_data || {}; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } const st = activeStratObj?.type || "HTS";
                       return st === "HTS" ? <>
-                        <span>SL wick: <strong style={{ color: (sd.sl_wick||t.sl_wick) === "WIN" ? T.green : T.red }}>{sd.sl_wick||t.sl_wick}</strong> ({sd.potential_wick||t.potential_wick}R)</span>
-                        <span>SL band: <strong style={{ color: (sd.sl_band||t.sl_band) === "WIN" ? T.green : T.red }}>{sd.sl_band||t.sl_band}</strong> ({sd.potential_band||t.potential_band}R)</span>
+                        <span>Type: <strong style={{ color: (sd.trade_type || "standard") === "between_bands" ? T.purple : T.cyan }}>{(sd.trade_type || "standard") === "between_bands" ? "Between Bands" : "Standard"}</strong></span>
                         <span>B{sd.bounce||t.bounce}</span>
                         {sd.band_type && <span>Wstęga: <strong style={{ color: sd.band_type === "fast" ? "#3B82F6" : "#EC4899" }}>{sd.band_type === "fast" ? "szybka" : "wolna"}</strong></span>}
                         {sd.setup_type && <span>Setup: <strong style={{ color: T.cyan }}>{sd.setup_type}</strong></span>}
@@ -5580,14 +5559,39 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Stat label="SHORT ▼ WR" value={shortWR} suffix={shortDecisive > 0 ? "%" : ""} color={shortDecisive > 0 && parseFloat(shortWR) >= 50 ? T.green : T.red} sub={`${shortWins}W/${shortLosses}L · ${shortProfit > 0 ? "+" : ""}${shortProfit}R`} />
           </div>
 
-          {/* HTS specific stats — only show for HTS strategy */}
+          {/* HTS Trade Type stats — only show for HTS strategy */}
           {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
-            <Stat label="SL Wick WR" value={total > 0 ? ((wickWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.cyan} sub={`${wickWins} / ${total}`} />
-            <Stat label="Avg Pot Wick" value={avgPotWick} suffix="R" color={T.green} />
-            <Stat label="SL Band WR" value={total > 0 ? ((bandWins/total)*100).toFixed(1) : "0"} suffix="%" color={T.purple} sub={`${bandWins} / ${total}`} />
-            <Stat label="Avg Pot Band" value={avgPotBand} suffix="R" color={T.green} />
-          </div>
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="🎚️">Trade Type Performance (HTS)</Heading>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { id: "standard", label: "Standard", color: T.cyan },
+                { id: "between_bands", label: "Between Bands", color: T.purple },
+              ].map(tt => {
+                const ttTrades = filteredTrades.filter(t => {
+                  let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                  return (sd?.trade_type || "standard") === tt.id;
+                });
+                const tWins = ttTrades.filter(t => t.result === "WIN").length;
+                const tLosses = ttTrades.filter(t => t.result === "LOSS").length;
+                const tBEs = ttTrades.filter(t => t.result === "BE").length;
+                const tDecisive = tWins + tLosses;
+                const tTotal = ttTrades.length;
+                const tWR = tDecisive > 0 ? ((tWins / tDecisive) * 100).toFixed(0) : "-";
+                const tProfit = ttTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+                const tAvgR = tTotal > 0 ? (tProfit / tTotal).toFixed(2) : "0";
+                return (
+                  <div key={tt.id} style={{ textAlign: "center", padding: 14, background: tTotal > 0 ? `${parseFloat(tWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: tt.color, marginBottom: 4 }}>{tt.label}</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: tTotal > 0 ? (parseFloat(tWR) >= 50 ? T.green : T.red) : T.textDim }}>{tWR}{tTotal > 0 ? "%" : ""}</div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{tWins}W / {tLosses}L{tBEs > 0 ? ` / ${tBEs}BE` : ""} · {tTotal} trades</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: tProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{tProfit > 0 ? "+" : ""}{tProfit.toFixed(2)}R</div>
+                    <div style={{ fontSize: 9, color: T.textDim }}>avg {tAvgR}R / trade</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
           )}
 
           {/* Timeframe Performance */}
