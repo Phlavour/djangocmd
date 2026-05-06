@@ -4959,7 +4959,7 @@ Rules:
 - If the HTS table is not visible, return empty trends/rsi/pivots but still try to extract trade_date
 - RSI: look for the RSI column value that corresponds to the ${tf.timeframe} row
 - Pivots: look for pivot point values (PP, R1, R2, R3, S1, S2, S3) if visible in the table
-- trade_date: look at the chart's X-axis (time/date axis) or any visible date label. Use the most recent visible date (rightmost on chart). Format strictly as YYYY-MM-DD. If you only see day/month, assume current year. If unreadable, return empty string ""
+- trade_date: look at the chart's X-axis time/date label. Use the most recent (rightmost) visible date. Common formats: "Mon 06 Apr '26 10:10" means day=06, month=Apr (April=04), year=2026 → output "2026-04-06". "06/04 14:30" means day=06, month=04 → output "${new Date().getFullYear()}-04-06". DAY ALWAYS COMES FIRST in European/trading platform formats (DD MMM YY or DD/MM). Month name is "Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec". If year shows as 'YY (e.g. '26), expand to 20YY (2026). If only day and month visible, use ${new Date().getFullYear()}. Output STRICTLY as YYYY-MM-DD with zero-padded month and day. If completely unreadable, return empty string ""
 - Respond ONLY with JSON, nothing else` }
           ] }]
         }),
