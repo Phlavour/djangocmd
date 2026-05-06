@@ -4797,7 +4797,7 @@ function TradingPanel({ apiKey, supa }) {
   });
   const [visionLoading, setVisionLoading] = useState(false);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
-  const [calInstrument, setCalInstrument] = useState("NQ");
+  const [drInstrument, setDrInstrument] = useState("NQ");
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
@@ -5687,9 +5687,27 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ STATS TAB ═══ */}
-      {subTab === "stats" && activeStrategy && (
+      {subTab === "stats" && activeStrategy && (() => {
+        // For DR strategy, filter by instrument toggle
+        const isDR = activeStratObj?.type === "DR";
+        const drFilteredTrades = isDR ? filteredTrades.filter(t => {
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          return sd?.instrument === drInstrument;
+        }) : filteredTrades;
+        return (
         <div>
+          {/* DR: Instrument toggle */}
+          {isDR && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: T.textDim, marginRight: 4 }}>Instrument:</span>
+              <button onClick={() => setDrInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: drInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: drInstrument === "NQ" ? 700 : 400, borderColor: drInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+              <button onClick={() => setDrInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ES" ? `${T.purple}20` : T.bg2, color: drInstrument === "ES" ? T.purple : T.textSoft, fontWeight: drInstrument === "ES" ? 700 : 400, borderColor: drInstrument === "ES" ? T.purple : T.border }}>ES</button>
+              <span style={{ fontSize: 10, color: T.textDim, marginLeft: 8 }}>{drFilteredTrades.length} trades</span>
+            </div>
+          )}
+
           {/* Overview stats */}
+          {!isDR && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
             <Stat label="Total Trades" value={total} color={T.cyan} />
             <Stat label="Win Rate" value={winRate} suffix="%" color={parseFloat(winRate) >= 50 ? T.green : T.red} sub={`${wins}W / ${losses}L (decisive)`} />
@@ -5698,6 +5716,174 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Stat label="LONG ▲ WR" value={longWR} suffix={longDecisive > 0 ? "%" : ""} color={longDecisive > 0 && parseFloat(longWR) >= 50 ? T.green : T.red} sub={`${longWins}W/${longLosses}L · ${longProfit > 0 ? "+" : ""}${longProfit}R`} />
             <Stat label="SHORT ▼ WR" value={shortWR} suffix={shortDecisive > 0 ? "%" : ""} color={shortDecisive > 0 && parseFloat(shortWR) >= 50 ? T.green : T.red} sub={`${shortWins}W/${shortLosses}L · ${shortProfit > 0 ? "+" : ""}${shortProfit}R`} />
           </div>
+          )}
+
+          {/* DR: Overview */}
+          {isDR && (() => {
+            const drTotal = drFilteredTrades.length;
+            const drWins = drFilteredTrades.filter(t => t.result === "WIN").length;
+            const drLosses = drFilteredTrades.filter(t => t.result === "LOSS").length;
+            const drBEs = drFilteredTrades.filter(t => t.result === "BE").length;
+            const drDecisive = drWins + drLosses;
+            const drWR = drDecisive > 0 ? ((drWins / drDecisive) * 100).toFixed(1) : "0";
+            const drProfitUsd = drFilteredTrades.reduce((s, t) => {
+              let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+              return s + (parseFloat(sd?.profit_usd) || 0);
+            }, 0);
+            const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
+                <Stat label="Total Trades" value={drTotal} color={T.cyan} />
+                <Stat label="Win Rate" value={drWR} suffix="%" color={parseFloat(drWR) >= 50 ? T.green : T.red} sub={`${drWins}W / ${drLosses}L`} />
+                <Stat label="Break Even" value={drBEs} color={T.amber} sub={drTotal > 0 ? `${((drBEs / drTotal) * 100).toFixed(0)}% of all` : ""} />
+                <Stat label="Total P/L" value={fmtUSD(drProfitUsd)} color={drProfitUsd >= 0 ? T.green : T.red} />
+                <Stat label="Avg / Trade" value={drTotal > 0 ? fmtUSD(drProfitUsd / drTotal) : "$0.00"} color={drProfitUsd >= 0 ? T.green : T.red} />
+              </div>
+            );
+          })()}
+
+          {/* DR: First vs Second Trade */}
+          {isDR && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="🔢">First Trade vs Second Trade</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { num: 1, label: "Pierwszy Trade", color: T.green },
+                  { num: 2, label: "Drugi Trade", color: T.amber },
+                ].map(tn => {
+                  const tnTrades = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return parseInt(sd?.trade_number) === tn.num;
+                  });
+                  const tnWins = tnTrades.filter(t => t.result === "WIN").length;
+                  const tnLosses = tnTrades.filter(t => t.result === "LOSS").length;
+                  const tnBEs = tnTrades.filter(t => t.result === "BE").length;
+                  const tnDecisive = tnWins + tnLosses;
+                  const tnTotal = tnTrades.length;
+                  const tnWR = tnDecisive > 0 ? ((tnWins / tnDecisive) * 100).toFixed(0) : "-";
+                  const tnProfit = tnTrades.reduce((s, t) => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return s + (parseFloat(sd?.profit_usd) || 0);
+                  }, 0);
+                  const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  return (
+                    <div key={tn.num} style={{ textAlign: "center", padding: 14, background: tnTotal > 0 ? `${parseFloat(tnWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: tn.color, marginBottom: 4 }}>{tn.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: tnTotal > 0 ? (parseFloat(tnWR) >= 50 ? T.green : T.red) : T.textDim }}>{tnWR}{tnTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{tnWins}W / {tnLosses}L{tnBEs > 0 ? ` / ${tnBEs}BE` : ""} · {tnTotal} trades</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: tnProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD(tnProfit)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* DR: Day of Week WR */}
+          {isDR && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="📆">Day of Week Performance</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                {[
+                  { idx: 1, label: "Mon" }, { idx: 2, label: "Tue" }, { idx: 3, label: "Wed" }, { idx: 4, label: "Thu" }, { idx: 5, label: "Fri" }
+                ].map(d => {
+                  const dayTrades = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    if (!sd?.trade_date) return false;
+                    const dayIdx = new Date(sd.trade_date + "T12:00:00").getDay();
+                    return dayIdx === d.idx;
+                  });
+                  const dW = dayTrades.filter(t => t.result === "WIN").length;
+                  const dL = dayTrades.filter(t => t.result === "LOSS").length;
+                  const dBE = dayTrades.filter(t => t.result === "BE").length;
+                  const dDec = dW + dL;
+                  const dTotal = dayTrades.length;
+                  const dWR = dDec > 0 ? ((dW / dDec) * 100).toFixed(0) : "-";
+                  const dProfit = dayTrades.reduce((s, t) => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return s + (parseFloat(sd?.profit_usd) || 0);
+                  }, 0);
+                  const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                  return (
+                    <div key={d.idx} style={{ textAlign: "center", padding: "10px 4px", background: dTotal > 0 ? `${parseFloat(dWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>{d.label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: dDec > 0 ? (parseFloat(dWR) >= 50 ? T.green : T.red) : T.textDim }}>{dWR}{dDec > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{dW}W/{dL}L{dBE > 0 ? `/${dBE}BE` : ""} · {dTotal}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: dProfit >= 0 ? T.green : T.red, marginTop: 2 }}>{fmtUSD(dProfit)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* DR: Entry Hour Performance */}
+          {isDR && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="⏰">Entry Hour Performance
+                <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(% all trades + WR)</span>
+              </Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+                {[10, 11, 12, 13, 14, 15, 16].map(h => {
+                  const hourTrades = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    if (!sd?.entry_time) return false;
+                    const hh = parseInt(sd.entry_time.split(":")[0]);
+                    return hh === h;
+                  });
+                  const hW = hourTrades.filter(t => t.result === "WIN").length;
+                  const hL = hourTrades.filter(t => t.result === "LOSS").length;
+                  const hBE = hourTrades.filter(t => t.result === "BE").length;
+                  const hDec = hW + hL;
+                  const hTotal = hourTrades.length;
+                  const hWR = hDec > 0 ? ((hW / hDec) * 100).toFixed(0) : "-";
+                  const pctOfAll = drFilteredTrades.length > 0 ? ((hTotal / drFilteredTrades.length) * 100).toFixed(0) : "0";
+                  const hProfit = hourTrades.reduce((s, t) => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return s + (parseFloat(sd?.profit_usd) || 0);
+                  }, 0);
+                  return (
+                    <div key={h} style={{ textAlign: "center", padding: "10px 2px", background: hTotal > 0 ? `${parseFloat(hWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan }}>{h}:00</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: hDec > 0 ? (parseFloat(hWR) >= 50 ? T.green : T.red) : T.textDim, marginTop: 2 }}>{hWR}{hDec > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginTop: 1 }}>{hTotal} ({pctOfAll}%)</div>
+                      <div style={{ fontSize: 9, color: T.textDim }}>{hW}W/{hL}L{hBE > 0 ? `/${hBE}` : ""}</div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: hProfit >= 0 ? T.green : T.red, marginTop: 2 }}>{hProfit >= 0 ? "+" : "-"}${Math.abs(hProfit).toFixed(0)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* DR: TP Levels Reached */}
+          {isDR && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="🎯">TP Levels Reached</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                {[
+                  { id: "tp_01", label: "0.1 R" },
+                  { id: "tp_02", label: "0.2 R" },
+                  { id: "tp_03", label: "0.3 R" },
+                ].map(tp => {
+                  const reached = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return sd?.[tp.id] === true;
+                  }).length;
+                  const total = drFilteredTrades.length;
+                  const pct = total > 0 ? ((reached / total) * 100).toFixed(0) : "0";
+                  return (
+                    <div key={tp.id} style={{ textAlign: "center", padding: 14, background: total > 0 ? `${T.green}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>TP {tp.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: total > 0 ? T.green : T.textDim }}>{reached}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>z {total} trade{total !== 1 ? "s" : ""}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.green, marginTop: 6 }}>{pct}% osiągnięte</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* HTS Trade Type stats — only show for HTS strategy */}
           {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
@@ -5734,7 +5920,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           </Card>
           )}
 
-          {/* Timeframe Performance */}
+          {/* Timeframe Performance — hide for DR */}
+          {!isDR && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="⏱">Performance by Time-frame</Heading>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${TIMEFRAMES.length}, 1fr)`, gap: 8 }}>
@@ -5758,6 +5945,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               })}
             </div>
           </Card>
+          )}
 
           {/* Per-strategy breakdown (only in ALL mode) */}
           {activeStrategy === "ALL" && strategies.length > 1 && (
@@ -5858,7 +6046,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           </Card>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ═══ AI TAB ═══ */}
       {subTab === "ai" && activeStrategy && (
@@ -5888,7 +6077,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         const dayData = {};
         filteredTrades.forEach(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-          if (sd?.instrument !== calInstrument) return;
+          if (sd?.instrument !== drInstrument) return;
           const date = sd?.trade_date;
           if (!date) return;
           if (!dayData[date]) dayData[date] = { profit: 0, count: 0 };
@@ -5948,8 +6137,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <Btn small outline onClick={goNext}>›</Btn>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <button onClick={() => setCalInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: calInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: calInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: calInstrument === "NQ" ? 700 : 400, borderColor: calInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
-                <button onClick={() => setCalInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: calInstrument === "ES" ? `${T.purple}20` : T.bg2, color: calInstrument === "ES" ? T.purple : T.textSoft, fontWeight: calInstrument === "ES" ? 700 : 400, borderColor: calInstrument === "ES" ? T.purple : T.border }}>ES</button>
+                <button onClick={() => setDrInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: drInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: drInstrument === "NQ" ? 700 : 400, borderColor: drInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+                <button onClick={() => setDrInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ES" ? `${T.purple}20` : T.bg2, color: drInstrument === "ES" ? T.purple : T.textSoft, fontWeight: drInstrument === "ES" ? 700 : 400, borderColor: drInstrument === "ES" ? T.purple : T.border }}>ES</button>
                 <Btn small outline onClick={goToday}>Today</Btn>
               </div>
             </div>
@@ -6021,7 +6210,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               const monthCount = monthTrades.reduce((s, [,v]) => s + v.count, 0);
               return (
                 <div style={{ marginTop: 12, padding: 10, background: T.bg2, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 11, color: T.textSoft, fontWeight: 600 }}>{calInstrument} · {monthName}</div>
+                  <div style={{ fontSize: 11, color: T.textSoft, fontWeight: 600 }}>{drInstrument} · {monthName}</div>
                   <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                     <div style={{ fontSize: 11, color: T.textDim }}>{monthCount} trades</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: monthProfit > 0 ? T.green : monthProfit < 0 ? T.red : T.textDim }}>{fmtUSD(monthProfit)}</div>
