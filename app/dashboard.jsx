@@ -5629,11 +5629,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"} {t.direction === "SHORT" ? "▼" : "▲"}</Badge>
                     <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
-                    <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>
-                    {t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
-                    {t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
-                    <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>
-                    <Badge color={T.textDim}>B{t.bounce}</Badge>
+                    {activeStratObj?.type !== "DR" && <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>}
+                    {activeStratObj?.type !== "DR" && t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
+                    {activeStratObj?.type !== "DR" && t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
+                    {activeStratObj?.type !== "DR" && activeStratObj?.type !== "HTS" && <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>}
+                    {activeStratObj?.type !== "DR" && activeStratObj?.type !== "MARKET_PA" && activeStratObj?.type !== "V_SHAPE" && <Badge color={T.textDim}>B{t.bounce}</Badge>}
                   </div>
                   {t.reason && <div style={{ fontSize: 11, color: T.purple, marginBottom: 4 }}>📝 {t.reason}</div>}
                   {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
@@ -6142,6 +6142,29 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <Btn small outline onClick={goToday}>Today</Btn>
               </div>
             </div>
+
+            {/* Monthly summary notice (above grid) */}
+            {(() => {
+              const monthTradesList = filteredTrades.filter(t => {
+                let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                if (sd?.instrument !== drInstrument) return false;
+                if (!sd?.trade_date) return false;
+                return sd.trade_date.startsWith(`${year}-${String(month+1).padStart(2,"0")}`);
+              });
+              const mWins = monthTradesList.filter(t => t.result === "WIN").length;
+              const mLosses = monthTradesList.filter(t => t.result === "LOSS").length;
+              const mBEs = monthTradesList.filter(t => t.result === "BE").length;
+              const mDecisive = mWins + mLosses;
+              const mTotal = monthTradesList.length;
+              const mWR = mDecisive > 0 ? ((mWins / mDecisive) * 100).toFixed(1) : "-";
+              return (
+                <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "8px 12px", background: T.bg2, borderRadius: 6, marginBottom: 10, fontSize: 11 }}>
+                  <span style={{ color: T.textDim }}>Trades: <strong style={{ color: T.text }}>{mTotal}</strong></span>
+                  <span style={{ color: T.textDim }}>Win Rate: <strong style={{ color: mDecisive > 0 ? (parseFloat(mWR) >= 50 ? T.green : T.red) : T.textDim }}>{mWR}{mDecisive > 0 ? "%" : ""}</strong></span>
+                  <span style={{ color: T.textDim, fontSize: 10 }}>{mWins}W / {mLosses}L{mBEs > 0 ? ` / ${mBEs}BE` : ""}</span>
+                </div>
+              );
+            })()}
 
             {/* Weekday header */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 0, marginBottom: 6 }}>
