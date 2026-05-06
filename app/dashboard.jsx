@@ -4789,11 +4789,14 @@ function TradingPanel({ apiKey, supa }) {
     screenshot_before: "", screenshot_after: "", reason: "", profit: "0",
     bounce: "1",
     band_type: "fast", setup_type: "A", trade_type: "standard",
+    instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10),
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
   });
   const [visionLoading, setVisionLoading] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [calInstrument, setCalInstrument] = useState("NQ");
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
@@ -4817,6 +4820,7 @@ function TradingPanel({ apiKey, supa }) {
     { id: "HTS", label: "HTS", desc: "SL wick/band, bounce, potentials" },
     { id: "V_SHAPE", label: "V-Shape Recovery", desc: "Candle entry, engulfing, V quality" },
     { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
+    { id: "DR", label: "DR", desc: "NQ/ES, session, entry hour, USD profit" },
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
@@ -4985,6 +4989,13 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
+    } : stratType === "DR" ? {
+      instrument: tf.instrument || "NQ",
+      session: tf.session || "NY",
+      entry_time: tf.entry_time || "10:00",
+      trade_number: parseInt(tf.trade_number) || 1,
+      profit_usd: parseFloat(tf.profit_usd) || 0,
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5047,6 +5058,12 @@ Rules:
       bounce: String(sd.bounce || t.bounce || 1),
       band_type: sd.band_type || "fast", setup_type: sd.setup_type || "A",
       trade_type: sd.trade_type || "standard",
+      instrument: sd.instrument || "NQ",
+      session: sd.session || "NY",
+      entry_time: sd.entry_time || "10:00",
+      trade_number: String(sd.trade_number || 1),
+      profit_usd: String(sd.profit_usd || 0),
+      trade_date: sd.trade_date || new Date().toISOString().slice(0, 10),
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5055,7 +5072,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10) };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5068,6 +5085,13 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
+    } : stratType === "DR" ? {
+      instrument: tf.instrument || "NQ",
+      session: tf.session || "NY",
+      entry_time: tf.entry_time || "10:00",
+      trade_number: parseInt(tf.trade_number) || 1,
+      profit_usd: parseFloat(tf.profit_usd) || 0,
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5278,6 +5302,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
+            ...(activeStratObj?.type === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -5295,8 +5320,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
-              {/* Row 1: Direction, Result, (Meets Req — not for HTS) */}
-              <div style={{ display: "grid", gridTemplateColumns: (activeStratObj?.type || "HTS") === "HTS" ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
+              <div style={{ display: "grid", gridTemplateColumns: ((activeStratObj?.type || "HTS") === "HTS" || (activeStratObj?.type) === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5312,7 +5337,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
-                {(activeStratObj?.type || "HTS") !== "HTS" && (
+                {(activeStratObj?.type || "HTS") !== "HTS" && (activeStratObj?.type) !== "DR" && (
                 <div>
                   <div style={label}>Meets Requirements</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5323,7 +5348,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 )}
               </div>
 
-              {/* Row 2: Pair, TF, Profit */}
+              {/* Row 2: Pair, TF, Profit — hidden for DR */}
+              {(activeStratObj?.type) !== "DR" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Para</div>
@@ -5354,6 +5380,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   />
                 </div>
               </div>
+              )}
 
               {/* Screenshot BEFORE + reason */}
               <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>📸 Before Trade (z tabelką HTS)</div>
@@ -5474,6 +5501,61 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
               </>}
 
+              {(activeStratObj?.type) === "DR" && <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>DR Strategy Fields</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Instrument</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, instrument: "NQ"}))} style={{ ...sel, flex: 1, background: tf.instrument === "NQ" ? `${T.cyan}20` : T.bg2, color: tf.instrument === "NQ" ? T.cyan : T.textSoft, fontWeight: tf.instrument === "NQ" ? 700 : 400, borderColor: tf.instrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+                    <button onClick={() => setTf(p => ({...p, instrument: "ES"}))} style={{ ...sel, flex: 1, background: tf.instrument === "ES" ? `${T.purple}20` : T.bg2, color: tf.instrument === "ES" ? T.purple : T.textSoft, fontWeight: tf.instrument === "ES" ? 700 : 400, borderColor: tf.instrument === "ES" ? T.purple : T.border }}>ES</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Sesja</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {["NY", "London", "Azja"].map(s => (
+                      <button key={s} onClick={() => setTf(p => ({...p, session: s}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.session === s ? `${T.cyan}20` : T.bg2, color: tf.session === s ? T.cyan : T.textSoft, fontWeight: tf.session === s ? 700 : 400, borderColor: tf.session === s ? T.cyan : T.border }}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Trade #</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, trade_number: "1"}))} style={{ ...sel, flex: 1, background: tf.trade_number === "1" ? `${T.green}20` : T.bg2, color: tf.trade_number === "1" ? T.green : T.textSoft, fontWeight: tf.trade_number === "1" ? 700 : 400, borderColor: tf.trade_number === "1" ? T.green : T.border }}>Pierwszy</button>
+                    <button onClick={() => setTf(p => ({...p, trade_number: "2"}))} style={{ ...sel, flex: 1, background: tf.trade_number === "2" ? `${T.amber}20` : T.bg2, color: tf.trade_number === "2" ? T.amber : T.textSoft, fontWeight: tf.trade_number === "2" ? 700 : 400, borderColor: tf.trade_number === "2" ? T.amber : T.border }}>Drugi</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Godzina wejścia</div>
+                  <input type="time" value={tf.entry_time} onChange={e => setTf(p => ({...p, entry_time: e.target.value}))} min="10:00" max="16:00" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>Data trade'a</div>
+                  <input type="date" value={tf.trade_date} onChange={e => setTf(p => ({...p, trade_date: e.target.value}))} min="2023-01-01" style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>Profit / Strata ($)</div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={tf.profit_usd}
+                    onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))}
+                    placeholder="np. 250.50, -100"
+                    style={{
+                      ...sel, width: "100%", boxSizing: "border-box", textAlign: "center",
+                      fontWeight: 700, fontSize: 13,
+                      color: parseFloat(tf.profit_usd) > 0 ? T.green : parseFloat(tf.profit_usd) < 0 ? T.red : T.textSoft,
+                      borderColor: parseFloat(tf.profit_usd) > 0 ? T.green : parseFloat(tf.profit_usd) < 0 ? T.red : T.border,
+                    }}
+                  />
+                </div>
+              </div>
+              </>}
+
               <div style={{ marginBottom: 12 }}>
                 <div style={label}>Opis trade'a</div>
                 <textarea value={tf.description} onChange={e => setTf(p => ({...p, description: e.target.value}))} placeholder="opisz setup, entry, co widziałeś na wykresie..."
@@ -5538,6 +5620,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>Świeczka: <strong>{sd.entry_candle || "?"}</strong></span>
                         <span>Engulfing: <strong style={{ color: sd.has_engulfing ? T.green : T.red }}>{sd.has_engulfing ? "TAK" : "NIE"}</strong></span>
                         <span>V: <strong style={{ color: sd.v_quality === "clear" ? T.green : T.amber }}>{sd.v_quality === "clear" ? "wyraźny" : "rozjechany"}</strong></span>
+                      </> : st === "DR" ? <>
+                        <span>{sd.instrument || "NQ"}</span>
+                        <span>{sd.session || "NY"}</span>
+                        <span>{sd.entry_time || ""}</span>
+                        <span>Trade #{sd.trade_number || 1}</span>
+                        <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
+                        {sd.trade_date && <span>{sd.trade_date}</span>}
                       </> : null;
                     })()}
                     {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
@@ -5750,6 +5839,164 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           </Card>
         </div>
       )}
+
+      {/* ═══ PnL CALENDAR TAB (DR only) ═══ */}
+      {subTab === "calendar" && activeStratObj?.type === "DR" && (() => {
+        const { year, month } = calMonth;
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startWeekday = firstDay.getDay(); // 0=Sun
+        const monthName = new Date(year, month, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+
+        // Build day data: { "YYYY-MM-DD": { profit, count } }
+        const dayData = {};
+        filteredTrades.forEach(t => {
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          if (sd?.instrument !== calInstrument) return;
+          const date = sd?.trade_date;
+          if (!date) return;
+          if (!dayData[date]) dayData[date] = { profit: 0, count: 0 };
+          dayData[date].profit += parseFloat(sd?.profit_usd || 0);
+          dayData[date].count++;
+        });
+
+        // Build cells for 6 weeks (42 cells)
+        const cells = [];
+        // Lead with previous month tail
+        for (let i = 0; i < startWeekday; i++) {
+          const prevDate = new Date(year, month, -startWeekday + i + 1);
+          cells.push({ day: prevDate.getDate(), date: null, isOther: true });
+        }
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+          cells.push({ day: d, date: dateStr, isOther: false });
+        }
+        while (cells.length < 42) {
+          const idx = cells.length - daysInMonth - startWeekday + 1;
+          cells.push({ day: idx, date: null, isOther: true });
+        }
+
+        // Group cells into weeks (rows of 7)
+        const weeks = [];
+        for (let w = 0; w < 6; w++) {
+          weeks.push(cells.slice(w * 7, (w + 1) * 7));
+        }
+
+        const fmtUSD = (v) => {
+          const sign = v < 0 ? "-" : "";
+          const abs = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return `${sign}$${abs}`;
+        };
+
+        const goPrev = () => {
+          const newM = month === 0 ? 11 : month - 1;
+          const newY = month === 0 ? year - 1 : year;
+          if (newY < 2023 || (newY === 2023 && newM < 0)) return;
+          setCalMonth({ year: newY, month: newM });
+        };
+        const goNext = () => {
+          const newM = month === 11 ? 0 : month + 1;
+          const newY = month === 11 ? year + 1 : year;
+          setCalMonth({ year: newY, month: newM });
+        };
+        const goToday = () => { const d = new Date(); setCalMonth({ year: d.getFullYear(), month: d.getMonth() }); };
+
+        const canGoPrev = !(year === 2023 && month === 0);
+
+        return (
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Btn small outline disabled={!canGoPrev} onClick={goPrev}>‹</Btn>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text, minWidth: 160 }}>{monthName}</div>
+                <Btn small outline onClick={goNext}>›</Btn>
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button onClick={() => setCalInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: calInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: calInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: calInstrument === "NQ" ? 700 : 400, borderColor: calInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+                <button onClick={() => setCalInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: calInstrument === "ES" ? `${T.purple}20` : T.bg2, color: calInstrument === "ES" ? T.purple : T.textSoft, fontWeight: calInstrument === "ES" ? 700 : 400, borderColor: calInstrument === "ES" ? T.purple : T.border }}>ES</button>
+                <Btn small outline onClick={goToday}>Today</Btn>
+              </div>
+            </div>
+
+            {/* Weekday header */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 0, marginBottom: 6 }}>
+              {["Su","Mo","Tu","We","Th","Fr","Sa"].map(wd => (
+                <div key={wd} style={{ fontSize: 11, color: T.textDim, fontWeight: 600, textAlign: "center", padding: "4px 0", letterSpacing: ".05em" }}>{wd}</div>
+              ))}
+            </div>
+
+            {/* Weeks */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${T.border}`, borderRadius: 6, overflow: "hidden" }}>
+              {weeks.map((week, wi) => {
+                // Week aggregate (Sa cell shows totals)
+                const weekTotal = week.reduce((acc, c) => {
+                  if (c.date && dayData[c.date]) { acc.profit += dayData[c.date].profit; acc.count += dayData[c.date].count; }
+                  return acc;
+                }, { profit: 0, count: 0 });
+
+                return (
+                  <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderTop: wi > 0 ? `1px solid ${T.border}` : "none" }}>
+                    {week.map((cell, ci) => {
+                      const isSat = ci === 6;
+                      const dd = cell.date ? dayData[cell.date] : null;
+                      const profit = dd?.profit || 0;
+                      const count = dd?.count || 0;
+                      const bg = profit > 0 ? `${T.green}15` : profit < 0 ? `${T.red}15` : "transparent";
+                      const profitColor = profit > 0 ? T.green : profit < 0 ? T.red : T.textDim;
+
+                      return (
+                        <div key={ci} style={{
+                          padding: 10, minHeight: 90,
+                          borderRight: ci < 6 ? `1px solid ${T.border}` : "none",
+                          background: cell.isOther ? T.bg2 : bg,
+                          opacity: cell.isOther ? 0.4 : 1,
+                          display: "flex", flexDirection: "column", justifyContent: "flex-start"
+                        }}>
+                          <div style={{ fontSize: 12, color: cell.isOther ? T.textDim : T.text, fontWeight: 500, marginBottom: 4 }}>
+                            {isSat && !cell.isOther ? `${cell.day}` : cell.day}
+                          </div>
+                          {isSat && !cell.isOther && (
+                            <div style={{ fontSize: 10, fontWeight: 700, color: T.text, marginBottom: 2 }}>Week {wi + 1}</div>
+                          )}
+                          {!cell.isOther && cell.date && dd && count > 0 && !isSat && (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: profitColor }}>{fmtUSD(profit)}</div>
+                              <div style={{ fontSize: 9, color: T.textDim }}>{count} trade{count !== 1 ? "s" : ""}</div>
+                            </div>
+                          )}
+                          {isSat && !cell.isOther && weekTotal.count > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, marginTop: 2 }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: weekTotal.profit > 0 ? T.green : weekTotal.profit < 0 ? T.red : T.textDim }}>{fmtUSD(weekTotal.profit)}</div>
+                              <div style={{ fontSize: 9, color: T.textDim }}>{weekTotal.count} trade{weekTotal.count !== 1 ? "s" : ""}</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Month summary */}
+            {(() => {
+              const monthTrades = Object.entries(dayData).filter(([d]) => d.startsWith(`${year}-${String(month+1).padStart(2,"0")}`));
+              const monthProfit = monthTrades.reduce((s, [,v]) => s + v.profit, 0);
+              const monthCount = monthTrades.reduce((s, [,v]) => s + v.count, 0);
+              return (
+                <div style={{ marginTop: 12, padding: 10, background: T.bg2, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 11, color: T.textSoft, fontWeight: 600 }}>{calInstrument} · {monthName}</div>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                    <div style={{ fontSize: 11, color: T.textDim }}>{monthCount} trades</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: monthProfit > 0 ? T.green : monthProfit < 0 ? T.red : T.textDim }}>{fmtUSD(monthProfit)}</div>
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
+        );
+      })()}
     </div>
   );
 }
