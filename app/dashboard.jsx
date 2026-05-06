@@ -4790,6 +4790,7 @@ function TradingPanel({ apiKey, supa }) {
     bounce: "1",
     band_type: "fast", setup_type: "A", trade_type: "standard",
     instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10),
+    tp_01: false, tp_02: false, tp_03: false,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4948,15 +4949,17 @@ Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
     "S1": "price or empty",
     "S2": "price or empty",
     "S3": "price or empty"
-  }
+  },
+  "trade_date": "date visible on the chart in YYYY-MM-DD format, or empty string if not readable"
 }
 
 Rules:
 - "up" = green arrow/triangle pointing up, "down" = red arrow/triangle pointing down
 - If you can't read a value, use "" (empty string)
-- If the HTS table is not visible, return {"trends":{},"rsi":"","pivots":{}}
+- If the HTS table is not visible, return empty trends/rsi/pivots but still try to extract trade_date
 - RSI: look for the RSI column value that corresponds to the ${tf.timeframe} row
 - Pivots: look for pivot point values (PP, R1, R2, R3, S1, S2, S3) if visible in the table
+- trade_date: look at the chart's X-axis (time/date axis) or any visible date label. Use the most recent visible date (rightmost on chart). Format strictly as YYYY-MM-DD. If you only see day/month, assume current year. If unreadable, return empty string ""
 - Respond ONLY with JSON, nothing else` }
           ] }]
         }),
@@ -4971,6 +4974,8 @@ Rules:
           trends: parsed.trends || {},
           rsi: parsed.rsi || "",
           pivots: parsed.pivots || {},
+          // Auto-fill trade_date only if Vision found one and user hasn't manually changed it (still default today)
+          trade_date: (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === new Date().toISOString().slice(0, 10)) ? parsed.trade_date : prev.trade_date,
         }));
       } catch { console.error("Vision parse error:", text); }
     } catch (err) { console.error("Vision analysis error:", err); }
@@ -4996,6 +5001,7 @@ Rules:
       trade_number: parseInt(tf.trade_number) || 1,
       profit_usd: parseFloat(tf.profit_usd) || 0,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
+      tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5064,6 +5070,7 @@ Rules:
       trade_number: String(sd.trade_number || 1),
       profit_usd: String(sd.profit_usd || 0),
       trade_date: sd.trade_date || new Date().toISOString().slice(0, 10),
+      tp_01: sd.tp_01 || false, tp_02: sd.tp_02 || false, tp_03: sd.tp_03 || false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5072,7 +5079,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10) };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5092,6 +5099,7 @@ Rules:
       trade_number: parseInt(tf.trade_number) || 1,
       profit_usd: parseFloat(tf.profit_usd) || 0,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
+      tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5554,6 +5562,26 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   />
                 </div>
               </div>
+
+              {/* DR: TP levels reached */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Take Profit — które poziomy osiągnięte?</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  {[
+                    { id: "tp_01", label: "0.1 R" },
+                    { id: "tp_02", label: "0.2 R" },
+                    { id: "tp_03", label: "0.3 R" },
+                  ].map(tp => (
+                    <div key={tp.id}>
+                      <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{tp.label}</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => setTf(p => ({...p, [tp.id]: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[tp.id] ? `${T.green}20` : T.bg2, color: tf[tp.id] ? T.green : T.textSoft, fontWeight: tf[tp.id] ? 700 : 400, borderColor: tf[tp.id] ? T.green : T.border }}>TAK</button>
+                        <button onClick={() => setTf(p => ({...p, [tp.id]: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf[tp.id] ? `${T.red}20` : T.bg2, color: !tf[tp.id] ? T.red : T.textSoft, fontWeight: !tf[tp.id] ? 700 : 400, borderColor: !tf[tp.id] ? T.red : T.border }}>NIE</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
               </>}
 
               <div style={{ marginBottom: 12 }}>
@@ -5627,6 +5655,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>Trade #{sd.trade_number || 1}</span>
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
                         {sd.trade_date && <span>{sd.trade_date}</span>}
+                        {(sd.tp_01 || sd.tp_02 || sd.tp_03) && (
+                          <span>TP:
+                            <strong style={{ color: sd.tp_01 ? T.green : T.textDim, marginLeft: 4 }}>0.1{sd.tp_01 ? "✓" : "✗"}</strong>
+                            <strong style={{ color: sd.tp_02 ? T.green : T.textDim, marginLeft: 4 }}>0.2{sd.tp_02 ? "✓" : "✗"}</strong>
+                            <strong style={{ color: sd.tp_03 ? T.green : T.textDim, marginLeft: 4 }}>0.3{sd.tp_03 ? "✓" : "✗"}</strong>
+                          </span>
+                        )}
                       </> : null;
                     })()}
                     {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
