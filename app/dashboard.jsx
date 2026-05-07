@@ -4800,6 +4800,7 @@ function TradingPanel({ apiKey, supa }) {
   const [visionLoading, setVisionLoading] = useState(false);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [drInstrument, setDrInstrument] = useState("NQ");
+  const [dayPickerDate, setDayPickerDate] = useState(null);
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
@@ -5332,7 +5333,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         <div>
           {/* Add/Edit trade */}
           {showAddTrade ? (
-            <Card style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" } : {}) }}>
+            <Card style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
               {editingTradeId && <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000 }} />}
               <div style={{ position: editingTradeId ? "relative" : "static", zIndex: 1002 }}>
               <Heading icon="✎" right={editingTradeId ? <Btn small outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>✕ Close</Btn> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
@@ -6143,17 +6144,28 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         const startWeekday = firstDay.getDay(); // 0=Sun
         const monthName = new Date(year, month, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
 
-        // Build day data: { "YYYY-MM-DD": { profit, count } }
+        // Build day data: { "YYYY-MM-DD": { profit, count, trades: [] } }
         const dayData = {};
         filteredTrades.forEach(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
           if (sd?.instrument !== drInstrument) return;
           const date = sd?.trade_date;
           if (!date) return;
-          if (!dayData[date]) dayData[date] = { profit: 0, count: 0 };
+          if (!dayData[date]) dayData[date] = { profit: 0, count: 0, trades: [] };
           dayData[date].profit += parseFloat(sd?.profit_usd || 0);
           dayData[date].count++;
+          dayData[date].trades.push(t);
         });
+
+        const handleDayClick = (date) => {
+          if (!date || !dayData[date] || dayData[date].count === 0) return;
+          if (dayData[date].count === 1) {
+            setSubTab("journal");
+            startEdit(dayData[date].trades[0]);
+          } else {
+            setDayPickerDate(date);
+          }
+        };
 
         // Build cells for 6 weeks (42 cells)
         const cells = [];
@@ -6263,13 +6275,18 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       const profitColor = profit > 0 ? T.green : profit < 0 ? T.red : T.textDim;
 
                       return (
-                        <div key={ci} style={{
+                        <div key={ci} onClick={() => !isSat && cell.date && count > 0 && handleDayClick(cell.date)} style={{
                           padding: 10, minHeight: 90,
                           borderRight: ci < 6 ? `1px solid ${T.border}` : "none",
                           background: cell.isOther ? T.bg2 : bg,
                           opacity: cell.isOther ? 0.4 : 1,
-                          display: "flex", flexDirection: "column", justifyContent: "flex-start"
-                        }}>
+                          display: "flex", flexDirection: "column", justifyContent: "flex-start",
+                          cursor: !isSat && cell.date && count > 0 ? "pointer" : "default",
+                          transition: "background 0.15s"
+                        }}
+                        onMouseEnter={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = profit > 0 ? `${T.green}30` : profit < 0 ? `${T.red}30` : `${T.cyan}15`; }}
+                        onMouseLeave={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = bg; }}
+                        >
                           <div style={{ fontSize: 12, color: cell.isOther ? T.textDim : T.text, fontWeight: 500, marginBottom: 4 }}>
                             {isSat && !cell.isOther ? `${cell.day}` : cell.day}
                           </div>
@@ -6311,6 +6328,41 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               );
             })()}
+
+            {/* Day picker modal — when multiple trades on one day */}
+            {dayPickerDate && dayData[dayPickerDate] && dayData[dayPickerDate].trades.length > 1 && (
+              <div onClick={(e) => { if (e.target === e.currentTarget) setDayPickerDate(null); }}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div style={{ background: "#ffffff", borderRadius: 12, padding: 20, maxWidth: 500, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Trades on {dayPickerDate}</div>
+                    <Btn small outline onClick={() => setDayPickerDate(null)}>✕</Btn>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {dayData[dayPickerDate].trades.map(t => {
+                      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                      const profit = parseFloat(sd?.profit_usd || 0);
+                      return (
+                        <div key={t.id} onClick={() => { setSubTab("journal"); startEdit(t); setDayPickerDate(null); }} style={{
+                          padding: 10, background: T.bg2, borderRadius: 6, cursor: "pointer", border: `1px solid ${T.border}`,
+                          display: "flex", justifyContent: "space-between", alignItems: "center"
+                        }}>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+                            <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"}</Badge>
+                            <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
+                            <span style={{ color: T.textSoft }}>{sd?.entry_time || ""} · Trade #{sd?.trade_number || 1}</span>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: profit > 0 ? T.green : profit < 0 ? T.red : T.textDim }}>
+                            {profit < 0 ? "-" : ""}${Math.abs(profit).toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10, fontSize: 10, color: T.textDim, textAlign: "center" }}>Click a trade to edit</div>
+                </div>
+              </div>
+            )}
           </Card>
         );
       })()}
