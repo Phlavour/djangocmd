@@ -205,10 +205,10 @@ const Btn = ({ children, color = T.green, outline, small, onClick, disabled, sty
   >{children}</button>
 );
 
-const Card = ({ children, style: sx, hover }) => {
+const Card = ({ children, style: sx, hover, className }) => {
   const isLight = T === LIGHT;
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, transition: "all .15s", boxShadow: isLight ? "0 1px 3px rgba(0,0,0,.06)" : "none", ...sx }}
+    <div className={className} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, transition: "all .15s", boxShadow: isLight ? "0 1px 3px rgba(0,0,0,.06)" : "none", ...sx }}
       onMouseEnter={hover ? e => { e.currentTarget.style.borderColor = T.borderHi; } : undefined}
       onMouseLeave={hover ? e => { e.currentTarget.style.borderColor = T.border; } : undefined}
     >{children}</div>
@@ -4890,13 +4890,13 @@ function TradingPanel({ apiKey, supa }) {
         if (url) {
           setTf(prev => ({ ...prev, screenshot_before: url }));
           // Run Vision analysis
-          if (apiKey) analyzeScreenshot(file, url);
+          if (apiKey) analyzeScreenshot(file, url, "before");
         }
       }
     }
   };
 
-  // Paste handler for AFTER screenshot (simple)
+  // Paste handler for AFTER screenshot (Vision analysis for DR — result + TPs)
   const handlePasteAfter = async (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -4906,13 +4906,17 @@ function TradingPanel({ apiKey, supa }) {
         const file = item.getAsFile();
         if (!file) return;
         const url = await uploadImage(file);
-        if (url) setTf(prev => ({ ...prev, screenshot_after: url }));
+        if (url) {
+          setTf(prev => ({ ...prev, screenshot_after: url }));
+          // Run Vision analysis for DR (result + TPs from after-trade chart)
+          if (apiKey && stratType === "DR") analyzeScreenshot(file, url, "after");
+        }
       }
     }
   };
 
-  // Claude Vision — analyze HTS table from screenshot
-  const analyzeScreenshot = async (file, url) => {
+  // Claude Vision — analyze screenshot (HTS table for HTS strategy / DR-specific data for DR)
+  const analyzeScreenshot = async (file, url, phase = "before") => {
     if (!apiKey) return;
     setVisionLoading(true);
     try {
@@ -4923,14 +4927,59 @@ function TradingPanel({ apiKey, supa }) {
         r.readAsDataURL(file);
       });
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 500,
-          messages: [{ role: "user", content: [
-            { type: "image", source: { type: "base64", media_type: "image/png", data: base64 } },
-            { type: "text", text: `Look at this trading chart screenshot. In the bottom-right corner there should be an HTS table with trend indicators and values.
+      // For DR strategy use DR-specific prompts (different for before/after)
+      const isDR = stratType === "DR";
+
+      // Count trades in current strategy on a given date+instrument to suggest trade_number
+      const countTradesOnDate = (date, instrument) => {
+        return trades.filter(t => {
+          if (t.strategy_id !== activeStrategy) return false;
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          return sd?.trade_date === date && sd?.instrument === instrument && (!editingTradeId || t.id !== editingTradeId);
+        }).length;
+      };
+
+      let promptText;
+      if (isDR && phase === "before") {
+        promptText = `Look at this trading chart screenshot from a futures trading platform.
+
+Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "instrument": "NQ" or "ES",
+  "direction": "LONG" or "SHORT",
+  "entry_time": "HH:MM (24h) — exact entry candle time, e.g. '10:30'",
+  "trade_date": "YYYY-MM-DD",
+  "tp_01_drawn": true/false,
+  "tp_02_drawn": true/false,
+  "tp_03_drawn": true/false
+}
+
+Rules:
+- instrument: read ticker in top-left corner of chart. NQ futures contracts (NQ1!, NQM5, etc.) → "NQ". ES/Mini S&P (ES1!, ESM5, MES, etc.) → "ES". If unclear, return ""
+- direction: look for entry arrow/marker on chart. Green arrow pointing up or "BUY" tag → "LONG". Red arrow pointing down or "SELL" tag → "SHORT". If unclear, return ""
+- entry_time: find the exact candle where entry occurred (usually marked with arrow or position box). Read X-axis time label for THAT candle. Format strictly HH:MM 24-hour
+- trade_date: read X-axis date label. Format DD MMM 'YY (e.g. "06 Apr '26") means day=06, month=Apr=04, year=2026 → "2026-04-06". DAY ALWAYS FIRST. Months: Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec. 'YY → 20YY. Output STRICTLY as YYYY-MM-DD. Today is ${new Date().toISOString().slice(0,10)}. If unreadable return ""
+- tp_01_drawn / tp_02_drawn / tp_03_drawn: check if there are horizontal price lines or labels marked "0.1", "0.2", "0.3" or similar TP level annotations on the chart. true if drawn, false if not visible
+- Respond ONLY with JSON, nothing else`;
+      } else if (isDR && phase === "after") {
+        promptText = `Look at this trading chart screenshot AFTER the trade has played out.
+
+Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "result": "WIN" or "LOSS" or "BE",
+  "tp_01_hit": true/false,
+  "tp_02_hit": true/false,
+  "tp_03_hit": true/false
+}
+
+Rules:
+- result: determine if the trade was a WIN, LOSS, or break-even (BE). Look at the entry point and watch which side price went FIRST after entry. If price reached TP/profit target first → "WIN". If price hit stop-loss first → "LOSS". If price hovered near entry without significant move → "BE". The decisive direction is which line/level was reached FIRST chronologically (next candles after entry).
+- tp_01_hit / tp_02_hit / tp_03_hit: check whether price reached the 0.1R, 0.2R, 0.3R levels after entry. Look at horizontal levels marked "0.1", "0.2", "0.3" (or similar) and verify if any candle wick/body crossed those lines AFTER the entry point. true if reached, false otherwise
+- If unable to determine, return false for TPs and "" for result
+- Respond ONLY with JSON, nothing else`;
+      } else {
+        // HTS / V_SHAPE / MARKET_PA — original HTS table extraction
+        promptText = `Look at this trading chart screenshot. In the bottom-right corner there should be an HTS table with trend indicators and values.
 
 Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 {
@@ -4962,8 +5011,18 @@ Rules:
 - If the HTS table is not visible, return empty trends/rsi/pivots but still try to extract trade_date
 - RSI: look for the RSI column value that corresponds to the ${tf.timeframe} row
 - Pivots: look for pivot point values (PP, R1, R2, R3, S1, S2, S3) if visible in the table
-- trade_date: look at the chart's X-axis time/date label. Use the most recent (rightmost) visible date. Common formats: "Mon 06 Apr '26 10:10" means day=06, month=Apr (April=04), year=2026 → output "2026-04-06". "06/04 14:30" means day=06, month=04 → output "${new Date().getFullYear()}-04-06". DAY ALWAYS COMES FIRST in European/trading platform formats (DD MMM YY or DD/MM). Month name is "Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec". If year shows as 'YY (e.g. '26), expand to 20YY (2026). If only day and month visible, use ${new Date().getFullYear()}. Output STRICTLY as YYYY-MM-DD with zero-padded month and day. If completely unreadable, return empty string ""
-- Respond ONLY with JSON, nothing else` }
+- trade_date: read the X-axis date label. "06 Apr '26" means day=06, month=Apr=April=04, year=2026 → "2026-04-06". DAY ALWAYS FIRST. Output STRICTLY as YYYY-MM-DD with zero-padded month and day. If unreadable return ""
+- Respond ONLY with JSON, nothing else`;
+      }
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 500,
+          messages: [{ role: "user", content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: base64 } },
+            { type: "text", text: promptText }
           ] }]
         }),
       });
@@ -4972,14 +5031,41 @@ Rules:
       const text = (data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim();
       try {
         const parsed = JSON.parse(text);
-        setTf(prev => ({
-          ...prev,
-          trends: parsed.trends || {},
-          rsi: parsed.rsi || "",
-          pivots: parsed.pivots || {},
-          // Auto-fill trade_date only if Vision found one and user hasn't manually changed it (still default today)
-          trade_date: (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === new Date().toISOString().slice(0, 10)) ? parsed.trade_date : prev.trade_date,
-        }));
+        if (isDR && phase === "before") {
+          setTf(prev => {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            // Determine date to use (prefer Vision result if user hasn't manually changed)
+            const newDate = (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === todayStr) ? parsed.trade_date : prev.trade_date;
+            const newInstrument = (parsed.instrument === "NQ" || parsed.instrument === "ES") ? parsed.instrument : prev.instrument;
+            // Auto-suggest trade_number based on existing trades on (date, instrument)
+            const existingCount = countTradesOnDate(newDate, newInstrument);
+            const suggestedTradeNum = existingCount === 0 ? "1" : existingCount === 1 ? "2" : prev.trade_number;
+            return {
+              ...prev,
+              instrument: newInstrument,
+              direction: (parsed.direction === "LONG" || parsed.direction === "SHORT") ? parsed.direction : prev.direction,
+              entry_time: (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : prev.entry_time,
+              trade_date: newDate,
+              trade_number: suggestedTradeNum,
+            };
+          });
+        } else if (isDR && phase === "after") {
+          setTf(prev => ({
+            ...prev,
+            result: (parsed.result === "WIN" || parsed.result === "LOSS" || parsed.result === "BE") ? parsed.result : prev.result,
+            tp_01: parsed.tp_01_hit === true ? true : prev.tp_01,
+            tp_02: parsed.tp_02_hit === true ? true : prev.tp_02,
+            tp_03: parsed.tp_03_hit === true ? true : prev.tp_03,
+          }));
+        } else {
+          setTf(prev => ({
+            ...prev,
+            trends: parsed.trends || {},
+            rsi: parsed.rsi || "",
+            pivots: parsed.pivots || {},
+            trade_date: (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === new Date().toISOString().slice(0, 10)) ? parsed.trade_date : prev.trade_date,
+          }));
+        }
       } catch { console.error("Vision parse error:", text); }
     } catch (err) { console.error("Vision analysis error:", err); }
     setVisionLoading(false);
@@ -5333,7 +5419,19 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         <div>
           {/* Add/Edit trade */}
           {showAddTrade ? (
-            <Card style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
+            <>
+            {editingTradeId && (
+              <style>{`
+                .dr-edit-modal,
+                .dr-edit-modal * { color: #1a1a2e !important; }
+                .dr-edit-modal h3, .dr-edit-modal strong { color: #111827 !important; }
+                .dr-edit-modal input, .dr-edit-modal select, .dr-edit-modal textarea, .dr-edit-modal button {
+                  background: #f8f9fa !important; border-color: #e5e7eb !important; color: #1a1a2e !important;
+                }
+                .dr-edit-modal .label-soft { color: #5c5c7a !important; }
+              `}</style>
+            )}
+            <Card className={editingTradeId ? "dr-edit-modal" : ""} style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
               {editingTradeId && <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000 }} />}
               <div style={{ position: editingTradeId ? "relative" : "static", zIndex: 1002 }}>
               <Heading icon="✎" right={editingTradeId ? <Btn small outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>✕ Close</Btn> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
@@ -5401,7 +5499,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               )}
 
               {/* Screenshot BEFORE + reason */}
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>📸 Before Trade (z tabelką HTS)</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>📸 Before Trade</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div onPaste={handlePasteBefore} tabIndex={0}
@@ -5644,6 +5742,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
               </div>
             </Card>
+            </>
           ) : (
             subTab === "journal" && <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
           )}
@@ -5762,9 +5861,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
       {/* ═══ STATS TAB ═══ */}
       {subTab === "stats" && activeStrategy && (() => {
-        // For DR strategy, filter by instrument toggle
+        // For DR strategy, filter by instrument toggle (ALL = no filter)
         const isDR = stratType === "DR";
         const drFilteredTrades = isDR ? filteredTrades.filter(t => {
+          if (drInstrument === "ALL") return true;
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
           return sd?.instrument === drInstrument;
         }) : filteredTrades;
@@ -5776,6 +5876,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <span style={{ fontSize: 11, color: T.textDim, marginRight: 4 }}>Instrument:</span>
               <button onClick={() => setDrInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: drInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: drInstrument === "NQ" ? 700 : 400, borderColor: drInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
               <button onClick={() => setDrInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ES" ? `${T.purple}20` : T.bg2, color: drInstrument === "ES" ? T.purple : T.textSoft, fontWeight: drInstrument === "ES" ? 700 : 400, borderColor: drInstrument === "ES" ? T.purple : T.border }}>ES</button>
+              <button onClick={() => setDrInstrument("ALL")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ALL" ? `${T.text}15` : T.bg2, color: drInstrument === "ALL" ? T.text : T.textSoft, fontWeight: drInstrument === "ALL" ? 700 : 400, borderColor: drInstrument === "ALL" ? T.text : T.border }}>ALL</button>
               <span style={{ fontSize: 10, color: T.textDim, marginLeft: 8 }}>{drFilteredTrades.length} trades</span>
             </div>
           )}
@@ -5813,6 +5914,74 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <Stat label="Total P/L" value={fmtUSD(drProfitUsd)} color={drProfitUsd >= 0 ? T.green : T.red} />
                 <Stat label="Avg / Trade" value={drTotal > 0 ? fmtUSD(drProfitUsd / drTotal) : "$0.00"} color={drProfitUsd >= 0 ? T.green : T.red} />
               </div>
+            );
+          })()}
+
+          {/* DR: Account Status (EVAL / FUNDED passed / burned) */}
+          {isDR && (() => {
+            // Count UNIQUE accounts (one per date+instrument) instead of per-trade
+            const evalP = new Set(), evalB = new Set(), fundP = new Set(), fundB = new Set();
+            drFilteredTrades.forEach(t => {
+              let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+              const key = `${sd?.trade_date}_${sd?.instrument}`;
+              if (sd?.account_type === "EVAL" && sd?.account_passed)  evalP.add(key);
+              if (sd?.account_type === "EVAL" && sd?.account_burned)  evalB.add(key);
+              if (sd?.account_type === "FUNDED" && sd?.account_passed)fundP.add(key);
+              if (sd?.account_type === "FUNDED" && sd?.account_burned)fundB.add(key);
+            });
+            const eP = evalP.size, eB = evalB.size, fP = fundP.size, fB = fundB.size;
+            const evalTotal = eP + eB;
+            const fundTotal = fP + fB;
+            const evalSuccessRate = evalTotal > 0 ? ((eP / evalTotal) * 100).toFixed(0) : "-";
+            const fundSuccessRate = fundTotal > 0 ? ((fP / fundTotal) * 100).toFixed(0) : "-";
+            return (
+              <Card style={{ marginBottom: 16 }}>
+                <Heading icon="🏆">Account Status (Eval & Funded)</Heading>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ padding: 14, background: `${T.amber}08`, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.amber, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>EVAL accounts</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>PASSED</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: T.green, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ filter: "grayscale(1) brightness(1.1)", fontSize: 20 }}>🏆</span>{eP}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>BURNED</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: T.red }}>✗ {eB}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>SUCCESS RATE</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: evalTotal > 0 ? (parseFloat(evalSuccessRate) >= 50 ? T.green : T.red) : T.textDim }}>{evalSuccessRate}{evalTotal > 0 ? "%" : ""}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ padding: 14, background: `${T.cyan}08`, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>FUNDED accounts</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>PASSED</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 20 }}>🏆</span>{fP}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>BURNED</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: T.red }}>✗ {fB}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                        <div style={{ fontSize: 9, color: T.textDim, marginBottom: 2 }}>SUCCESS RATE</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: fundTotal > 0 ? (parseFloat(fundSuccessRate) >= 50 ? T.green : T.red) : T.textDim }}>{fundSuccessRate}{fundTotal > 0 ? "%" : ""}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
             );
           })()}
 
@@ -5891,38 +6060,43 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
-          {/* DR: Entry Hour Performance */}
+          {/* DR: Entry Time Buckets */}
           {isDR && (
             <Card style={{ marginBottom: 16 }}>
-              <Heading icon="⏰">Entry Hour Performance
+              <Heading icon="⏰">Entry Time Buckets
                 <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(% all trades + WR)</span>
               </Heading>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
-                {[10, 11, 12, 13, 14, 15, 16].map(h => {
-                  const hourTrades = drFilteredTrades.filter(t => {
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                {[
+                  { id: "early",     label: "< 10:20",      check: (h, m) => (h < 10) || (h === 10 && m < 20) },
+                  { id: "mid_early", label: "10:20–10:30",  check: (h, m) => h === 10 && m >= 20 && m < 30 },
+                  { id: "mid_late",  label: "10:30–11:00",  check: (h, m) => h === 10 && m >= 30 },
+                  { id: "late",      label: "11:00+",       check: (h, m) => h >= 11 },
+                ].map(bucket => {
+                  const bucketTrades = drFilteredTrades.filter(t => {
                     let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
                     if (!sd?.entry_time) return false;
-                    const hh = parseInt(sd.entry_time.split(":")[0]);
-                    return hh === h;
+                    const [hh, mm] = sd.entry_time.split(":").map(x => parseInt(x));
+                    return bucket.check(hh, mm);
                   });
-                  const hW = hourTrades.filter(t => t.result === "WIN").length;
-                  const hL = hourTrades.filter(t => t.result === "LOSS").length;
-                  const hBE = hourTrades.filter(t => t.result === "BE").length;
-                  const hDec = hW + hL;
-                  const hTotal = hourTrades.length;
-                  const hWR = hDec > 0 ? ((hW / hDec) * 100).toFixed(0) : "-";
-                  const pctOfAll = drFilteredTrades.length > 0 ? ((hTotal / drFilteredTrades.length) * 100).toFixed(0) : "0";
-                  const hProfit = hourTrades.reduce((s, t) => {
+                  const bW = bucketTrades.filter(t => t.result === "WIN").length;
+                  const bL = bucketTrades.filter(t => t.result === "LOSS").length;
+                  const bBE = bucketTrades.filter(t => t.result === "BE").length;
+                  const bDec = bW + bL;
+                  const bTotal = bucketTrades.length;
+                  const bWR = bDec > 0 ? ((bW / bDec) * 100).toFixed(0) : "-";
+                  const pctOfAll = drFilteredTrades.length > 0 ? ((bTotal / drFilteredTrades.length) * 100).toFixed(0) : "0";
+                  const bProfit = bucketTrades.reduce((s, t) => {
                     let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
                     return s + (parseFloat(sd?.profit_usd) || 0);
                   }, 0);
                   return (
-                    <div key={h} style={{ textAlign: "center", padding: "10px 2px", background: hTotal > 0 ? `${parseFloat(hWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan }}>{h}:00</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: hDec > 0 ? (parseFloat(hWR) >= 50 ? T.green : T.red) : T.textDim, marginTop: 2 }}>{hWR}{hDec > 0 ? "%" : ""}</div>
-                      <div style={{ fontSize: 9, color: T.textDim, marginTop: 1 }}>{hTotal} ({pctOfAll}%)</div>
-                      <div style={{ fontSize: 9, color: T.textDim }}>{hW}W/{hL}L{hBE > 0 ? `/${hBE}` : ""}</div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: hProfit >= 0 ? T.green : T.red, marginTop: 2 }}>{hProfit >= 0 ? "+" : "-"}${Math.abs(hProfit).toFixed(0)}</div>
+                    <div key={bucket.id} style={{ textAlign: "center", padding: "12px 6px", background: bTotal > 0 ? `${parseFloat(bWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan }}>{bucket.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: bDec > 0 ? (parseFloat(bWR) >= 50 ? T.green : T.red) : T.textDim, marginTop: 4 }}>{bWR}{bDec > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{bTotal} trades ({pctOfAll}%)</div>
+                      <div style={{ fontSize: 10, color: T.textDim }}>{bW}W / {bL}L{bBE > 0 ? ` / ${bBE}BE` : ""}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: bProfit >= 0 ? T.green : T.red, marginTop: 4 }}>{bProfit >= 0 ? "+" : "-"}${Math.abs(bProfit).toFixed(2)}</div>
                     </div>
                   );
                 })}
@@ -6151,7 +6325,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         const dayData = {};
         filteredTrades.forEach(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-          if (sd?.instrument !== drInstrument) return;
+          if (drInstrument !== "ALL" && sd?.instrument !== drInstrument) return;
           const date = sd?.trade_date;
           if (!date) return;
           if (!dayData[date]) dayData[date] = { profit: 0, count: 0, trades: [] };
@@ -6161,7 +6335,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         });
 
         const handleDayClick = (date) => {
-          if (!date || !dayData[date] || dayData[date].count === 0) return;
+          if (!date) return;
+          // No trades on this day → open New Trade form with prefilled date + instrument
+          if (!dayData[date] || dayData[date].count === 0) {
+            setEditingTradeId(null);
+            setTf({ ...EMPTY_TF, trade_date: date, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
+            setShowAddTrade(true);
+            return;
+          }
           if (dayData[date].count === 1) {
             startEdit(dayData[date].trades[0]);
           } else {
@@ -6223,6 +6404,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button onClick={() => setDrInstrument("NQ")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "NQ" ? `${T.cyan}20` : T.bg2, color: drInstrument === "NQ" ? T.cyan : T.textSoft, fontWeight: drInstrument === "NQ" ? 700 : 400, borderColor: drInstrument === "NQ" ? T.cyan : T.border }}>NQ</button>
                 <button onClick={() => setDrInstrument("ES")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ES" ? `${T.purple}20` : T.bg2, color: drInstrument === "ES" ? T.purple : T.textSoft, fontWeight: drInstrument === "ES" ? 700 : 400, borderColor: drInstrument === "ES" ? T.purple : T.border }}>ES</button>
+                <button onClick={() => setDrInstrument("ALL")} style={{ ...sel, padding: "6px 14px", background: drInstrument === "ALL" ? `${T.text}15` : T.bg2, color: drInstrument === "ALL" ? T.text : T.textSoft, fontWeight: drInstrument === "ALL" ? 700 : 400, borderColor: drInstrument === "ALL" ? T.text : T.border }}>ALL</button>
                 <Btn small outline onClick={goToday}>Today</Btn>
               </div>
             </div>
@@ -6231,7 +6413,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             {(() => {
               const monthTradesList = filteredTrades.filter(t => {
                 let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-                if (sd?.instrument !== drInstrument) return false;
+                if (drInstrument !== "ALL" && sd?.instrument !== drInstrument) return false;
                 if (!sd?.trade_date) return false;
                 return sd.trade_date.startsWith(`${year}-${String(month+1).padStart(2,"0")}`);
               });
@@ -6241,11 +6423,30 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               const mDecisive = mWins + mLosses;
               const mTotal = monthTradesList.length;
               const mWR = mDecisive > 0 ? ((mWins / mDecisive) * 100).toFixed(1) : "-";
+
+              // Account counters: count UNIQUE passes/burns (not per-trade) — by date+instrument (one challenge per day)
+              const evalPassedSet = new Set();
+              const evalBurnedSet = new Set();
+              const fundedPassedSet = new Set();
+              const fundedBurnedSet = new Set();
+              monthTradesList.forEach(t => {
+                let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                const key = `${sd?.trade_date}_${sd?.instrument}`;
+                if (sd?.account_type === "EVAL" && sd?.account_passed)  evalPassedSet.add(key);
+                if (sd?.account_type === "EVAL" && sd?.account_burned)  evalBurnedSet.add(key);
+                if (sd?.account_type === "FUNDED" && sd?.account_passed)fundedPassedSet.add(key);
+                if (sd?.account_type === "FUNDED" && sd?.account_burned)fundedBurnedSet.add(key);
+              });
+              const eP = evalPassedSet.size, eB = evalBurnedSet.size, fP = fundedPassedSet.size, fB = fundedBurnedSet.size;
+
               return (
-                <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "8px 12px", background: T.bg2, borderRadius: 6, marginBottom: 10, fontSize: 11 }}>
+                <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "8px 12px", background: T.bg2, borderRadius: 6, marginBottom: 10, fontSize: 11, flexWrap: "wrap" }}>
                   <span style={{ color: T.textDim }}>Trades: <strong style={{ color: T.text }}>{mTotal}</strong></span>
                   <span style={{ color: T.textDim }}>Win Rate: <strong style={{ color: mDecisive > 0 ? (parseFloat(mWR) >= 50 ? T.green : T.red) : T.textDim }}>{mWR}{mDecisive > 0 ? "%" : ""}</strong></span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>{mWins}W / {mLosses}L{mBEs > 0 ? ` / ${mBEs}BE` : ""}</span>
+                  <span style={{ color: T.border }}>·</span>
+                  <span style={{ color: T.textDim }}>EVAL: <strong style={{ color: T.green }}>{eP}🏆</strong> / <strong style={{ color: T.red }}>{eB}✗</strong></span>
+                  <span style={{ color: T.textDim }}>FUNDED: <strong style={{ color: "#fbbf24" }}>{fP}🏆</strong> / <strong style={{ color: T.red }}>{fB}✗</strong></span>
                 </div>
               );
             })()}
@@ -6277,17 +6478,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       const profitColor = profit > 0 ? T.green : profit < 0 ? T.red : T.textDim;
 
                       return (
-                        <div key={ci} onClick={() => !isSat && cell.date && count > 0 && handleDayClick(cell.date)} style={{
+                        <div key={ci} onClick={() => !isSat && cell.date && !cell.isOther && handleDayClick(cell.date)} style={{
                           padding: 10, minHeight: 90, position: "relative",
                           borderRight: ci < 6 ? `1px solid ${T.border}` : "none",
                           background: cell.isOther ? T.bg2 : bg,
                           opacity: cell.isOther ? 0.4 : 1,
                           display: "flex", flexDirection: "column", justifyContent: "flex-start",
-                          cursor: !isSat && cell.date && count > 0 ? "pointer" : "default",
+                          cursor: !isSat && cell.date && !cell.isOther ? "pointer" : "default",
                           transition: "background 0.15s"
                         }}
-                        onMouseEnter={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = profit > 0 ? `${T.green}30` : profit < 0 ? `${T.red}30` : `${T.cyan}15`; }}
-                        onMouseLeave={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = bg; }}
+                        onMouseEnter={(e) => { if (!isSat && cell.date && !cell.isOther) e.currentTarget.style.background = count > 0 ? (profit > 0 ? `${T.green}30` : profit < 0 ? `${T.red}30` : `${T.cyan}15`) : `${T.cyan}10`; }}
+                        onMouseLeave={(e) => { if (!isSat && cell.date && !cell.isOther) e.currentTarget.style.background = bg; }}
                         >
                           {/* EVAL/FUNDED markers in top-right corner */}
                           {!cell.isOther && cell.date && dd && !isSat && (() => {
@@ -6300,17 +6501,22 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             const fundedActive = !fundedPassed && !fundedBurned && dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "FUNDED"; });
 
                             const badges = [];
-                            if (evalPassed)  badges.push({ key: "ep", label: "E✓", color: T.green,  title: "EVAL passed" });
+                            if (evalPassed)  badges.push({ key: "ep", label: "🏆", color: "#9ca3af", title: "EVAL passed", isIcon: true });
                             if (evalBurned)  badges.push({ key: "eb", label: "E✗", color: T.red,    title: "EVAL burned" });
                             if (evalActive)  badges.push({ key: "ea", label: "E",  color: T.amber,  title: "EVAL active" });
-                            if (fundedPassed)badges.push({ key: "fp", label: "F✓", color: T.green,  title: "FUNDED passed" });
+                            if (fundedPassed)badges.push({ key: "fp", label: "🏆", color: "#fbbf24", title: "FUNDED passed", isIcon: true, gold: true });
                             if (fundedBurned)badges.push({ key: "fb", label: "F✗", color: T.red,    title: "FUNDED burned" });
                             if (fundedActive)badges.push({ key: "fa", label: "F",  color: T.cyan,   title: "FUNDED active" });
 
                             if (badges.length === 0) return null;
                             return (
-                              <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 60 }}>
-                                {badges.map(b => (
+                              <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 70 }}>
+                                {badges.map(b => b.isIcon ? (
+                                  <span key={b.key} title={b.title} style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 14, lineHeight: 1, filter: b.gold ? "none" : "grayscale(1) brightness(1.1)",
+                                  }}>{b.label}</span>
+                                ) : (
                                   <span key={b.key} title={b.title} style={{
                                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                                     fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3,
@@ -6371,7 +6577,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 EVAL active
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.green}25`, color: T.green, border: `1px solid ${T.green}60` }}>E✓</span>
+                <span style={{ fontSize: 14, lineHeight: 1, filter: "grayscale(1) brightness(1.1)" }}>🏆</span>
                 EVAL passed
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -6383,8 +6589,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 FUNDED active
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.green}25`, color: T.green, border: `1px solid ${T.green}60` }}>F✓</span>
-                FUNDED passed
+                <span style={{ fontSize: 14, lineHeight: 1 }}>🏆</span>
+                FUNDED passed (gold)
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.red}25`, color: T.red, border: `1px solid ${T.red}60` }}>F✗</span>
@@ -6398,7 +6604,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
                 <div style={{ background: "#ffffff", borderRadius: 12, padding: 20, maxWidth: 500, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Trades on {dayPickerDate}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Trades on {dayPickerDate}</div>
                     <Btn small outline onClick={() => setDayPickerDate(null)}>✕</Btn>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -6407,13 +6613,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       const profit = parseFloat(sd?.profit_usd || 0);
                       return (
                         <div key={t.id} onClick={() => { startEdit(t); setDayPickerDate(null); }} style={{
-                          padding: 10, background: T.bg2, borderRadius: 6, cursor: "pointer", border: `1px solid ${T.border}`,
+                          padding: 10, background: "#f8f9fa", borderRadius: 6, cursor: "pointer", border: `1px solid #e5e7eb`,
                           display: "flex", justifyContent: "space-between", alignItems: "center"
                         }}>
                           <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                             <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"}</Badge>
                             <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
-                            <span style={{ color: T.textSoft }}>{sd?.entry_time || ""} · Trade #{sd?.trade_number || 1}</span>
+                            <span style={{ color: "#6b7280" }}>{sd?.entry_time || ""} · Trade #{sd?.trade_number || 1}</span>
                           </div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: profit > 0 ? T.green : profit < 0 ? T.red : T.textDim }}>
                             {profit < 0 ? "-" : ""}${Math.abs(profit).toFixed(2)}
