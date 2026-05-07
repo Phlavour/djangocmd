@@ -4776,6 +4776,7 @@ function TradingPanel({ apiKey, supa }) {
   const [activeStrategy, setActiveStrategy] = useState(null);
   const [subTab, setSubTab] = useState("journal"); // journal | stats | ai
   const [showAddTrade, setShowAddTrade] = useState(false);
+  const [sortMode, setSortMode] = useState("date_desc"); // date_desc | date_asc | result_win | result_loss | trade_1 | trade_2 | inst_NQ | inst_ES
   const [editingTradeId, setEditingTradeId] = useState(null);
   const [showAddStrategy, setShowAddStrategy] = useState(false);
   const [newStratName, setNewStratName] = useState("");
@@ -4791,6 +4792,7 @@ function TradingPanel({ apiKey, supa }) {
     band_type: "fast", setup_type: "A", trade_type: "standard",
     instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10),
     tp_01: false, tp_02: false, tp_03: false,
+    account_type: "EVAL", account_passed: false, account_burned: false,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -5002,6 +5004,7 @@ Rules:
       profit_usd: parseFloat(tf.profit_usd) || 0,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
+      account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5071,6 +5074,7 @@ Rules:
       profit_usd: String(sd.profit_usd || 0),
       trade_date: sd.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: sd.tp_01 || false, tp_02: sd.tp_02 || false, tp_03: sd.tp_03 || false,
+      account_type: sd.account_type || "EVAL", account_passed: sd.account_passed || false, account_burned: sd.account_burned || false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5079,7 +5083,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5100,6 +5104,7 @@ Rules:
       profit_usd: parseFloat(tf.profit_usd) || 0,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
+      account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5119,6 +5124,8 @@ Rules:
   // Filter trades by active strategy
   const filteredTrades = activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
   const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
+  // Resolve strategy type with fallback to name (handles legacy rows where type is null)
+  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
 
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
@@ -5310,7 +5317,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
-            ...(activeStratObj?.type === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}] : []),
+            ...(stratType === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -5323,13 +5330,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {/* ═══ JOURNAL TAB ═══ */}
       {subTab === "journal" && activeStrategy && activeStrategy !== "ALL" && (
         <div>
-          {/* Add trade */}
+          {/* Add/Edit trade */}
           {showAddTrade ? (
-            <Card style={{ marginBottom: 16 }}>
-              <Heading icon="✎">{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
+            <Card style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" } : {}) }}>
+              {editingTradeId && <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000 }} />}
+              <div style={{ position: editingTradeId ? "relative" : "static", zIndex: 1002 }}>
+              <Heading icon="✎" right={editingTradeId ? <Btn small outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>✕ Close</Btn> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
-              <div style={{ display: "grid", gridTemplateColumns: ((activeStratObj?.type || "HTS") === "HTS" || (activeStratObj?.type) === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || stratType === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5345,7 +5354,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
-                {(activeStratObj?.type || "HTS") !== "HTS" && (activeStratObj?.type) !== "DR" && (
+                {stratType !== "HTS" && stratType !== "DR" && (
                 <div>
                   <div style={label}>Meets Requirements</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5357,7 +5366,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
 
               {/* Row 2: Pair, TF, Profit — hidden for DR */}
-              {(activeStratObj?.type) !== "DR" && (
+              {stratType !== "DR" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Para</div>
@@ -5433,7 +5442,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               )}
 
               {/* Strategy-specific fields */}
-              {(activeStratObj?.type || "HTS") === "HTS" && <>
+              {stratType === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
@@ -5483,7 +5492,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
               </>}
 
-              {(activeStratObj?.type) === "V_SHAPE" && <>
+              {stratType === "V_SHAPE" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, marginBottom: 8, textTransform: "uppercase" }}>V-Shape Recovery Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
@@ -5509,7 +5518,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
               </>}
 
-              {(activeStratObj?.type) === "DR" && <>
+              {stratType === "DR" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>DR Strategy Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
@@ -5582,6 +5591,27 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   ))}
                 </div>
               </div>
+
+              {/* DR: Account Type and Status */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ ...label, marginBottom: 6 }}>Typ konta</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => setTf(p => ({...p, account_type: "EVAL"}))} style={{ ...sel, flex: 1, background: tf.account_type === "EVAL" ? `${T.amber}20` : T.bg2, color: tf.account_type === "EVAL" ? T.amber : T.textSoft, fontWeight: tf.account_type === "EVAL" ? 700 : 400, borderColor: tf.account_type === "EVAL" ? T.amber : T.border }}>EVAL</button>
+                      <button onClick={() => setTf(p => ({...p, account_type: "FUNDED"}))} style={{ ...sel, flex: 1, background: tf.account_type === "FUNDED" ? `${T.green}20` : T.bg2, color: tf.account_type === "FUNDED" ? T.green : T.textSoft, fontWeight: tf.account_type === "FUNDED" ? 700 : 400, borderColor: tf.account_type === "FUNDED" ? T.green : T.border }}>FUNDED</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ ...label, marginBottom: 6 }}>Passed?</div>
+                    <button onClick={() => setTf(p => ({...p, account_passed: !p.account_passed, account_burned: false}))} style={{ ...sel, width: "100%", padding: "6px", background: tf.account_passed ? `${T.green}20` : T.bg2, color: tf.account_passed ? T.green : T.textSoft, fontWeight: tf.account_passed ? 700 : 400, borderColor: tf.account_passed ? T.green : T.border }}>{tf.account_passed ? "✓ Passed" : "□ Not passed"}</button>
+                  </div>
+                  <div>
+                    <div style={{ ...label, marginBottom: 6 }}>Burned?</div>
+                    <button onClick={() => setTf(p => ({...p, account_burned: !p.account_burned, account_passed: false}))} style={{ ...sel, width: "100%", padding: "6px", background: tf.account_burned ? `${T.red}20` : T.bg2, color: tf.account_burned ? T.red : T.textSoft, fontWeight: tf.account_burned ? 700 : 400, borderColor: tf.account_burned ? T.red : T.border }}>{tf.account_burned ? "✗ Burned" : "□ Not burned"}</button>
+                  </div>
+                </div>
+              </div>
               </>}
 
               <div style={{ marginBottom: 12 }}>
@@ -5611,13 +5641,53 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <Btn color={T.green} onClick={editingTradeId ? updateTrade : saveTrade}>{editingTradeId ? "✓ Update Trade" : "💾 Save Trade"}</Btn>
                 <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>Cancel</Btn>
               </div>
+              </div>
             </Card>
           ) : (
             <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
           )}
 
+          {/* Sort controls */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.textDim, marginRight: 4 }}>Sort:</span>
+            {[
+              { id: "date_desc", label: "📅 Newest" },
+              { id: "date_asc", label: "📅 Oldest" },
+              { id: "result_win", label: "✓ WIN first" },
+              { id: "result_loss", label: "✕ LOSS first" },
+              ...(stratType === "DR" ? [
+                { id: "trade_1", label: "1st trade" },
+                { id: "trade_2", label: "2nd trade" },
+                { id: "inst_NQ", label: "NQ" },
+                { id: "inst_ES", label: "ES" },
+              ] : []),
+            ].map(opt => (
+              <button key={opt.id} onClick={() => setSortMode(opt.id)} style={{
+                ...sel, padding: "4px 10px", fontSize: 10,
+                background: sortMode === opt.id ? `${T.cyan}20` : T.bg2,
+                color: sortMode === opt.id ? T.cyan : T.textSoft,
+                fontWeight: sortMode === opt.id ? 700 : 400,
+                borderColor: sortMode === opt.id ? T.cyan : T.border,
+              }}>{opt.label}</button>
+            ))}
+          </div>
+
           {/* Trade list */}
-          {filteredTrades.map(t => {
+          {(() => {
+            let sorted = [...filteredTrades];
+            const getSd = (t) => { let s = t.strategy_data; try { if (typeof s === "string") s = JSON.parse(s); } catch { s = {}; } return s || {}; };
+            const getDate = (t) => { const sd = getSd(t); return sd.trade_date || t.created_at || ""; };
+
+            if (sortMode === "date_desc") sorted.sort((a, b) => getDate(b).localeCompare(getDate(a)));
+            else if (sortMode === "date_asc") sorted.sort((a, b) => getDate(a).localeCompare(getDate(b)));
+            else if (sortMode === "result_win") sorted = sorted.filter(t => t.result === "WIN");
+            else if (sortMode === "result_loss") sorted = sorted.filter(t => t.result === "LOSS");
+            else if (sortMode === "trade_1") sorted = sorted.filter(t => parseInt(getSd(t).trade_number) === 1);
+            else if (sortMode === "trade_2") sorted = sorted.filter(t => parseInt(getSd(t).trade_number) === 2);
+            else if (sortMode === "inst_NQ") sorted = sorted.filter(t => getSd(t).instrument === "NQ");
+            else if (sortMode === "inst_ES") sorted = sorted.filter(t => getSd(t).instrument === "ES");
+
+            return sorted.map(t => {
             let trends = t.trends || {};
             try { if (typeof trends === "string") trends = JSON.parse(trends); } catch { trends = {}; }
             let pivots = t.pivots || {};
@@ -5629,16 +5699,16 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                     <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"} {t.direction === "SHORT" ? "▼" : "▲"}</Badge>
                     <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
-                    {activeStratObj?.type !== "DR" && <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>}
-                    {activeStratObj?.type !== "DR" && t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
-                    {activeStratObj?.type !== "DR" && t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
-                    {activeStratObj?.type !== "DR" && activeStratObj?.type !== "HTS" && <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>}
-                    {activeStratObj?.type !== "DR" && activeStratObj?.type !== "MARKET_PA" && activeStratObj?.type !== "V_SHAPE" && <Badge color={T.textDim}>B{t.bounce}</Badge>}
+                    {stratType !== "DR" && <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>}
+                    {stratType !== "DR" && t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
+                    {stratType !== "DR" && t.timeframe && <Badge color={T.purple}>{t.timeframe}</Badge>}
+                    {stratType !== "DR" && stratType !== "HTS" && <Badge color={t.meets_requirements ? T.green : T.amber}>{t.meets_requirements ? "✓ req" : "✕ no req"}</Badge>}
+                    {stratType !== "DR" && stratType !== "MARKET_PA" && stratType !== "V_SHAPE" && <Badge color={T.textDim}>B{t.bounce}</Badge>}
                   </div>
                   {t.reason && <div style={{ fontSize: 11, color: T.purple, marginBottom: 4 }}>📝 {t.reason}</div>}
                   {t.description && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, marginBottom: 4 }}>{t.description}</div>}
                   <div style={{ display: "flex", gap: 12, fontSize: 10, color: T.textSoft }}>
-                    {(() => { let sd = t.strategy_data || {}; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } const st = activeStratObj?.type || "HTS";
+                    {(() => { let sd = t.strategy_data || {}; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } const st = stratType || "HTS";
                       return st === "HTS" ? <>
                         <span>Type: <strong style={{ color: (sd.trade_type || "standard") === "between_bands" ? T.purple : T.cyan }}>{(sd.trade_type || "standard") === "between_bands" ? "Between Bands" : "Standard"}</strong></span>
                         <span>B{sd.bounce||t.bounce}</span>
@@ -5681,7 +5751,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
             </Card>
-          ); })}
+          ); }); })()}
           {filteredTrades.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades yet — click "+ New Trade" to start journaling</div>}
         </div>
       )}
@@ -5689,7 +5759,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {/* ═══ STATS TAB ═══ */}
       {subTab === "stats" && activeStrategy && (() => {
         // For DR strategy, filter by instrument toggle
-        const isDR = activeStratObj?.type === "DR";
+        const isDR = stratType === "DR";
         const drFilteredTrades = isDR ? filteredTrades.filter(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
           return sd?.instrument === drInstrument;
@@ -5886,7 +5956,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* HTS Trade Type stats — only show for HTS strategy */}
-          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="🎚️">Trade Type Performance (HTS)</Heading>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -5975,7 +6045,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* Bounce distribution — Standard (HTS only) */}
-          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="📊">Bounce Distribution — Standard
               <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(pierwsze odbicie najlepsze)</span>
@@ -6002,7 +6072,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* Bounce distribution — Between Bands (HTS only) */}
-          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="📊">Bounce Distribution — Between Bands
               <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(późniejsze odbicia powinny być skuteczniejsze)</span>
@@ -6029,7 +6099,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* Setup type performance — HTS only */}
-          {(activeStratObj?.type === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
+          {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
             <Heading icon="🎯">Setup Type Performance</Heading>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -6065,7 +6135,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ PnL CALENDAR TAB (DR only) ═══ */}
-      {subTab === "calendar" && activeStratObj?.type === "DR" && (() => {
+      {subTab === "calendar" && stratType === "DR" && (() => {
         const { year, month } = calMonth;
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
