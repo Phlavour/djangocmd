@@ -5415,35 +5415,35 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ JOURNAL TAB ═══ (also: edit modal renders here regardless of tab if editingTradeId) ═══ */}
-      {((subTab === "journal" && activeStrategy && activeStrategy !== "ALL") || (editingTradeId && activeStrategy && activeStrategy !== "ALL")) && (
+      {((subTab === "journal" && activeStrategy && activeStrategy !== "ALL") || ((editingTradeId || showAddTrade) && activeStrategy && activeStrategy !== "ALL")) && (
         <div>
           {/* Add/Edit trade */}
-          {showAddTrade ? (
+          {(() => {
+            // isModal: edit existing OR new trade triggered from non-journal tab (calendar)
+            const isModal = !!editingTradeId || (showAddTrade && subTab !== "journal");
+            return showAddTrade ? (
             <>
-            {editingTradeId && (
-              <>
+            {isModal && (
               <style>{`
-                .dr-edit-modal-card { background: #ffffff !important; border-color: #e5e7eb !important; }
-                .dr-edit-modal-card { color: #1a1a2e; }
-                .dr-edit-modal-card h1, .dr-edit-modal-card h2, .dr-edit-modal-card h3, .dr-edit-modal-card label, .dr-edit-modal-card span, .dr-edit-modal-card p, .dr-edit-modal-card div { color: inherit; }
-                .dr-edit-modal-card h3 { color: #111827 !important; }
-                .dr-edit-modal-card input[type="text"],
-                .dr-edit-modal-card input[type="time"],
-                .dr-edit-modal-card input[type="date"],
-                .dr-edit-modal-card input[type="number"],
-                .dr-edit-modal-card select,
-                .dr-edit-modal-card textarea {
+                .dr-edit-modal { background: #ffffff !important; }
+                .dr-edit-modal * { color: #1a1a2e; }
+                .dr-edit-modal h1, .dr-edit-modal h2, .dr-edit-modal h3 { color: #111827 !important; }
+                .dr-edit-modal input[type="text"],
+                .dr-edit-modal input[type="time"],
+                .dr-edit-modal input[type="date"],
+                .dr-edit-modal input[type="number"],
+                .dr-edit-modal select,
+                .dr-edit-modal textarea {
                   background: #f8f9fa !important; border: 1px solid #d1d5db !important; color: #1a1a2e !important;
                 }
-                .dr-edit-modal-card textarea::placeholder,
-                .dr-edit-modal-card input::placeholder { color: #9ca3af !important; }
+                .dr-edit-modal textarea::placeholder,
+                .dr-edit-modal input::placeholder { color: #9ca3af !important; }
               `}</style>
-              <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998 }} />
-              </>
             )}
-            <Card className={editingTradeId ? "dr-edit-modal-card" : ""} style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 9999, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
+            {isModal && <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998 }} />}
+            <Card className={isModal ? "dr-edit-modal" : ""} style={{ marginBottom: 16, ...(isModal ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 9999, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff", border: "1px solid #e5e7eb" } : {}) }}>
               <div>
-              <Heading icon="✎" right={editingTradeId ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
+              <Heading icon="✎" right={isModal ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
               <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || stratType === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -5754,7 +5754,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </>
           ) : (
             subTab === "journal" && <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
-          )}
+          );
+          })()}
 
           {/* Sort controls + trade list — only when on journal tab */}
           {subTab === "journal" && <>
