@@ -5421,20 +5421,29 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           {showAddTrade ? (
             <>
             {editingTradeId && (
+              <>
               <style>{`
-                .dr-edit-modal,
-                .dr-edit-modal * { color: #1a1a2e !important; }
-                .dr-edit-modal h3, .dr-edit-modal strong { color: #111827 !important; }
-                .dr-edit-modal input, .dr-edit-modal select, .dr-edit-modal textarea, .dr-edit-modal button {
-                  background: #f8f9fa !important; border-color: #e5e7eb !important; color: #1a1a2e !important;
+                .dr-edit-modal-card { background: #ffffff !important; border-color: #e5e7eb !important; }
+                .dr-edit-modal-card { color: #1a1a2e; }
+                .dr-edit-modal-card h1, .dr-edit-modal-card h2, .dr-edit-modal-card h3, .dr-edit-modal-card label, .dr-edit-modal-card span, .dr-edit-modal-card p, .dr-edit-modal-card div { color: inherit; }
+                .dr-edit-modal-card h3 { color: #111827 !important; }
+                .dr-edit-modal-card input[type="text"],
+                .dr-edit-modal-card input[type="time"],
+                .dr-edit-modal-card input[type="date"],
+                .dr-edit-modal-card input[type="number"],
+                .dr-edit-modal-card select,
+                .dr-edit-modal-card textarea {
+                  background: #f8f9fa !important; border: 1px solid #d1d5db !important; color: #1a1a2e !important;
                 }
-                .dr-edit-modal .label-soft { color: #5c5c7a !important; }
+                .dr-edit-modal-card textarea::placeholder,
+                .dr-edit-modal-card input::placeholder { color: #9ca3af !important; }
               `}</style>
+              <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998 }} />
+              </>
             )}
-            <Card className={editingTradeId ? "dr-edit-modal" : ""} style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 1001, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
-              {editingTradeId && <div onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000 }} />}
-              <div style={{ position: editingTradeId ? "relative" : "static", zIndex: 1002 }}>
-              <Heading icon="✎" right={editingTradeId ? <Btn small outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>✕ Close</Btn> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
+            <Card className={editingTradeId ? "dr-edit-modal-card" : ""} style={{ marginBottom: 16, ...(editingTradeId ? { position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)", width: "90%", maxWidth: 1100, maxHeight: "90vh", overflowY: "auto", zIndex: 9999, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", background: "#ffffff" } : {}) }}>
+              <div>
+              <Heading icon="✎" right={editingTradeId ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
               <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || stratType === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
