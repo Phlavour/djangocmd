@@ -5328,8 +5328,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         </div>
       )}
 
-      {/* ═══ JOURNAL TAB ═══ */}
-      {subTab === "journal" && activeStrategy && activeStrategy !== "ALL" && (
+      {/* ═══ JOURNAL TAB ═══ (also: edit modal renders here regardless of tab if editingTradeId) ═══ */}
+      {((subTab === "journal" && activeStrategy && activeStrategy !== "ALL") || (editingTradeId && activeStrategy && activeStrategy !== "ALL")) && (
         <div>
           {/* Add/Edit trade */}
           {showAddTrade ? (
@@ -5645,9 +5645,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
             </Card>
           ) : (
-            <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
+            subTab === "journal" && <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
           )}
 
+          {/* Sort controls + trade list — only when on journal tab */}
+          {subTab === "journal" && <>
           {/* Sort controls */}
           <div style={{ display: "flex", gap: 6, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: T.textDim, marginRight: 4 }}>Sort:</span>
@@ -5753,7 +5755,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
             </Card>
           ); }); })()}
-          {filteredTrades.length === 0 && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades yet — click "+ New Trade" to start journaling</div>}
+          {filteredTrades.length === 0 && subTab === "journal" && <div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades yet — click "+ New Trade" to start journaling</div>}
+          </>}
         </div>
       )}
 
@@ -6160,7 +6163,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         const handleDayClick = (date) => {
           if (!date || !dayData[date] || dayData[date].count === 0) return;
           if (dayData[date].count === 1) {
-            setSubTab("journal");
             startEdit(dayData[date].trades[0]);
           } else {
             setDayPickerDate(date);
@@ -6276,7 +6278,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
                       return (
                         <div key={ci} onClick={() => !isSat && cell.date && count > 0 && handleDayClick(cell.date)} style={{
-                          padding: 10, minHeight: 90,
+                          padding: 10, minHeight: 90, position: "relative",
                           borderRight: ci < 6 ? `1px solid ${T.border}` : "none",
                           background: cell.isOther ? T.bg2 : bg,
                           opacity: cell.isOther ? 0.4 : 1,
@@ -6287,6 +6289,38 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         onMouseEnter={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = profit > 0 ? `${T.green}30` : profit < 0 ? `${T.red}30` : `${T.cyan}15`; }}
                         onMouseLeave={(e) => { if (!isSat && cell.date && count > 0) e.currentTarget.style.background = bg; }}
                         >
+                          {/* EVAL/FUNDED markers in top-right corner */}
+                          {!cell.isOther && cell.date && dd && !isSat && (() => {
+                            // Determine which account states appear in trades on this day
+                            const evalPassed = dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "EVAL" && sd?.account_passed; });
+                            const evalBurned = dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "EVAL" && sd?.account_burned; });
+                            const evalActive = !evalPassed && !evalBurned && dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "EVAL"; });
+                            const fundedPassed = dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "FUNDED" && sd?.account_passed; });
+                            const fundedBurned = dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "FUNDED" && sd?.account_burned; });
+                            const fundedActive = !fundedPassed && !fundedBurned && dd.trades.some(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.account_type === "FUNDED"; });
+
+                            const badges = [];
+                            if (evalPassed)  badges.push({ key: "ep", label: "E✓", color: T.green,  title: "EVAL passed" });
+                            if (evalBurned)  badges.push({ key: "eb", label: "E✗", color: T.red,    title: "EVAL burned" });
+                            if (evalActive)  badges.push({ key: "ea", label: "E",  color: T.amber,  title: "EVAL active" });
+                            if (fundedPassed)badges.push({ key: "fp", label: "F✓", color: T.green,  title: "FUNDED passed" });
+                            if (fundedBurned)badges.push({ key: "fb", label: "F✗", color: T.red,    title: "FUNDED burned" });
+                            if (fundedActive)badges.push({ key: "fa", label: "F",  color: T.cyan,   title: "FUNDED active" });
+
+                            if (badges.length === 0) return null;
+                            return (
+                              <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 60 }}>
+                                {badges.map(b => (
+                                  <span key={b.key} title={b.title} style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3,
+                                    background: `${b.color}25`, color: b.color, border: `1px solid ${b.color}60`,
+                                    lineHeight: 1.2, letterSpacing: 0,
+                                  }}>{b.label}</span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           <div style={{ fontSize: 12, color: cell.isOther ? T.textDim : T.text, fontWeight: 500, marginBottom: 4 }}>
                             {isSat && !cell.isOther ? `${cell.day}` : cell.day}
                           </div>
@@ -6329,6 +6363,35 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               );
             })()}
 
+            {/* Account markers legend */}
+            <div style={{ marginTop: 8, padding: "8px 12px", background: T.bg2, borderRadius: 6, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center", fontSize: 10, color: T.textDim }}>
+              <span style={{ fontWeight: 600 }}>Markers:</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.amber}25`, color: T.amber, border: `1px solid ${T.amber}60` }}>E</span>
+                EVAL active
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.green}25`, color: T.green, border: `1px solid ${T.green}60` }}>E✓</span>
+                EVAL passed
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.red}25`, color: T.red, border: `1px solid ${T.red}60` }}>E✗</span>
+                EVAL burned
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.cyan}25`, color: T.cyan, border: `1px solid ${T.cyan}60` }}>F</span>
+                FUNDED active
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.green}25`, color: T.green, border: `1px solid ${T.green}60` }}>F✓</span>
+                FUNDED passed
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: `${T.red}25`, color: T.red, border: `1px solid ${T.red}60` }}>F✗</span>
+                FUNDED burned
+              </span>
+            </div>
+
             {/* Day picker modal — when multiple trades on one day */}
             {dayPickerDate && dayData[dayPickerDate] && dayData[dayPickerDate].trades.length > 1 && (
               <div onClick={(e) => { if (e.target === e.currentTarget) setDayPickerDate(null); }}
@@ -6343,7 +6406,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
                       const profit = parseFloat(sd?.profit_usd || 0);
                       return (
-                        <div key={t.id} onClick={() => { setSubTab("journal"); startEdit(t); setDayPickerDate(null); }} style={{
+                        <div key={t.id} onClick={() => { startEdit(t); setDayPickerDate(null); }} style={{
                           padding: 10, background: T.bg2, borderRadius: 6, cursor: "pointer", border: `1px solid ${T.border}`,
                           display: "flex", justifyContent: "space-between", alignItems: "center"
                         }}>
