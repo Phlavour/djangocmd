@@ -5454,8 +5454,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, direction: "LONG"}))} style={{ ...sel, flex: 1, background: tf.direction === "LONG" ? `${T.green}20` : T.bg2, color: tf.direction === "LONG" ? T.green : T.textSoft, fontWeight: tf.direction === "LONG" ? 700 : 400, borderColor: tf.direction === "LONG" ? T.green : T.border }}>LONG ▲</button>
-                    <button onClick={() => setTf(p => ({...p, direction: "SHORT"}))} style={{ ...sel, flex: 1, background: tf.direction === "SHORT" ? `${T.red}20` : T.bg2, color: tf.direction === "SHORT" ? T.red : T.textSoft, fontWeight: tf.direction === "SHORT" ? 700 : 400, borderColor: tf.direction === "SHORT" ? T.red : T.border }}>SHORT ▼</button>
+                    <button onClick={() => setTf(p => ({...p, direction: "LONG"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "LONG" ? `${T.green}20` : T.bg2, color: tf.direction === "LONG" ? T.green : T.textSoft, fontWeight: tf.direction === "LONG" ? 700 : 400, borderColor: tf.direction === "LONG" ? T.green : T.border }}>LONG ▲</button>
+                    <button onClick={() => setTf(p => ({...p, direction: "SHORT"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "SHORT" ? `${T.red}20` : T.bg2, color: tf.direction === "SHORT" ? T.red : T.textSoft, fontWeight: tf.direction === "SHORT" ? 700 : 400, borderColor: tf.direction === "SHORT" ? T.red : T.border }}>SHORT ▼</button>
+                    <button onClick={() => setTf(p => ({...p, direction: "NO_TRADE", result: "BE", profit: "0", profit_usd: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "NO_TRADE" ? `${T.textDim}30` : T.bg2, color: tf.direction === "NO_TRADE" ? T.text : T.textSoft, fontWeight: tf.direction === "NO_TRADE" ? 700 : 400, borderColor: tf.direction === "NO_TRADE" ? T.textDim : T.border }}>NO TRADE</button>
                   </div>
                 </div>
                 <div>
@@ -5650,9 +5651,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
                 <div>
                   <div style={label}>Trade #</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, trade_number: "1"}))} style={{ ...sel, flex: 1, background: tf.trade_number === "1" ? `${T.green}20` : T.bg2, color: tf.trade_number === "1" ? T.green : T.textSoft, fontWeight: tf.trade_number === "1" ? 700 : 400, borderColor: tf.trade_number === "1" ? T.green : T.border }}>Pierwszy</button>
-                    <button onClick={() => setTf(p => ({...p, trade_number: "2"}))} style={{ ...sel, flex: 1, background: tf.trade_number === "2" ? `${T.amber}20` : T.bg2, color: tf.trade_number === "2" ? T.amber : T.textSoft, fontWeight: tf.trade_number === "2" ? 700 : 400, borderColor: tf.trade_number === "2" ? T.amber : T.border }}>Drugi</button>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTf(p => ({...p, trade_number: "1"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.trade_number === "1" ? `${T.green}20` : T.bg2, color: tf.trade_number === "1" ? T.green : T.textSoft, fontWeight: tf.trade_number === "1" ? 700 : 400, borderColor: tf.trade_number === "1" ? T.green : T.border }}>1.</button>
+                    <button onClick={() => setTf(p => ({...p, trade_number: "2"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.trade_number === "2" ? `${T.amber}20` : T.bg2, color: tf.trade_number === "2" ? T.amber : T.textSoft, fontWeight: tf.trade_number === "2" ? 700 : 400, borderColor: tf.trade_number === "2" ? T.amber : T.border }}>2.</button>
+                    <button onClick={() => setTf(p => ({...p, trade_number: "3"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.trade_number === "3" ? `${T.purple}20` : T.bg2, color: tf.trade_number === "3" ? T.purple : T.textSoft, fontWeight: tf.trade_number === "3" ? 700 : 400, borderColor: tf.trade_number === "3" ? T.purple : T.border }}>3.</button>
                   </div>
                 </div>
               </div>
@@ -5815,6 +5817,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               ...(stratType === "DR" ? [
                 { id: "trade_1", label: "1st trade" },
                 { id: "trade_2", label: "2nd trade" },
+                { id: "trade_3", label: "3rd trade" },
+                { id: "no_trade", label: "NO TRADE" },
                 { id: "inst_NQ", label: "NQ" },
                 { id: "inst_ES", label: "ES" },
               ] : []),
@@ -5841,6 +5845,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             else if (sortMode === "result_loss") sorted = sorted.filter(t => t.result === "LOSS");
             else if (sortMode === "trade_1") sorted = sorted.filter(t => parseInt(getSd(t).trade_number) === 1);
             else if (sortMode === "trade_2") sorted = sorted.filter(t => parseInt(getSd(t).trade_number) === 2);
+            else if (sortMode === "trade_3") sorted = sorted.filter(t => parseInt(getSd(t).trade_number) === 3);
+            else if (sortMode === "no_trade") sorted = sorted.filter(t => t.direction === "NO_TRADE");
             else if (sortMode === "inst_NQ") sorted = sorted.filter(t => getSd(t).instrument === "NQ");
             else if (sortMode === "inst_ES") sorted = sorted.filter(t => getSd(t).instrument === "ES");
 
@@ -5854,7 +5860,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                    <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"} {t.direction === "SHORT" ? "▼" : "▲"}</Badge>
+                    <Badge color={t.direction === "SHORT" ? T.red : t.direction === "NO_TRADE" ? T.textDim : T.green}>{t.direction === "NO_TRADE" ? "NO TRADE" : `${t.direction || "LONG"} ${t.direction === "SHORT" ? "▼" : "▲"}`}</Badge>
                     <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
                     {stratType !== "DR" && <Badge color={(t.profit || 0) > 0 ? T.green : (t.profit || 0) < 0 ? T.red : T.textDim}>{(t.profit || 0) > 0 ? "+" : ""}{t.profit || 0}R</Badge>}
                     {stratType !== "DR" && t.pair && <Badge color={T.cyan}>{t.pair}</Badge>}
@@ -6040,14 +6046,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             );
           })()}
 
-          {/* DR: First vs Second Trade */}
+          {/* DR: First vs Second vs Third Trade */}
           {isDR && (
             <Card style={{ marginBottom: 16 }}>
-              <Heading icon="🔢">First Trade vs Second Trade</Heading>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Heading icon="🔢">Trade by Number (1st / 2nd / 3rd)</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 {[
-                  { num: 1, label: "Pierwszy Trade", color: T.green },
-                  { num: 2, label: "Drugi Trade", color: T.amber },
+                  { num: 1, label: "Pierwszy", color: T.green },
+                  { num: 2, label: "Drugi", color: T.amber },
+                  { num: 3, label: "Trzeci", color: T.purple },
                 ].map(tn => {
                   const tnTrades = drFilteredTrades.filter(t => {
                     let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -6601,13 +6608,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             </div>
                           )}
 
-                          {/* Quick-add 1 / 2 buttons in bottom-right corner — only on regular days, not Sat */}
+                          {/* Quick-add 1 / 2 / 3 buttons in bottom-right corner — only on regular days, not Sat */}
                           {!isSat && !cell.isOther && cell.date && (() => {
                             // Check which trade numbers exist for this day+instrument
                             const trades1 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 1; });
                             const trades2 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 2; });
+                            const trades3 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 3; });
                             const has1 = trades1.length > 0;
                             const has2 = trades2.length > 0;
+                            const has3 = trades3.length > 0;
                             const quickAdd = (num, e) => {
                               e.stopPropagation();
                               setEditingTradeId(null);
@@ -6628,6 +6637,12 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                                   fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
                                   display: "flex", alignItems: "center", justifyContent: "center"
                                 }}>2</button>
+                                <button onClick={(e) => quickAdd(3, e)} title={has3 ? "Trade #3 already added (click to add another)" : "Add trade #3"} style={{
+                                  width: 18, height: 18, borderRadius: 4, border: `1px solid ${has3 ? T.purple : T.border}`,
+                                  background: has3 ? `${T.purple}25` : T.bg2, color: has3 ? T.purple : T.textDim,
+                                  fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                                  display: "flex", alignItems: "center", justifyContent: "center"
+                                }}>3</button>
                               </div>
                             );
                           })()}
@@ -6703,7 +6718,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                           display: "flex", justifyContent: "space-between", alignItems: "center"
                         }}>
                           <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                            <Badge color={t.direction === "SHORT" ? T.red : T.green}>{t.direction || "LONG"}</Badge>
+                            <Badge color={t.direction === "SHORT" ? T.red : t.direction === "NO_TRADE" ? T.textDim : T.green}>{t.direction === "NO_TRADE" ? "NO TRADE" : (t.direction || "LONG")}</Badge>
                             <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
                             <span style={{ color: "#6b7280" }}>{sd?.entry_time || ""} · Trade #{sd?.trade_number || 1}</span>
                           </div>
