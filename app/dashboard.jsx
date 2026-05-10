@@ -4793,6 +4793,7 @@ function TradingPanel({ apiKey, supa }) {
     instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10),
     tp_01: false, tp_02: false, tp_03: false,
     account_type: "EVAL", account_passed: false, account_burned: false,
+    smt: false, dr_requirements: false, highs_lows: false,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4957,8 +4958,8 @@ Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 Rules:
 - instrument: read ticker in top-left corner of chart. NQ futures contracts (NQ1!, NQM5, etc.) → "NQ". ES/Mini S&P (ES1!, ESM5, MES, etc.) → "ES". If unclear, return ""
 - direction: look for entry arrow/marker on chart. Green arrow pointing up or "BUY" tag → "LONG". Red arrow pointing down or "SELL" tag → "SHORT". If unclear, return ""
-- entry_time: find the exact candle where entry occurred (usually marked with arrow or position box). Read X-axis time label for THAT candle. Format strictly HH:MM 24-hour
-- trade_date: read X-axis date label. Format DD MMM 'YY (e.g. "06 Apr '26") means day=06, month=Apr=04, year=2026 → "2026-04-06". DAY ALWAYS FIRST. Months: Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec. 'YY → 20YY. Output STRICTLY as YYYY-MM-DD. Today is ${new Date().toISOString().slice(0,10)}. If unreadable return ""
+- entry_time: read from the bottom-of-chart status bar where the current/cursor candle date+time is shown (e.g. "Mon 06 Apr '26 10:10" → "10:10"). This dark/black bar at the bottom shows the time of the candle the cursor is on, which represents the entry candle. Format strictly HH:MM 24-hour. If only date visible without time, return ""
+- trade_date: read from the bottom-of-chart status bar where the current/cursor candle date+time is shown (e.g. "Mon 06 Apr '26 10:10"). The same dark/black bar at the bottom that shows the time. Format DD MMM 'YY → 06 Apr '26 means day=06, month=Apr=04, year=2026 → "2026-04-06". DAY ALWAYS FIRST. Months: Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec. 'YY → 20YY. Output STRICTLY as YYYY-MM-DD. Today is ${new Date().toISOString().slice(0,10)}. If unreadable return ""
 - tp_01_drawn / tp_02_drawn / tp_03_drawn: check if there are horizontal price lines or labels marked "0.1", "0.2", "0.3" or similar TP level annotations on the chart. true if drawn, false if not visible
 - Respond ONLY with JSON, nothing else`;
       } else if (isDR && phase === "after") {
@@ -5092,6 +5093,7 @@ Rules:
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
+      smt: tf.smt || false, dr_requirements: tf.dr_requirements || false, highs_lows: tf.highs_lows || false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5162,6 +5164,7 @@ Rules:
       trade_date: sd.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: sd.tp_01 || false, tp_02: sd.tp_02 || false, tp_03: sd.tp_03 || false,
       account_type: sd.account_type || "EVAL", account_passed: sd.account_passed || false, account_burned: sd.account_burned || false,
+      smt: sd.smt || false, dr_requirements: sd.dr_requirements || false, highs_lows: sd.highs_lows || false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5170,7 +5173,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, dr_requirements: false, highs_lows: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5192,6 +5195,7 @@ Rules:
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
+      smt: tf.smt || false, dr_requirements: tf.dr_requirements || false, highs_lows: tf.highs_lows || false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5717,6 +5721,40 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div>
                     <div style={{ ...label, marginBottom: 6 }}>Burned?</div>
                     <button onClick={() => setTf(p => ({...p, account_burned: !p.account_burned, account_passed: false}))} style={{ ...sel, width: "100%", padding: "6px", background: tf.account_burned ? `${T.red}20` : T.bg2, color: tf.account_burned ? T.red : T.textSoft, fontWeight: tf.account_burned ? 700 : 400, borderColor: tf.account_burned ? T.red : T.border }}>{tf.account_burned ? "✗ Burned" : "□ Not burned"}</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* DR: Confluence checkboxes */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Confluence</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>SMT</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setTf(p => ({...p, smt: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.smt ? `${T.green}20` : T.bg2, color: tf.smt ? T.green : T.textSoft, fontWeight: tf.smt ? 700 : 400, borderColor: tf.smt ? T.green : T.border }}>TAK</button>
+                      <button onClick={() => setTf(p => ({...p, smt: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.smt ? `${T.red}20` : T.bg2, color: !tf.smt ? T.red : T.textSoft, fontWeight: !tf.smt ? 700 : 400, borderColor: !tf.smt ? T.red : T.border }}>NIE</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                      <span>REQUIREMENTS</span>
+                      <span
+                        title={"Wymagane elementy:\n\n• VWAP\n• Wstęgi\n• PA (Price Action)\n• RR (Risk-Reward)"}
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 13, height: 13, borderRadius: "50%", border: `1px solid ${T.cyan}`, color: T.cyan, fontSize: 9, fontWeight: 700, cursor: "help", userSelect: "none", textTransform: "none", letterSpacing: 0 }}
+                      >i</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setTf(p => ({...p, dr_requirements: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.dr_requirements ? `${T.green}20` : T.bg2, color: tf.dr_requirements ? T.green : T.textSoft, fontWeight: tf.dr_requirements ? 700 : 400, borderColor: tf.dr_requirements ? T.green : T.border }}>TAK</button>
+                      <button onClick={() => setTf(p => ({...p, dr_requirements: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.dr_requirements ? `${T.red}20` : T.bg2, color: !tf.dr_requirements ? T.red : T.textSoft, fontWeight: !tf.dr_requirements ? 700 : 400, borderColor: !tf.dr_requirements ? T.red : T.border }}>NIE</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Highs/Lows</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setTf(p => ({...p, highs_lows: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.highs_lows ? `${T.green}20` : T.bg2, color: tf.highs_lows ? T.green : T.textSoft, fontWeight: tf.highs_lows ? 700 : 400, borderColor: tf.highs_lows ? T.green : T.border }}>TAK</button>
+                      <button onClick={() => setTf(p => ({...p, highs_lows: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.highs_lows ? `${T.red}20` : T.bg2, color: !tf.highs_lows ? T.red : T.textSoft, fontWeight: !tf.highs_lows ? 700 : 400, borderColor: !tf.highs_lows ? T.red : T.border }}>NIE</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6555,6 +6593,37 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                               <div style={{ fontSize: 9, color: T.textDim }}>{weekTotal.count} trade{weekTotal.count !== 1 ? "s" : ""}</div>
                             </div>
                           )}
+
+                          {/* Quick-add 1 / 2 buttons in bottom-right corner — only on regular days, not Sat */}
+                          {!isSat && !cell.isOther && cell.date && (() => {
+                            // Check which trade numbers exist for this day+instrument
+                            const trades1 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 1; });
+                            const trades2 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 2; });
+                            const has1 = trades1.length > 0;
+                            const has2 = trades2.length > 0;
+                            const quickAdd = (num, e) => {
+                              e.stopPropagation();
+                              setEditingTradeId(null);
+                              setTf({ ...EMPTY_TF, trade_date: cell.date, instrument: drInstrument === "ALL" ? "NQ" : drInstrument, trade_number: String(num) });
+                              setShowAddTrade(true);
+                            };
+                            return (
+                              <div style={{ position: "absolute", bottom: 4, right: 4, display: "flex", gap: 3 }}>
+                                <button onClick={(e) => quickAdd(1, e)} title={has1 ? "Trade #1 already added (click to add another)" : "Add trade #1"} style={{
+                                  width: 18, height: 18, borderRadius: 4, border: `1px solid ${has1 ? T.green : T.border}`,
+                                  background: has1 ? `${T.green}25` : T.bg2, color: has1 ? T.green : T.textDim,
+                                  fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                                  display: "flex", alignItems: "center", justifyContent: "center"
+                                }}>1</button>
+                                <button onClick={(e) => quickAdd(2, e)} title={has2 ? "Trade #2 already added (click to add another)" : "Add trade #2"} style={{
+                                  width: 18, height: 18, borderRadius: 4, border: `1px solid ${has2 ? T.amber : T.border}`,
+                                  background: has2 ? `${T.amber}25` : T.bg2, color: has2 ? T.amber : T.textDim,
+                                  fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                                  display: "flex", alignItems: "center", justifyContent: "center"
+                                }}>2</button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
