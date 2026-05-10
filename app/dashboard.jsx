@@ -6046,6 +6046,69 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             );
           })()}
 
+          {/* DR: Win/Loss Streaks */}
+          {isDR && (() => {
+            // Sort trades chronologically (date + entry_time)
+            const sorted = [...drFilteredTrades]
+              .map(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return { t, sd }; })
+              // Skip BE and NO_TRADE (they don't break or extend streaks)
+              .filter(({ t }) => t.result === "WIN" || t.result === "LOSS")
+              .sort((a, b) => {
+                const da = `${a.sd?.trade_date || ""} ${a.sd?.entry_time || ""}`;
+                const db = `${b.sd?.trade_date || ""} ${b.sd?.entry_time || ""}`;
+                return da.localeCompare(db);
+              });
+
+            let maxWin = 0, maxLoss = 0, curWin = 0, curLoss = 0;
+            let currentStreak = 0; let currentType = null; // "win" | "loss"
+            sorted.forEach(({ t }) => {
+              if (t.result === "WIN") {
+                curWin++; curLoss = 0;
+                maxWin = Math.max(maxWin, curWin);
+              } else if (t.result === "LOSS") {
+                curLoss++; curWin = 0;
+                maxLoss = Math.max(maxLoss, curLoss);
+              }
+            });
+            // Determine current streak (from end of sorted list)
+            for (let i = sorted.length - 1; i >= 0; i--) {
+              const r = sorted[i].t.result;
+              if (currentType === null) {
+                currentType = r === "WIN" ? "win" : "loss";
+                currentStreak = 1;
+              } else if ((currentType === "win" && r === "WIN") || (currentType === "loss" && r === "LOSS")) {
+                currentStreak++;
+              } else {
+                break;
+              }
+            }
+
+            return (
+              <Card style={{ marginBottom: 16 }}>
+                <Heading icon="🔥">Streaks (consecutive WIN / LOSS)</Heading>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <div style={{ textAlign: "center", padding: 14, background: `${T.green}08`, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.green, marginBottom: 4 }}>Max Win Streak</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: T.green }}>{maxWin}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>najdłuższa seria zwycięstw pod rząd</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: 14, background: `${T.red}08`, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.red, marginBottom: 4 }}>Max Loss Streak</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: T.red }}>{maxLoss}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>najdłuższa seria strat pod rząd</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: 14, background: currentType === "win" ? `${T.green}08` : currentType === "loss" ? `${T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: currentType === "win" ? T.green : currentType === "loss" ? T.red : T.textDim, marginBottom: 4 }}>Current Streak</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: currentType === "win" ? T.green : currentType === "loss" ? T.red : T.textDim }}>
+                      {currentStreak > 0 ? `${currentStreak}${currentType === "win" ? "W" : "L"}` : "—"}
+                    </div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>aktualna seria (BE/NT pominięte)</div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
+
           {/* DR: First vs Second vs Third Trade */}
           {isDR && (
             <Card style={{ marginBottom: 16 }}>
@@ -6595,12 +6658,27 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                           {isSat && !cell.isOther && (
                             <div style={{ fontSize: 10, fontWeight: 700, color: T.text, marginBottom: 2 }}>Week {wi + 1}</div>
                           )}
-                          {!cell.isOther && cell.date && dd && count > 0 && !isSat && (
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: profitColor }}>{fmtUSD(profit)}</div>
-                              <div style={{ fontSize: 9, color: T.textDim }}>{count} trade{count !== 1 ? "s" : ""}</div>
-                            </div>
-                          )}
+                          {!cell.isOther && cell.date && dd && count > 0 && !isSat && (() => {
+                            const noTradeCount = (dd.trades || []).filter(t => t.direction === "NO_TRADE").length;
+                            const realCount = count - noTradeCount;
+                            const allNoTrade = noTradeCount === count;
+                            if (allNoTrade) {
+                              return (
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: T.textDim, fontStyle: "italic" }}>NO TRADE</div>
+                                  <div style={{ fontSize: 9, color: T.textDim }}>{count > 1 ? `${count}×` : "marked"}</div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: profitColor }}>{fmtUSD(profit)}</div>
+                                <div style={{ fontSize: 9, color: T.textDim }}>
+                                  {realCount} trade{realCount !== 1 ? "s" : ""}{noTradeCount > 0 ? ` · ${noTradeCount} NT` : ""}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {isSat && !cell.isOther && weekTotal.count > 0 && (
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, marginTop: 2 }}>
                               <div style={{ fontSize: 14, fontWeight: 700, color: weekTotal.profit > 0 ? T.green : weekTotal.profit < 0 ? T.red : T.textDim }}>{fmtUSD(weekTotal.profit)}</div>
