@@ -5783,9 +5783,16 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 {tf.screenshot_after && <Btn small outline onClick={() => setTf(p => ({...p, screenshot_after: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>}
               </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <Btn color={T.green} onClick={editingTradeId ? updateTrade : saveTrade}>{editingTradeId ? "✓ Update Trade" : "💾 Save Trade"}</Btn>
                 <Btn outline onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }}>Cancel</Btn>
+                {editingTradeId && (
+                  <Btn small onClick={async () => {
+                    if (!confirm("Usunąć ten trade? Nie da się tego cofnąć.")) return;
+                    await deleteTrade(editingTradeId);
+                    setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF);
+                  }} style={{ marginLeft: "auto", background: `${T.red}20`, color: T.red, border: `1px solid ${T.red}60` }}>🗑 Usuń trade</Btn>
+                )}
               </div>
               </div>
             </Card>
