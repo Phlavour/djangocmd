@@ -4797,6 +4797,7 @@ function TradingPanel({ apiKey, supa }) {
     req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true,
     entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false,
     second_instrument_reached: false, could_reduce_sl: false,
+    additional_entries: "0",
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -5101,6 +5102,7 @@ Rules:
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
+      additional_entries: tf.additional_entries || "0",
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5176,6 +5178,7 @@ Rules:
       req_pa: sd.req_pa !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
       entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false,
       second_instrument_reached: sd.second_instrument_reached || false, could_reduce_sl: sd.could_reduce_sl || false,
+      additional_entries: sd.additional_entries || "0",
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5184,7 +5187,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5211,6 +5214,7 @@ Rules:
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
+      additional_entries: tf.additional_entries || "0",
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5813,7 +5817,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {/* DR: Trade Review */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8 }}>Przegląd trade'a</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                   <div>
                     <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Drugi instrument reached</div>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -5827,6 +5831,20 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <button onClick={() => setTf(p => ({...p, could_reduce_sl: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.could_reduce_sl ? `${T.amber}20` : T.bg2, color: tf.could_reduce_sl ? T.amber : T.textSoft, fontWeight: tf.could_reduce_sl ? 700 : 400, borderColor: tf.could_reduce_sl ? T.amber : T.border }}>TAK</button>
                       <button onClick={() => setTf(p => ({...p, could_reduce_sl: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.could_reduce_sl ? `${T.green}20` : T.bg2, color: !tf.could_reduce_sl ? T.green : T.textSoft, fontWeight: !tf.could_reduce_sl ? 700 : 400, borderColor: !tf.could_reduce_sl ? T.green : T.border }}>NIE</button>
                     </div>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, fontWeight: 600 }}>Czy były kolejne wejścia?</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {["0", "1", "2", "3", "4+"].map(n => (
+                      <button key={n} onClick={() => setTf(p => ({...p, additional_entries: n}))} style={{
+                        ...sel, flex: 1, padding: "6px 4px",
+                        background: tf.additional_entries === n ? `${T.cyan}20` : T.bg2,
+                        color: tf.additional_entries === n ? T.cyan : T.textSoft,
+                        fontWeight: tf.additional_entries === n ? 700 : 400,
+                        borderColor: tf.additional_entries === n ? T.cyan : T.border,
+                      }}>{n}</button>
+                    ))}
                   </div>
                 </div>
               </div>
