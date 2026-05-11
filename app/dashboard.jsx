@@ -4793,7 +4793,8 @@ function TradingPanel({ apiKey, supa }) {
     instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10),
     tp_01: false, tp_02: false, tp_03: false,
     account_type: "EVAL", account_passed: false, account_burned: false,
-    smt: false, dr_requirements: false, highs_lows: false,
+    smt: false, highs_lows: false,
+    req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -5093,7 +5094,9 @@ Rules:
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
-      smt: tf.smt || false, dr_requirements: tf.dr_requirements || false, highs_lows: tf.highs_lows || false,
+      smt: tf.smt || false, highs_lows: tf.highs_lows || false,
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
+      req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5164,7 +5167,9 @@ Rules:
       trade_date: sd.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: sd.tp_01 || false, tp_02: sd.tp_02 || false, tp_03: sd.tp_03 || false,
       account_type: sd.account_type || "EVAL", account_passed: sd.account_passed || false, account_burned: sd.account_burned || false,
-      smt: sd.smt || false, dr_requirements: sd.dr_requirements || false, highs_lows: sd.highs_lows || false,
+      smt: sd.smt || false, highs_lows: sd.highs_lows || false,
+      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false,
+      req_pa: sd.req_pa !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5173,7 +5178,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, dr_requirements: false, highs_lows: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5195,7 +5200,9 @@ Rules:
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
-      smt: tf.smt || false, dr_requirements: tf.dr_requirements || false, highs_lows: tf.highs_lows || false,
+      smt: tf.smt || false, highs_lows: tf.highs_lows || false,
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
+      req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5730,25 +5737,12 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {/* DR: Confluence checkboxes */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8 }}>Confluence</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>SMT</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => setTf(p => ({...p, smt: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.smt ? `${T.green}20` : T.bg2, color: tf.smt ? T.green : T.textSoft, fontWeight: tf.smt ? 700 : 400, borderColor: tf.smt ? T.green : T.border }}>TAK</button>
                       <button onClick={() => setTf(p => ({...p, smt: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.smt ? `${T.red}20` : T.bg2, color: !tf.smt ? T.red : T.textSoft, fontWeight: !tf.smt ? 700 : 400, borderColor: !tf.smt ? T.red : T.border }}>NIE</button>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                      <span>REQUIREMENTS</span>
-                      <span
-                        title={"Wymagane elementy:\n\n• VWAP\n• Wstęgi\n• PA (Price Action)\n• RR (Risk-Reward)"}
-                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 13, height: 13, borderRadius: "50%", border: `1px solid ${T.cyan}`, color: T.cyan, fontSize: 9, fontWeight: 700, cursor: "help", userSelect: "none", textTransform: "none", letterSpacing: 0 }}
-                      >i</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => setTf(p => ({...p, dr_requirements: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.dr_requirements ? `${T.green}20` : T.bg2, color: tf.dr_requirements ? T.green : T.textSoft, fontWeight: tf.dr_requirements ? 700 : 400, borderColor: tf.dr_requirements ? T.green : T.border }}>TAK</button>
-                      <button onClick={() => setTf(p => ({...p, dr_requirements: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.dr_requirements ? `${T.red}20` : T.bg2, color: !tf.dr_requirements ? T.red : T.textSoft, fontWeight: !tf.dr_requirements ? 700 : 400, borderColor: !tf.dr_requirements ? T.red : T.border }}>NIE</button>
                     </div>
                   </div>
                   <div>
@@ -5758,6 +5752,32 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <button onClick={() => setTf(p => ({...p, highs_lows: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.highs_lows ? `${T.red}20` : T.bg2, color: !tf.highs_lows ? T.red : T.textSoft, fontWeight: !tf.highs_lows ? 700 : 400, borderColor: !tf.highs_lows ? T.red : T.border }}>NIE</button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* DR: Requirements (6 checkboxes, all default true) */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>Requirements</span>
+                  <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>(odznacz jeśli element brakuje)</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  {[
+                    { id: "req_vwap",     label: "VWAP" },
+                    { id: "req_bands",    label: "Wstęgi" },
+                    { id: "req_bands_5m", label: "Wstęgi 5m" },
+                    { id: "req_pa",       label: "PA" },
+                    { id: "req_rr",       label: "RR" },
+                    { id: "req_range",    label: "Range" },
+                  ].map(r => (
+                    <div key={r.id}>
+                      <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => setTf(p => ({...p, [r.id]: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] ? `${T.green}20` : T.bg2, color: tf[r.id] ? T.green : T.textSoft, fontWeight: tf[r.id] ? 700 : 400, borderColor: tf[r.id] ? T.green : T.border }}>TAK</button>
+                        <button onClick={() => setTf(p => ({...p, [r.id]: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] === false ? `${T.red}20` : T.bg2, color: tf[r.id] === false ? T.red : T.textSoft, fontWeight: tf[r.id] === false ? 700 : 400, borderColor: tf[r.id] === false ? T.red : T.border }}>NIE</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
               </>}
