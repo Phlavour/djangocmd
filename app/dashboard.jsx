@@ -4798,6 +4798,7 @@ function TradingPanel({ apiKey, supa }) {
     entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false,
     second_instrument_reached: false, could_reduce_sl: false,
     additional_entries: "0",
+    idea: "SWEEP",
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4840,6 +4841,7 @@ function TradingPanel({ apiKey, supa }) {
     { id: "V_SHAPE", label: "V-Shape Recovery", desc: "Candle entry, engulfing, V quality" },
     { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
     { id: "DR", label: "DR", desc: "NQ/ES, session, entry hour, USD profit" },
+    { id: "LUNCH_BOX", label: "Lunch Box", desc: "Same as DR + IDEA (Sweep / 50% Range), no TP" },
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
@@ -4943,7 +4945,7 @@ function TradingPanel({ apiKey, supa }) {
       });
 
       // For DR strategy use DR-specific prompts (different for before/after)
-      const isDR = stratType === "DR";
+      const isDR = stratType === "DR" || stratType === "LUNCH_BOX";
 
       // Count trades in current strategy on a given date+instrument to suggest trade_number
       const countTradesOnDate = (date, instrument) => {
@@ -5098,7 +5100,7 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
-    } : stratType === "DR" ? {
+    } : (stratType === "DR" || stratType === "LUNCH_BOX") ? {
       instrument: tf.instrument || "NQ",
       session: tf.session || "NY",
       entry_time: tf.entry_time || "10:00",
@@ -5113,6 +5115,7 @@ Rules:
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
+      idea: tf.idea || "SWEEP",
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5189,6 +5192,7 @@ Rules:
       entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false,
       second_instrument_reached: sd.second_instrument_reached || false, could_reduce_sl: sd.could_reduce_sl || false,
       additional_entries: sd.additional_entries || "0",
+      idea: sd.idea || "SWEEP",
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5197,7 +5201,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", idea: "SWEEP" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5210,7 +5214,7 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
-    } : stratType === "DR" ? {
+    } : (stratType === "DR" || stratType === "LUNCH_BOX") ? {
       instrument: tf.instrument || "NQ",
       session: tf.session || "NY",
       entry_time: tf.entry_time || "10:00",
@@ -5225,6 +5229,7 @@ Rules:
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
+      idea: tf.idea || "SWEEP",
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5245,7 +5250,9 @@ Rules:
   const filteredTrades = activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
   const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
   // Resolve strategy type with fallback to name (handles legacy rows where type is null)
-  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
+  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
+  // DR-family helper: DR and LUNCH_BOX share most fields
+  const isDRLike = stratType === "DR" || stratType === "LUNCH_BOX";
 
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
@@ -5437,7 +5444,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
-            ...(stratType === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
+            ...(isDRLike ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -5479,7 +5486,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <Heading icon="✎" right={isModal ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
-              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || stratType === "DR") ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || isDRLike) ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5660,7 +5667,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
               </>}
 
-              {stratType === "DR" && <>
+              {isDRLike && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>DR Strategy Fields</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
@@ -5715,11 +5722,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* DR: TP levels reached + Highs/Lows */}
+              {/* DR: TP levels reached (DR only) + Highs/Lows (both) */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                <div style={{ ...label, marginBottom: 8 }}>Take Profit — które poziomy osiągnięte?</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
-                  {[
+                <div style={{ ...label, marginBottom: 8 }}>{stratType === "LUNCH_BOX" ? "Highs/Lows" : "Take Profit — które poziomy osiągnięte?"}</div>
+                <div style={{ display: "grid", gridTemplateColumns: stratType === "LUNCH_BOX" ? "1fr" : "1fr 1fr 1fr 1fr", gap: 10 }}>
+                  {stratType !== "LUNCH_BOX" && [
                     { id: "tp_01", label: "0.1 R" },
                     { id: "tp_02", label: "0.2 R" },
                     { id: "tp_03", label: "0.3 R" },
@@ -5733,7 +5740,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     </div>
                   ))}
                   <div>
-                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Highs/Lows</div>
+                    {stratType !== "LUNCH_BOX" && <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Highs/Lows</div>}
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => setTf(p => ({...p, highs_lows: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.highs_lows ? `${T.green}20` : T.bg2, color: tf.highs_lows ? T.green : T.textSoft, fontWeight: tf.highs_lows ? 700 : 400, borderColor: tf.highs_lows ? T.green : T.border }}>TAK</button>
                       <button onClick={() => setTf(p => ({...p, highs_lows: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.highs_lows ? `${T.red}20` : T.bg2, color: !tf.highs_lows ? T.red : T.textSoft, fontWeight: !tf.highs_lows ? 700 : 400, borderColor: !tf.highs_lows ? T.red : T.border }}>NIE</button>
@@ -5762,6 +5769,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                 </div>
               </div>
+
+              {/* Lunch Box: IDEA */}
+              {stratType === "LUNCH_BOX" && (
+                <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  <div style={{ ...label, marginBottom: 8 }}>IDEA</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, idea: "SWEEP"}))} style={{ ...sel, flex: 1, padding: "8px 6px", background: tf.idea === "SWEEP" ? `${T.cyan}20` : T.bg2, color: tf.idea === "SWEEP" ? T.cyan : T.textSoft, fontWeight: tf.idea === "SWEEP" ? 700 : 400, borderColor: tf.idea === "SWEEP" ? T.cyan : T.border }}>Sweep</button>
+                    <button onClick={() => setTf(p => ({...p, idea: "RANGE_50"}))} style={{ ...sel, flex: 1, padding: "8px 6px", background: tf.idea === "RANGE_50" ? `${T.purple}20` : T.bg2, color: tf.idea === "RANGE_50" ? T.purple : T.textSoft, fontWeight: tf.idea === "RANGE_50" ? 700 : 400, borderColor: tf.idea === "RANGE_50" ? T.purple : T.border }}>50% Range</button>
+                  </div>
+                </div>
+              )}
 
               {/* DR: Confluence checkboxes */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
@@ -5912,7 +5930,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               { id: "date_asc", label: "📅 Oldest" },
               { id: "result_win", label: "✓ WIN first" },
               { id: "result_loss", label: "✕ LOSS first" },
-              ...(stratType === "DR" ? [
+              ...(isDRLike ? [
                 { id: "trade_1", label: "1st trade" },
                 { id: "trade_2", label: "2nd trade" },
                 { id: "trade_3", label: "3rd trade" },
@@ -5979,14 +5997,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>Świeczka: <strong>{sd.entry_candle || "?"}</strong></span>
                         <span>Engulfing: <strong style={{ color: sd.has_engulfing ? T.green : T.red }}>{sd.has_engulfing ? "TAK" : "NIE"}</strong></span>
                         <span>V: <strong style={{ color: sd.v_quality === "clear" ? T.green : T.amber }}>{sd.v_quality === "clear" ? "wyraźny" : "rozjechany"}</strong></span>
-                      </> : st === "DR" ? <>
+                      </> : (st === "DR" || st === "LUNCH_BOX") ? <>
                         <span>{sd.instrument || "NQ"}</span>
                         <span>{sd.session || "NY"}</span>
                         <span>{sd.entry_time || ""}</span>
                         <span>Trade #{sd.trade_number || 1}</span>
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
                         {sd.trade_date && <span>{sd.trade_date}</span>}
-                        {(sd.tp_01 || sd.tp_02 || sd.tp_03) && (
+                        {st === "LUNCH_BOX" && sd.idea && <span>Idea: <strong style={{ color: sd.idea === "SWEEP" ? T.cyan : T.purple }}>{sd.idea === "SWEEP" ? "Sweep" : "50% Range"}</strong></span>}
+                        {st === "DR" && (sd.tp_01 || sd.tp_02 || sd.tp_03) && (
                           <span>TP:
                             <strong style={{ color: sd.tp_01 ? T.green : T.textDim, marginLeft: 4 }}>0.1{sd.tp_01 ? "✓" : "✗"}</strong>
                             <strong style={{ color: sd.tp_02 ? T.green : T.textDim, marginLeft: 4 }}>0.2{sd.tp_02 ? "✓" : "✗"}</strong>
@@ -6021,7 +6040,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       {/* ═══ STATS TAB ═══ */}
       {subTab === "stats" && activeStrategy && (() => {
         // For DR strategy, filter by instrument toggle (ALL = no filter)
-        const isDR = stratType === "DR";
+        const isDR = stratType === "DR" || stratType === "LUNCH_BOX";
         const drFilteredTrades = isDR ? filteredTrades.filter(t => {
           if (drInstrument === "ALL") return true;
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -6327,8 +6346,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
-          {/* DR: TP Levels Reached */}
-          {isDR && (
+          {/* DR: TP Levels Reached (DR only, not LUNCH_BOX) */}
+          {isDR && stratType === "DR" && (
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="🎯">TP Levels Reached</Heading>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -6349,6 +6368,40 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <div style={{ fontSize: 26, fontWeight: 800, color: total > 0 ? T.green : T.textDim }}>{reached}</div>
                       <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>z {total} trade{total !== 1 ? "s" : ""}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: T.green, marginTop: 6 }}>{pct}% osiągnięte</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Lunch Box: IDEA Performance */}
+          {stratType === "LUNCH_BOX" && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="💡">IDEA Performance</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { id: "SWEEP", label: "Sweep", color: T.cyan },
+                  { id: "RANGE_50", label: "50% Range", color: T.purple },
+                ].map(idea => {
+                  const ideaTrades = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return sd?.idea === idea.id;
+                  });
+                  const iW = ideaTrades.filter(t => t.result === "WIN").length;
+                  const iL = ideaTrades.filter(t => t.result === "LOSS").length;
+                  const iBE = ideaTrades.filter(t => t.result === "BE").length;
+                  const iDec = iW + iL;
+                  const iTotal = ideaTrades.length;
+                  const iWR = iDec > 0 ? ((iW / iDec) * 100).toFixed(0) : "-";
+                  const iProfit = ideaTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+                  const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  return (
+                    <div key={idea.id} style={{ textAlign: "center", padding: 14, background: iTotal > 0 ? `${parseFloat(iWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: idea.color, marginBottom: 4 }}>{idea.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: iTotal > 0 ? (parseFloat(iWR) >= 50 ? T.green : T.red) : T.textDim }}>{iWR}{iTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{iW}W / {iL}L{iBE > 0 ? ` / ${iBE}BE` : ""} · {iTotal} trades</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: iProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD(iProfit)}</div>
                     </div>
                   );
                 })}
@@ -6536,7 +6589,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ PnL CALENDAR TAB (DR only) ═══ */}
-      {subTab === "calendar" && stratType === "DR" && (() => {
+      {subTab === "calendar" && isDRLike && (() => {
         const { year, month } = calMonth;
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
@@ -6914,7 +6967,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       })()}
 
       {/* ═══ SLIDER TAB (DR only) ═══ */}
-      {subTab === "slider" && stratType === "DR" && (() => {
+      {subTab === "slider" && isDRLike && (() => {
         // Filter trades: only DR + has at least one screenshot (before or after)
         const sliderTrades = filteredTrades.filter(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
