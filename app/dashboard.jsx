@@ -4806,6 +4806,16 @@ function TradingPanel({ apiKey, supa }) {
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [drInstrument, setDrInstrument] = useState("NQ");
   const [dayPickerDate, setDayPickerDate] = useState(null);
+  // Slider state
+  const [sliderViewMode, setSliderViewMode] = useState("single"); // "single" | "grid"
+  const [sliderIndex, setSliderIndex] = useState(0);
+  const [sliderFilters, setSliderFilters] = useState({
+    direction: "ALL",     // ALL | LONG | SHORT | NO_TRADE
+    instrument: "ALL",    // ALL | NQ | ES
+    entry_type: "ALL",    // ALL | pullback | boundary | pa | bands
+    result: "ALL",        // ALL | WIN | LOSS | BE
+  });
+  const [sliderImageModal, setSliderImageModal] = useState(null); // url or null for full-size view
 
   const R_OPTIONS_20 = Array.from({length: 20}, (_, i) => String(i + 1));
   const R_OPTIONS_10 = Array.from({length: 10}, (_, i) => String(i + 1));
@@ -5427,7 +5437,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
-            ...(stratType === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}] : []),
+            ...(stratType === "DR" ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -6900,6 +6910,230 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
             )}
           </Card>
+        );
+      })()}
+
+      {/* ═══ SLIDER TAB (DR only) ═══ */}
+      {subTab === "slider" && stratType === "DR" && (() => {
+        // Filter trades: only DR + has at least one screenshot (before or after)
+        const sliderTrades = filteredTrades.filter(t => {
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          if (!t.screenshot_before && !t.screenshot_after) return false;
+          if (sliderFilters.direction !== "ALL" && t.direction !== sliderFilters.direction) return false;
+          if (sliderFilters.instrument !== "ALL" && sd?.instrument !== sliderFilters.instrument) return false;
+          if (sliderFilters.result !== "ALL" && t.result !== sliderFilters.result) return false;
+          if (sliderFilters.entry_type !== "ALL") {
+            const key = `entry_${sliderFilters.entry_type}`;
+            if (!sd?.[key]) return false;
+          }
+          return true;
+        }).sort((a, b) => {
+          // Sort chronologically (newest first)
+          let sda = a.strategy_data; try { if (typeof sda === "string") sda = JSON.parse(sda); } catch { sda = {}; }
+          let sdb = b.strategy_data; try { if (typeof sdb === "string") sdb = JSON.parse(sdb); } catch { sdb = {}; }
+          const ka = `${sda?.trade_date || ""} ${sda?.entry_time || ""}`;
+          const kb = `${sdb?.trade_date || ""} ${sdb?.entry_time || ""}`;
+          return kb.localeCompare(ka);
+        });
+
+        // Helper to render filter button
+        const FilterBtn = ({ groupKey, value, label, activeColor }) => {
+          const active = sliderFilters[groupKey] === value;
+          return (
+            <button onClick={() => { setSliderFilters(p => ({...p, [groupKey]: value})); setSliderIndex(0); }} style={{
+              ...sel, padding: "4px 10px", fontSize: 10,
+              background: active ? `${activeColor || T.cyan}20` : T.bg2,
+              color: active ? (activeColor || T.cyan) : T.textSoft,
+              fontWeight: active ? 700 : 400,
+              borderColor: active ? (activeColor || T.cyan) : T.border,
+            }}>{label}</button>
+          );
+        };
+
+        const currentTrade = sliderTrades[sliderIndex];
+        const getSd = (t) => { let sd = t?.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd || {}; };
+
+        return (
+          <div>
+            {/* Filters */}
+            <Card style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Direction</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="direction" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="direction" value="LONG" label="LONG ▲" activeColor={T.green} />
+                    <FilterBtn groupKey="direction" value="SHORT" label="SHORT ▼" activeColor={T.red} />
+                    <FilterBtn groupKey="direction" value="NO_TRADE" label="NO TRADE" activeColor={T.textDim} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Instrument</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="instrument" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="instrument" value="NQ" label="NQ" />
+                    <FilterBtn groupKey="instrument" value="ES" label="ES" activeColor={T.purple} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Typ wejścia</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="entry_type" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="entry_type" value="pullback" label="Pullback" />
+                    <FilterBtn groupKey="entry_type" value="boundary" label="Granica" />
+                    <FilterBtn groupKey="entry_type" value="pa" label="PA" />
+                    <FilterBtn groupKey="entry_type" value="bands" label="Wstęgi" />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Result</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="result" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="result" value="WIN" label="WIN" activeColor={T.green} />
+                    <FilterBtn groupKey="result" value="LOSS" label="LOSS" activeColor={T.red} />
+                    <FilterBtn groupKey="result" value="BE" label="BE" activeColor={T.amber} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 11, color: T.textSoft }}>
+                  <strong style={{ color: T.text }}>{sliderTrades.length}</strong> trade{sliderTrades.length !== 1 ? "s" : ""} matching filters
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => setSliderViewMode("single")} style={{
+                    ...sel, padding: "6px 14px", fontSize: 11,
+                    background: sliderViewMode === "single" ? `${T.cyan}20` : T.bg2,
+                    color: sliderViewMode === "single" ? T.cyan : T.textSoft,
+                    fontWeight: sliderViewMode === "single" ? 700 : 400,
+                    borderColor: sliderViewMode === "single" ? T.cyan : T.border,
+                  }}>🖼️ Single</button>
+                  <button onClick={() => setSliderViewMode("grid")} style={{
+                    ...sel, padding: "6px 14px", fontSize: 11,
+                    background: sliderViewMode === "grid" ? `${T.cyan}20` : T.bg2,
+                    color: sliderViewMode === "grid" ? T.cyan : T.textSoft,
+                    fontWeight: sliderViewMode === "grid" ? 700 : 400,
+                    borderColor: sliderViewMode === "grid" ? T.cyan : T.border,
+                  }}>⊞ Grid (6)</button>
+                </div>
+              </div>
+            </Card>
+
+            {sliderTrades.length === 0 ? (
+              <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>No trades with screenshots matching the selected filters.</div></Card>
+            ) : sliderViewMode === "single" ? (
+              /* SINGLE VIEW — large screenshot + nav buttons */
+              <Card>
+                {(() => {
+                  const t = currentTrade;
+                  const sd = getSd(t);
+                  return (
+                    <>
+                      {/* Header with nav + meta */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <Btn small outline disabled={sliderIndex === 0} onClick={() => setSliderIndex(i => Math.max(0, i - 1))}>‹ Prev</Btn>
+                          <div style={{ fontSize: 11, color: T.textDim, padding: "0 8px" }}>{sliderIndex + 1} / {sliderTrades.length}</div>
+                          <Btn small outline disabled={sliderIndex >= sliderTrades.length - 1} onClick={() => setSliderIndex(i => Math.min(sliderTrades.length - 1, i + 1))}>Next ›</Btn>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <Badge color={t.direction === "SHORT" ? T.red : t.direction === "NO_TRADE" ? T.textDim : T.green}>{t.direction === "NO_TRADE" ? "NO TRADE" : (t.direction || "LONG")}</Badge>
+                          <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
+                          <Badge color={sd.instrument === "ES" ? T.purple : T.cyan}>{sd.instrument || "NQ"}</Badge>
+                          <span style={{ fontSize: 10, color: T.textSoft }}>{sd.trade_date} {sd.entry_time}</span>
+                          <Btn small onClick={() => { startEdit(t); }} style={{ background: `${T.amber}20`, color: T.amber, border: `1px solid ${T.amber}60` }}>✎ Edit</Btn>
+                        </div>
+                      </div>
+
+                      {/* Big screenshot */}
+                      <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", minHeight: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {t.screenshot_before ? (
+                          <img src={t.screenshot_before} alt="Before trade" style={{ width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain", cursor: "zoom-in" }} onClick={() => setSliderImageModal(t.screenshot_before)} />
+                        ) : t.screenshot_after ? (
+                          <img src={t.screenshot_after} alt="After trade" style={{ width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain", cursor: "zoom-in" }} onClick={() => setSliderImageModal(t.screenshot_after)} />
+                        ) : (
+                          <div style={{ color: T.textDim, padding: 40 }}>No screenshot</div>
+                        )}
+                      </div>
+
+                      {/* Meta info below */}
+                      <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap", fontSize: 11, color: T.textSoft }}>
+                        <span>Trade #{sd.trade_number || 1}</span>
+                        <span>{sd.session || "NY"}</span>
+                        {sd.profit_usd && <span style={{ color: parseFloat(sd.profit_usd) > 0 ? T.green : parseFloat(sd.profit_usd) < 0 ? T.red : T.textDim, fontWeight: 700 }}>${parseFloat(sd.profit_usd).toFixed(2)}</span>}
+                        {sd.account_type && <span>{sd.account_type}{sd.account_passed ? " ✓" : sd.account_burned ? " ✗" : ""}</span>}
+                        {[sd.entry_pullback && "Pullback", sd.entry_boundary && "Granica", sd.entry_pa && "PA", sd.entry_bands && "Wstęgi"].filter(Boolean).length > 0 && (
+                          <span>Entry: {[sd.entry_pullback && "Pullback", sd.entry_boundary && "Granica", sd.entry_pa && "PA", sd.entry_bands && "Wstęgi"].filter(Boolean).join(", ")}</span>
+                        )}
+                      </div>
+                      {t.description && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: T.textSoft, fontStyle: "italic", padding: 8, background: T.bg2, borderRadius: 6 }}>{t.description}</div>
+                      )}
+                    </>
+                  );
+                })()}
+              </Card>
+            ) : (
+              /* GRID VIEW — 6 screenshots per row */
+              <Card>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {sliderTrades.map((t, idx) => {
+                    const sd = getSd(t);
+                    const img = t.screenshot_before || t.screenshot_after;
+                    return (
+                      <div key={t.id} style={{
+                        border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden",
+                        background: T.bg2, transition: "all .15s"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = T.cyan}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = T.border}
+                      >
+                        {/* Image */}
+                        <div onClick={() => img && setSliderImageModal(img)} style={{ background: "#000", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center", cursor: img ? "zoom-in" : "default", overflow: "hidden" }}>
+                          {img ? (
+                            <img src={img} alt={`Trade ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <span style={{ color: T.textDim, fontSize: 10 }}>No screenshot</span>
+                          )}
+                        </div>
+                        {/* Meta */}
+                        <div style={{ padding: 8 }}>
+                          <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                            <Badge color={t.direction === "SHORT" ? T.red : t.direction === "NO_TRADE" ? T.textDim : T.green}>{t.direction === "NO_TRADE" ? "NT" : (t.direction === "LONG" ? "▲" : t.direction === "SHORT" ? "▼" : "?")}</Badge>
+                            <Badge color={t.result === "WIN" ? T.green : t.result === "BE" ? T.amber : T.red}>{t.result}</Badge>
+                            <Badge color={sd.instrument === "ES" ? T.purple : T.cyan}>{sd.instrument || "NQ"}</Badge>
+                            {sd.profit_usd !== undefined && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: parseFloat(sd.profit_usd) > 0 ? T.green : parseFloat(sd.profit_usd) < 0 ? T.red : T.textDim, marginLeft: "auto" }}>
+                                ${parseFloat(sd.profit_usd).toFixed(0)}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 9, color: T.textDim, marginBottom: 6 }}>
+                            {sd.trade_date} · {sd.entry_time} · #{sd.trade_number || 1}
+                          </div>
+                          <Btn small outline onClick={() => startEdit(t)} style={{ width: "100%", fontSize: 10, padding: "4px 6px" }}>✎ Edit</Btn>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Full-size image modal */}
+            {sliderImageModal && (
+              <div onClick={() => setSliderImageModal(null)} style={{
+                position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 10000,
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "zoom-out"
+              }}>
+                <img src={sliderImageModal} alt="Full size" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                <button onClick={(e) => { e.stopPropagation(); setSliderImageModal(null); }} style={{
+                  position: "fixed", top: 20, right: 20, padding: "8px 16px",
+                  background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)",
+                  borderRadius: 6, cursor: "pointer", fontSize: 14
+                }}>✕ Close</button>
+              </div>
+            )}
+          </div>
         );
       })()}
     </div>
