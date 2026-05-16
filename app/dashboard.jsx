@@ -4795,7 +4795,7 @@ function TradingPanel({ apiKey, supa }) {
     account_type: "EVAL", account_passed: false, account_burned: false,
     smt: false, highs_lows: false,
     req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true,
-    entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false,
+    entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false,
     second_instrument_reached: false, could_reduce_sl: false,
     additional_entries: "0",
     bands_overlap: false,
@@ -5124,7 +5124,7 @@ Rules:
       smt: tf.smt || false, highs_lows: tf.highs_lows || false,
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
-      entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
+      entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false, entry_vwap: tf.entry_vwap || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
@@ -5202,7 +5202,7 @@ Rules:
       smt: sd.smt || false, highs_lows: sd.highs_lows || false,
       req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false,
       req_pa: sd.req_pa !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
-      entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false,
+      entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false, entry_vwap: sd.entry_vwap || false,
       second_instrument_reached: sd.second_instrument_reached || false, could_reduce_sl: sd.could_reduce_sl || false,
       additional_entries: sd.additional_entries || "0",
       bands_overlap: sd.bands_overlap || false,
@@ -5215,7 +5215,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5240,7 +5240,7 @@ Rules:
       smt: tf.smt || false, highs_lows: tf.highs_lows || false,
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
-      entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
+      entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false, entry_vwap: tf.entry_vwap || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
@@ -5839,12 +5839,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <div style={{ ...label, marginBottom: 8 }}>Typ wejścia
                   <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8 }}>
                   {[
                     { id: "entry_pullback", label: "Pullback" },
                     { id: "entry_boundary", label: "Przy granicy" },
                     { id: "entry_pa",       label: "PA" },
                     { id: "entry_bands",    label: "Wstęgi" },
+                    { id: "entry_vwap",     label: "VWAP" },
                   ].map(e => (
                     <button key={e.id} onClick={() => setTf(p => ({...p, [e.id]: !p[e.id]}))} style={{
                       ...sel, padding: "8px 6px", fontSize: 11,
@@ -6556,6 +6557,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <SimBtn groupKey="entry_type" value="boundary" label="Granica" />
                       <SimBtn groupKey="entry_type" value="pa" label="PA" />
                       <SimBtn groupKey="entry_type" value="bands" label="Wstęgi" />
+                      <SimBtn groupKey="entry_type" value="vwap" label="VWAP" />
                     </div>
                   </div>
                   <div>
@@ -7266,6 +7268,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <FilterBtn groupKey="entry_type" value="boundary" label="Granica" />
                     <FilterBtn groupKey="entry_type" value="pa" label="PA" />
                     <FilterBtn groupKey="entry_type" value="bands" label="Wstęgi" />
+                    <FilterBtn groupKey="entry_type" value="vwap" label="VWAP" />
                   </div>
                 </div>
                 <div>
