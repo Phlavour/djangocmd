@@ -4817,6 +4817,16 @@ function TradingPanel({ apiKey, supa }) {
     entry_type: "ALL",     // ALL | pullback | boundary | pa | bands
     result: "ALL",         // ALL | WIN | LOSS | BE
     bands_overlap: "ALL",  // ALL | YES | NO
+    weekday: "ALL",        // ALL | 1 | 2 | 3 | 4 | 5 (Mon-Fri)
+  });
+  const [simFilters, setSimFilters] = useState({
+    direction: "ALL",
+    instrument: "ALL",
+    entry_type: "ALL",
+    result: "ALL",
+    bands_overlap: "ALL",
+    weekday: "ALL",
+    trade_number: "ALL",
   });
   const [sliderImageModal, setSliderImageModal] = useState(null); // url or null for full-size view
 
@@ -6458,6 +6468,168 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
+          {/* DR/Lunch Box: Symulacja */}
+          {isDR && (() => {
+            // Apply all simFilters to drFilteredTrades
+            const simTrades = drFilteredTrades.filter(t => {
+              let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+              if (simFilters.direction !== "ALL" && t.direction !== simFilters.direction) return false;
+              if (simFilters.instrument !== "ALL" && sd?.instrument !== simFilters.instrument) return false;
+              if (simFilters.result !== "ALL" && t.result !== simFilters.result) return false;
+              if (simFilters.entry_type !== "ALL") {
+                const key = `entry_${simFilters.entry_type}`;
+                if (!sd?.[key]) return false;
+              }
+              if (simFilters.bands_overlap !== "ALL") {
+                const hasOverlap = sd?.bands_overlap === true;
+                if (simFilters.bands_overlap === "YES" && !hasOverlap) return false;
+                if (simFilters.bands_overlap === "NO" && hasOverlap) return false;
+              }
+              if (simFilters.weekday !== "ALL" && sd?.trade_date) {
+                const dayIdx = new Date(sd.trade_date + "T12:00:00").getDay();
+                if (String(dayIdx) !== simFilters.weekday) return false;
+              }
+              if (simFilters.trade_number !== "ALL" && String(sd?.trade_number) !== simFilters.trade_number) return false;
+              return true;
+            });
+
+            const sW = simTrades.filter(t => t.result === "WIN").length;
+            const sL = simTrades.filter(t => t.result === "LOSS").length;
+            const sBE = simTrades.filter(t => t.result === "BE").length;
+            const sTotal = simTrades.length;
+            const sDec = sW + sL;
+            const sWR = sDec > 0 ? ((sW / sDec) * 100).toFixed(1) : null;
+            const sLR = sDec > 0 ? ((sL / sDec) * 100).toFixed(1) : null;
+            const sProfit = simTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+            const totalAll = drFilteredTrades.length;
+            const pctOfAll = totalAll > 0 ? ((sTotal / totalAll) * 100).toFixed(1) : "0";
+            const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            // Filter button helper for sim
+            const SimBtn = ({ groupKey, value, label, activeColor }) => {
+              const active = simFilters[groupKey] === value;
+              return (
+                <button onClick={() => setSimFilters(p => ({...p, [groupKey]: value}))} style={{
+                  ...sel, padding: "4px 10px", fontSize: 10,
+                  background: active ? `${activeColor || T.cyan}20` : T.bg2,
+                  color: active ? (activeColor || T.cyan) : T.textSoft,
+                  fontWeight: active ? 700 : 400,
+                  borderColor: active ? (activeColor || T.cyan) : T.border,
+                }}>{label}</button>
+              );
+            };
+
+            const resetSim = () => setSimFilters({ direction: "ALL", instrument: "ALL", entry_type: "ALL", result: "ALL", bands_overlap: "ALL", weekday: "ALL", trade_number: "ALL" });
+            const anyActive = Object.values(simFilters).some(v => v !== "ALL");
+
+            return (
+              <Card style={{ marginBottom: 16, border: `2px solid ${T.cyan}40`, background: `${T.cyan}05` }}>
+                <Heading icon="🎯" right={anyActive ? <Btn small outline onClick={resetSim} style={{ fontSize: 10 }}>↺ Reset</Btn> : null}>
+                  Symulacja
+                  <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(filtruj wypadkowe i sprawdź WR / Loss%)</span>
+                </Heading>
+
+                {/* Filters */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 14, padding: 10, background: T.bg2, borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Direction</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <SimBtn groupKey="direction" value="ALL" label="ALL" />
+                      <SimBtn groupKey="direction" value="LONG" label="LONG ▲" activeColor={T.green} />
+                      <SimBtn groupKey="direction" value="SHORT" label="SHORT ▼" activeColor={T.red} />
+                      <SimBtn groupKey="direction" value="NO_TRADE" label="NO TRADE" activeColor={T.textDim} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Instrument</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <SimBtn groupKey="instrument" value="ALL" label="ALL" />
+                      <SimBtn groupKey="instrument" value="NQ" label="NQ" />
+                      <SimBtn groupKey="instrument" value="ES" label="ES" activeColor={T.purple} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Typ wejścia</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <SimBtn groupKey="entry_type" value="ALL" label="ALL" />
+                      <SimBtn groupKey="entry_type" value="pullback" label="Pullback" />
+                      <SimBtn groupKey="entry_type" value="boundary" label="Granica" />
+                      <SimBtn groupKey="entry_type" value="pa" label="PA" />
+                      <SimBtn groupKey="entry_type" value="bands" label="Wstęgi" />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Result</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <SimBtn groupKey="result" value="ALL" label="ALL" />
+                      <SimBtn groupKey="result" value="WIN" label="WIN" activeColor={T.green} />
+                      <SimBtn groupKey="result" value="LOSS" label="LOSS" activeColor={T.red} />
+                      <SimBtn groupKey="result" value="BE" label="BE" activeColor={T.amber} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Wstęgi nachodzą?</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <SimBtn groupKey="bands_overlap" value="ALL" label="ALL" />
+                      <SimBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
+                      <SimBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Dzień tygodnia</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <SimBtn groupKey="weekday" value="ALL" label="ALL" />
+                      <SimBtn groupKey="weekday" value="1" label="Pn" />
+                      <SimBtn groupKey="weekday" value="2" label="Wt" />
+                      <SimBtn groupKey="weekday" value="3" label="Śr" />
+                      <SimBtn groupKey="weekday" value="4" label="Cz" />
+                      <SimBtn groupKey="weekday" value="5" label="Pt" />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Trade #</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <SimBtn groupKey="trade_number" value="ALL" label="ALL" />
+                      <SimBtn groupKey="trade_number" value="1" label="1." activeColor={T.green} />
+                      <SimBtn groupKey="trade_number" value="2" label="2." activeColor={T.amber} />
+                      <SimBtn groupKey="trade_number" value="3" label="3." activeColor={T.purple} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Results */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+                  <div style={{ textAlign: "center", padding: 14, background: sTotal > 0 ? `${T.green}10` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.green, marginBottom: 4 }}>Win Rate</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: sWR !== null ? T.green : T.textDim }}>{sWR !== null ? `${sWR}%` : "—"}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>{sW} wygranych z {sDec} rozstrzygniętych</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: 14, background: sTotal > 0 ? `${T.red}10` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.red, marginBottom: 4 }}>Loss Rate</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: sLR !== null ? T.red : T.textDim }}>{sLR !== null ? `${sLR}%` : "—"}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>{sL} przegranych z {sDec}</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: 14, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>Profit</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: sProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD(sProfit)}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>{sBE > 0 ? `${sBE} BE` : "łącznie"}</div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: 14, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.textSoft, marginBottom: 4 }}>Próbka</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: T.text }}>{sTotal}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>{pctOfAll}% wszystkich ({totalAll})</div>
+                  </div>
+                </div>
+
+                {sTotal === 0 && (
+                  <div style={{ textAlign: "center", padding: 20, marginTop: 10, color: T.textDim, fontSize: 11, fontStyle: "italic" }}>
+                    Brak trade'ów spełniających wybrane kryteria
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
+
           {/* HTS Trade Type stats — only show for HTS strategy */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
@@ -7033,6 +7205,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             if (sliderFilters.bands_overlap === "YES" && !hasOverlap) return false;
             if (sliderFilters.bands_overlap === "NO" && hasOverlap) return false;
           }
+          if (sliderFilters.weekday !== "ALL" && sd?.trade_date) {
+            const dayIdx = new Date(sd.trade_date + "T12:00:00").getDay();
+            if (String(dayIdx) !== sliderFilters.weekday) return false;
+          }
           return true;
         }).sort((a, b) => {
           // Sort chronologically (newest first)
@@ -7107,6 +7283,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <FilterBtn groupKey="bands_overlap" value="ALL" label="ALL" />
                     <FilterBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
                     <FilterBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Dzień tygodnia</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="weekday" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="weekday" value="1" label="Pn" />
+                    <FilterBtn groupKey="weekday" value="2" label="Wt" />
+                    <FilterBtn groupKey="weekday" value="3" label="Śr" />
+                    <FilterBtn groupKey="weekday" value="4" label="Cz" />
+                    <FilterBtn groupKey="weekday" value="5" label="Pt" />
                   </div>
                 </div>
               </div>
