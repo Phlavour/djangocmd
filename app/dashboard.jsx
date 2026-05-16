@@ -6420,6 +6420,43 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
           )}
 
+          {/* DR/Lunch Box: Bands Overlap Performance */}
+          {isDR && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="〰️">Bands Overlap Performance
+                <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(czy wstęgi się na siebie nachodzą)</span>
+              </Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { val: false, label: "Wstęgi NIE nachodzą", color: T.green, hint: "dobre warunki" },
+                  { val: true,  label: "Wstęgi NACHODZĄ",     color: T.amber, hint: "utrudnione warunki" },
+                ].map(b => {
+                  const bTrades = drFilteredTrades.filter(t => {
+                    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                    return (sd?.bands_overlap === true) === b.val;
+                  });
+                  const bW = bTrades.filter(t => t.result === "WIN").length;
+                  const bL = bTrades.filter(t => t.result === "LOSS").length;
+                  const bBE = bTrades.filter(t => t.result === "BE").length;
+                  const bDec = bW + bL;
+                  const bTotal = bTrades.length;
+                  const bWR = bDec > 0 ? ((bW / bDec) * 100).toFixed(0) : "-";
+                  const bProfit = bTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+                  const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  return (
+                    <div key={String(b.val)} style={{ textAlign: "center", padding: 14, background: bTotal > 0 ? `${parseFloat(bWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: b.color, marginBottom: 2 }}>{b.label}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginBottom: 4, fontStyle: "italic" }}>{b.hint}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: bTotal > 0 ? (parseFloat(bWR) >= 50 ? T.green : T.red) : T.textDim }}>{bWR}{bTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{bW}W / {bL}L{bBE > 0 ? ` / ${bBE}BE` : ""} · {bTotal} trades</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: bProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD(bProfit)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
           {/* HTS Trade Type stats — only show for HTS strategy */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
           <Card style={{ marginBottom: 16 }}>
