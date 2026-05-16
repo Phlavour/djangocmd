@@ -4812,10 +4812,11 @@ function TradingPanel({ apiKey, supa }) {
   const [sliderViewMode, setSliderViewMode] = useState("single"); // "single" | "grid"
   const [sliderIndex, setSliderIndex] = useState(0);
   const [sliderFilters, setSliderFilters] = useState({
-    direction: "ALL",     // ALL | LONG | SHORT | NO_TRADE
-    instrument: "ALL",    // ALL | NQ | ES
-    entry_type: "ALL",    // ALL | pullback | boundary | pa | bands
-    result: "ALL",        // ALL | WIN | LOSS | BE
+    direction: "ALL",      // ALL | LONG | SHORT | NO_TRADE
+    instrument: "ALL",     // ALL | NQ | ES
+    entry_type: "ALL",     // ALL | pullback | boundary | pa | bands
+    result: "ALL",         // ALL | WIN | LOSS | BE
+    bands_overlap: "ALL",  // ALL | YES | NO
   });
   const [sliderImageModal, setSliderImageModal] = useState(null); // url or null for full-size view
 
@@ -7027,6 +7028,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const key = `entry_${sliderFilters.entry_type}`;
             if (!sd?.[key]) return false;
           }
+          if (sliderFilters.bands_overlap !== "ALL") {
+            const hasOverlap = sd?.bands_overlap === true;
+            if (sliderFilters.bands_overlap === "YES" && !hasOverlap) return false;
+            if (sliderFilters.bands_overlap === "NO" && hasOverlap) return false;
+          }
           return true;
         }).sort((a, b) => {
           // Sort chronologically (newest first)
@@ -7093,6 +7099,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <FilterBtn groupKey="result" value="WIN" label="WIN" activeColor={T.green} />
                     <FilterBtn groupKey="result" value="LOSS" label="LOSS" activeColor={T.red} />
                     <FilterBtn groupKey="result" value="BE" label="BE" activeColor={T.amber} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Wstęgi nachodzą?</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <FilterBtn groupKey="bands_overlap" value="ALL" label="ALL" />
+                    <FilterBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
+                    <FilterBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
                   </div>
                 </div>
               </div>
