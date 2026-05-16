@@ -4798,6 +4798,7 @@ function TradingPanel({ apiKey, supa }) {
     entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false,
     second_instrument_reached: false, could_reduce_sl: false,
     additional_entries: "0",
+    bands_overlap: false,
     idea: "SWEEP",
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
@@ -5115,6 +5116,7 @@ Rules:
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
+      bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
     } : {};
     const row = {
@@ -5192,6 +5194,7 @@ Rules:
       entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false,
       second_instrument_reached: sd.second_instrument_reached || false, could_reduce_sl: sd.could_reduce_sl || false,
       additional_entries: sd.additional_entries || "0",
+      bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
@@ -5201,7 +5204,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", idea: "SWEEP" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5229,6 +5232,7 @@ Rules:
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
       additional_entries: tf.additional_entries || "0",
+      bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
     } : {};
     const updates = {
@@ -5873,6 +5877,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         borderColor: tf.additional_entries === n ? T.cyan : T.border,
                       }}>{n}</button>
                     ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, fontWeight: 600 }}>Czy wstęgi się na siebie nachodzą?</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTf(p => ({...p, bands_overlap: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.bands_overlap ? `${T.amber}20` : T.bg2, color: tf.bands_overlap ? T.amber : T.textSoft, fontWeight: tf.bands_overlap ? 700 : 400, borderColor: tf.bands_overlap ? T.amber : T.border }}>TAK</button>
+                    <button onClick={() => setTf(p => ({...p, bands_overlap: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.bands_overlap ? `${T.green}20` : T.bg2, color: !tf.bands_overlap ? T.green : T.textSoft, fontWeight: !tf.bands_overlap ? 700 : 400, borderColor: !tf.bands_overlap ? T.green : T.border }}>NIE</button>
                   </div>
                 </div>
               </div>
