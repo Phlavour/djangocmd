@@ -4800,6 +4800,9 @@ function TradingPanel({ apiKey, supa }) {
     additional_entries: "0",
     bands_overlap: false,
     idea: "SWEEP",
+    // Live Journal fields:
+    lj_emotions_control: true,
+    lj_tactic: "IB", // IB | LUNCH_BOX | NO_TACTIC
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4827,6 +4830,8 @@ function TradingPanel({ apiKey, supa }) {
     bands_overlap: "ALL",
     weekday: "ALL",
     trade_number: "ALL",
+    lj_tactic: "ALL",
+    lj_emotions: "ALL",
   });
   const [sliderImageModal, setSliderImageModal] = useState(null); // url or null for full-size view
 
@@ -4854,6 +4859,7 @@ function TradingPanel({ apiKey, supa }) {
     { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
     { id: "DR", label: "DR", desc: "NQ/ES, session, entry hour, USD profit" },
     { id: "LUNCH_BOX", label: "Lunch Box", desc: "Same as DR + IDEA (Sweep / 50% Range), no TP" },
+    { id: "LIVE_JOURNAL", label: "Live Journal", desc: "Bieżące trade'y — emocje, wymagania, taktyka" },
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
@@ -5112,7 +5118,7 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
-    } : (stratType === "DR" || stratType === "LUNCH_BOX") ? {
+    } : (stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL") ? {
       instrument: tf.instrument || "NQ",
       session: tf.session || "NY",
       entry_time: tf.entry_time || "10:00",
@@ -5129,6 +5135,7 @@ Rules:
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
+      lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5207,6 +5214,7 @@ Rules:
       additional_entries: sd.additional_entries || "0",
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
+      lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5215,7 +5223,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5228,7 +5236,7 @@ Rules:
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
-    } : (stratType === "DR" || stratType === "LUNCH_BOX") ? {
+    } : (stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL") ? {
       instrument: tf.instrument || "NQ",
       session: tf.session || "NY",
       entry_time: tf.entry_time || "10:00",
@@ -5245,6 +5253,7 @@ Rules:
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
+      lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5265,9 +5274,12 @@ Rules:
   const filteredTrades = activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
   const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
   // Resolve strategy type with fallback to name (handles legacy rows where type is null)
-  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
+  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("live") ? "LIVE_JOURNAL" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
   // DR-family helper: DR and LUNCH_BOX share most fields
   const isDRLike = stratType === "DR" || stratType === "LUNCH_BOX";
+  // Calendar/Slider helper: DR, LUNCH_BOX, LIVE_JOURNAL all show calendar + slider
+  const isCalendarStrat = stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL";
+  const isLJ = stratType === "LIVE_JOURNAL";
 
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
@@ -5459,7 +5471,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
-            ...(isDRLike ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
+            ...(isCalendarStrat ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -5678,6 +5690,91 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, v_quality: "clear"}))} style={{ ...sel, flex: 1, background: tf.v_quality === "clear" ? `${T.green}20` : T.bg2, color: tf.v_quality === "clear" ? T.green : T.textSoft, fontWeight: tf.v_quality === "clear" ? 700 : 400, borderColor: tf.v_quality === "clear" ? T.green : T.border }}>Wyraźny</button>
                     <button onClick={() => setTf(p => ({...p, v_quality: "messy"}))} style={{ ...sel, flex: 1, background: tf.v_quality === "messy" ? `${T.amber}20` : T.bg2, color: tf.v_quality === "messy" ? T.amber : T.textSoft, fontWeight: tf.v_quality === "messy" ? 700 : 400, borderColor: tf.v_quality === "messy" ? T.amber : T.border }}>Rozjechany</button>
                   </div>
+                </div>
+              </div>
+              </>}
+
+              {isLJ && <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>Live Journal — Trade</div>
+
+              {/* Row 1: Instrument, Tactic, Entry time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Instrument</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, instrument: "NQ"}))} style={{ ...sel, flex: 1, background: tf.instrument === "NQ" ? `${T.cyan}20` : T.bg2, color: tf.instrument === "NQ" ? T.cyan : T.textSoft, fontWeight: tf.instrument === "NQ" ? 700 : 400, borderColor: tf.instrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+                    <button onClick={() => setTf(p => ({...p, instrument: "ES"}))} style={{ ...sel, flex: 1, background: tf.instrument === "ES" ? `${T.purple}20` : T.bg2, color: tf.instrument === "ES" ? T.purple : T.textSoft, fontWeight: tf.instrument === "ES" ? 700 : 400, borderColor: tf.instrument === "ES" ? T.purple : T.border }}>ES</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Taktyka</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTf(p => ({...p, lj_tactic: "IB"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "IB" ? `${T.green}20` : T.bg2, color: tf.lj_tactic === "IB" ? T.green : T.textSoft, fontWeight: tf.lj_tactic === "IB" ? 700 : 400, borderColor: tf.lj_tactic === "IB" ? T.green : T.border }}>IB</button>
+                    <button onClick={() => setTf(p => ({...p, lj_tactic: "LUNCH_BOX"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "LUNCH_BOX" ? `${T.purple}20` : T.bg2, color: tf.lj_tactic === "LUNCH_BOX" ? T.purple : T.textSoft, fontWeight: tf.lj_tactic === "LUNCH_BOX" ? 700 : 400, borderColor: tf.lj_tactic === "LUNCH_BOX" ? T.purple : T.border }}>Lunch Box</button>
+                    <button onClick={() => setTf(p => ({...p, lj_tactic: "NO_TACTIC"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "NO_TACTIC" ? `${T.textDim}30` : T.bg2, color: tf.lj_tactic === "NO_TACTIC" ? T.text : T.textSoft, fontWeight: tf.lj_tactic === "NO_TACTIC" ? 700 : 400, borderColor: tf.lj_tactic === "NO_TACTIC" ? T.textDim : T.border }}>No Tactic</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Godzina wejścia</div>
+                  <input type="time" value={tf.entry_time} onChange={e => setTf(p => ({...p, entry_time: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              {/* Row 2: Date, Profit/Loss */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Data trade'a</div>
+                  <input type="date" value={tf.trade_date} min="2023-01-01" onChange={e => setTf(p => ({...p, trade_date: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>Zysk / Strata ($)</div>
+                  <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+              </div>
+
+              {/* Meets Requirements + Emotions */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Meets Requirements</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setTf(p => ({...p, meetsRequirements: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.meetsRequirements ? `${T.green}20` : T.bg2, color: tf.meetsRequirements ? T.green : T.textSoft, fontWeight: tf.meetsRequirements ? 700 : 400, borderColor: tf.meetsRequirements ? T.green : T.border }}>TAK</button>
+                      <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NIE</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Emocje pod kontrolą</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setTf(p => ({...p, lj_emotions_control: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_emotions_control ? `${T.green}20` : T.bg2, color: tf.lj_emotions_control ? T.green : T.textSoft, fontWeight: tf.lj_emotions_control ? 700 : 400, borderColor: tf.lj_emotions_control ? T.green : T.border }}>TAK</button>
+                      <button onClick={() => setTf(p => ({...p, lj_emotions_control: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.lj_emotions_control ? `${T.red}20` : T.bg2, color: !tf.lj_emotions_control ? T.red : T.textSoft, fontWeight: !tf.lj_emotions_control ? 700 : 400, borderColor: !tf.lj_emotions_control ? T.red : T.border }}>NIE</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Requirements (6 checkboxes — default TAK) */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>Requirements</span>
+                  <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>(odznacz jeśli element brakuje)</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  {[
+                    { id: "req_vwap",     label: "VWAP" },
+                    { id: "req_bands",    label: "Wstęgi" },
+                    { id: "req_bands_5m", label: "Wstęgi 5m" },
+                    { id: "req_pa",       label: "PA" },
+                    { id: "req_rr",       label: "RR" },
+                    { id: "req_range",    label: "Range" },
+                  ].map(r => (
+                    <div key={r.id}>
+                      <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => setTf(p => ({...p, [r.id]: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] ? `${T.green}20` : T.bg2, color: tf[r.id] ? T.green : T.textSoft, fontWeight: tf[r.id] ? 700 : 400, borderColor: tf[r.id] ? T.green : T.border }}>TAK</button>
+                        <button onClick={() => setTf(p => ({...p, [r.id]: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] === false ? `${T.red}20` : T.bg2, color: tf[r.id] === false ? T.red : T.textSoft, fontWeight: tf[r.id] === false ? 700 : 400, borderColor: tf[r.id] === false ? T.red : T.border }}>NIE</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
               </>}
@@ -5960,6 +6057,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 { id: "no_trade", label: "NO TRADE" },
                 { id: "inst_NQ", label: "NQ" },
                 { id: "inst_ES", label: "ES" },
+              ] : isLJ ? [
+                { id: "inst_NQ", label: "NQ" },
+                { id: "inst_ES", label: "ES" },
+                { id: "tac_IB", label: "Tactic: IB" },
+                { id: "tac_LB", label: "Tactic: Lunch Box" },
+                { id: "tac_NONE", label: "Tactic: None" },
+                { id: "emo_yes", label: "Emocje ✓" },
+                { id: "emo_no", label: "Emocje ✗" },
               ] : []),
             ].map(opt => (
               <button key={opt.id} onClick={() => setSortMode(opt.id)} style={{
@@ -5988,6 +6093,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             else if (sortMode === "no_trade") sorted = sorted.filter(t => t.direction === "NO_TRADE");
             else if (sortMode === "inst_NQ") sorted = sorted.filter(t => getSd(t).instrument === "NQ");
             else if (sortMode === "inst_ES") sorted = sorted.filter(t => getSd(t).instrument === "ES");
+            else if (sortMode === "tac_IB") sorted = sorted.filter(t => getSd(t).lj_tactic === "IB");
+            else if (sortMode === "tac_LB") sorted = sorted.filter(t => getSd(t).lj_tactic === "LUNCH_BOX");
+            else if (sortMode === "tac_NONE") sorted = sorted.filter(t => getSd(t).lj_tactic === "NO_TACTIC");
+            else if (sortMode === "emo_yes") sorted = sorted.filter(t => getSd(t).lj_emotions_control !== false);
+            else if (sortMode === "emo_no")  sorted = sorted.filter(t => getSd(t).lj_emotions_control === false);
 
             return sorted.map(t => {
             let trends = t.trends || {};
@@ -6035,6 +6145,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             <strong style={{ color: sd.tp_03 ? T.green : T.textDim, marginLeft: 4 }}>0.3{sd.tp_03 ? "✓" : "✗"}</strong>
                           </span>
                         )}
+                      </> : st === "LIVE_JOURNAL" ? <>
+                        <span>{sd.instrument || "NQ"}</span>
+                        <span>{sd.entry_time || ""}</span>
+                        <span>Taktyka: <strong style={{ color: sd.lj_tactic === "IB" ? T.green : sd.lj_tactic === "LUNCH_BOX" ? T.purple : T.textDim }}>{sd.lj_tactic === "IB" ? "IB" : sd.lj_tactic === "LUNCH_BOX" ? "Lunch Box" : "No Tactic"}</strong></span>
+                        <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
+                        {sd.trade_date && <span>{sd.trade_date}</span>}
+                        <span>Emocje: <strong style={{ color: sd.lj_emotions_control !== false ? T.green : T.red }}>{sd.lj_emotions_control !== false ? "✓" : "✗"}</strong></span>
                       </> : null;
                     })()}
                     {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
@@ -6062,8 +6179,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
       {/* ═══ STATS TAB ═══ */}
       {subTab === "stats" && activeStrategy && (() => {
-        // For DR strategy, filter by instrument toggle (ALL = no filter)
-        const isDR = stratType === "DR" || stratType === "LUNCH_BOX";
+        // DR-like: DR, LUNCH_BOX, LIVE_JOURNAL (all use NQ/ES instrument toggle + Symulacja)
+        const isDR = stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL";
+        const isDRBacktest = stratType === "DR" || stratType === "LUNCH_BOX"; // backtest-only cards
         const drFilteredTrades = isDR ? filteredTrades.filter(t => {
           if (drInstrument === "ALL") return true;
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -6119,7 +6237,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           })()}
 
           {/* DR: Account Status (EVAL / FUNDED passed / burned) */}
-          {isDR && (() => {
+          {isDRBacktest && (() => {
             // Count UNIQUE accounts (one per date+instrument) instead of per-trade
             const evalP = new Set(), evalB = new Set(), fundP = new Set(), fundB = new Set();
             drFilteredTrades.forEach(t => {
@@ -6250,7 +6368,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           })()}
 
           {/* DR: First vs Second vs Third Trade */}
-          {isDR && (
+          {isDRBacktest && (
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="🔢">Trade by Number (1st / 2nd / 3rd)</Heading>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -6433,7 +6551,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           )}
 
           {/* DR/Lunch Box: Bands Overlap Performance */}
-          {isDR && (
+          {isDRBacktest && (
             <Card style={{ marginBottom: 16 }}>
               <Heading icon="〰️">Bands Overlap Performance
                 <span style={{ fontSize: 9, fontWeight: 500, color: T.textDim, marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(czy wstęgi się na siebie nachodzą)</span>
@@ -6491,6 +6609,12 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 if (String(dayIdx) !== simFilters.weekday) return false;
               }
               if (simFilters.trade_number !== "ALL" && String(sd?.trade_number) !== simFilters.trade_number) return false;
+              if (simFilters.lj_tactic !== undefined && simFilters.lj_tactic !== "ALL" && sd?.lj_tactic !== simFilters.lj_tactic) return false;
+              if (simFilters.lj_emotions !== undefined && simFilters.lj_emotions !== "ALL") {
+                const emo = sd?.lj_emotions_control !== false;
+                if (simFilters.lj_emotions === "YES" && !emo) return false;
+                if (simFilters.lj_emotions === "NO" && emo) return false;
+              }
               return true;
             });
 
@@ -6520,7 +6644,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               );
             };
 
-            const resetSim = () => setSimFilters({ direction: "ALL", instrument: "ALL", entry_type: "ALL", result: "ALL", bands_overlap: "ALL", weekday: "ALL", trade_number: "ALL" });
+            const resetSim = () => setSimFilters({ direction: "ALL", instrument: "ALL", entry_type: "ALL", result: "ALL", bands_overlap: "ALL", weekday: "ALL", trade_number: "ALL", lj_tactic: "ALL", lj_emotions: "ALL" });
             const anyActive = Object.values(simFilters).some(v => v !== "ALL");
 
             return (
@@ -6588,6 +6712,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <SimBtn groupKey="weekday" value="5" label="Pt" />
                     </div>
                   </div>
+                  {!isLJ && (
                   <div>
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Trade #</div>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -6597,6 +6722,28 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <SimBtn groupKey="trade_number" value="3" label="3." activeColor={T.purple} />
                     </div>
                   </div>
+                  )}
+                  {isLJ && (
+                    <div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Taktyka</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <SimBtn groupKey="lj_tactic" value="ALL" label="ALL" />
+                        <SimBtn groupKey="lj_tactic" value="IB" label="IB" activeColor={T.green} />
+                        <SimBtn groupKey="lj_tactic" value="LUNCH_BOX" label="LB" activeColor={T.purple} />
+                        <SimBtn groupKey="lj_tactic" value="NO_TACTIC" label="None" activeColor={T.textDim} />
+                      </div>
+                    </div>
+                  )}
+                  {isLJ && (
+                    <div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Emocje pod kontrolą</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <SimBtn groupKey="lj_emotions" value="ALL" label="ALL" />
+                        <SimBtn groupKey="lj_emotions" value="YES" label="TAK" activeColor={T.green} />
+                        <SimBtn groupKey="lj_emotions" value="NO" label="NIE" activeColor={T.red} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Results */}
@@ -6631,6 +6778,70 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </Card>
             );
           })()}
+
+          {/* Live Journal: Tactic Performance */}
+          {isLJ && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="🎯">Tactic Performance</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                {[
+                  { id: "IB", label: "IB", color: T.green },
+                  { id: "LUNCH_BOX", label: "Lunch Box", color: T.purple },
+                  { id: "NO_TACTIC", label: "No Tactic", color: T.textDim },
+                ].map(tac => {
+                  const tTrades = drFilteredTrades.filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd?.lj_tactic === tac.id; });
+                  const tW = tTrades.filter(t => t.result === "WIN").length;
+                  const tL = tTrades.filter(t => t.result === "LOSS").length;
+                  const tBE = tTrades.filter(t => t.result === "BE").length;
+                  const tDec = tW + tL;
+                  const tTotal = tTrades.length;
+                  const tWR = tDec > 0 ? ((tW / tDec) * 100).toFixed(0) : "-";
+                  const tProfit = tTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+                  const fmtUSD2 = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  return (
+                    <div key={tac.id} style={{ textAlign: "center", padding: 14, background: tTotal > 0 ? `${parseFloat(tWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: tac.color, marginBottom: 4 }}>{tac.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: tTotal > 0 ? (parseFloat(tWR) >= 50 ? T.green : T.red) : T.textDim }}>{tWR}{tTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{tW}W / {tL}L{tBE > 0 ? ` / ${tBE}BE` : ""} · {tTotal} trades</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: tProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD2(tProfit)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Live Journal: Emotions Control Performance */}
+          {isLJ && (
+            <Card style={{ marginBottom: 16 }}>
+              <Heading icon="🧠">Emocje pod kontrolą — Performance</Heading>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { val: true,  label: "Emocje pod kontrolą", color: T.green, hint: "dyscyplina utrzymana" },
+                  { val: false, label: "Emocje POZA kontrolą", color: T.red,   hint: "tilt / FOMO / panic" },
+                ].map(em => {
+                  const eTrades = drFilteredTrades.filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return (sd?.lj_emotions_control !== false) === em.val; });
+                  const eW = eTrades.filter(t => t.result === "WIN").length;
+                  const eL = eTrades.filter(t => t.result === "LOSS").length;
+                  const eBE = eTrades.filter(t => t.result === "BE").length;
+                  const eDec = eW + eL;
+                  const eTotal = eTrades.length;
+                  const eWR = eDec > 0 ? ((eW / eDec) * 100).toFixed(0) : "-";
+                  const eProfit = eTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+                  const fmtUSD2 = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  return (
+                    <div key={String(em.val)} style={{ textAlign: "center", padding: 14, background: eTotal > 0 ? `${parseFloat(eWR) >= 50 ? T.green : T.red}08` : T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: em.color, marginBottom: 2 }}>{em.label}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginBottom: 4, fontStyle: "italic" }}>{em.hint}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: eTotal > 0 ? (parseFloat(eWR) >= 50 ? T.green : T.red) : T.textDim }}>{eWR}{eTotal > 0 ? "%" : ""}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{eW}W / {eL}L{eBE > 0 ? ` / ${eBE}BE` : ""} · {eTotal} trades</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: eProfit >= 0 ? T.green : T.red, marginTop: 6 }}>{fmtUSD2(eProfit)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* HTS Trade Type stats — only show for HTS strategy */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (
@@ -6812,7 +7023,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       )}
 
       {/* ═══ PnL CALENDAR TAB (DR only) ═══ */}
-      {subTab === "calendar" && isDRLike && (() => {
+      {subTab === "calendar" && isCalendarStrat && (() => {
         const { year, month } = calMonth;
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
@@ -7060,9 +7271,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             </div>
                           )}
 
-                          {/* Quick-add 1 / 2 / 3 buttons in bottom-right corner — only on regular days, not Sat */}
-                          {!isSat && !cell.isOther && cell.date && (() => {
-                            // Check which trade numbers exist for this day+instrument
+                          {/* Quick-add buttons in bottom-right corner — only on regular days, not Sat */}
+                          {!isSat && !cell.isOther && cell.date && !isLJ && (() => {
+                            // DR/Lunch Box: 1/2/3 quick-add buttons
                             const trades1 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 1; });
                             const trades2 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 2; });
                             const trades3 = (dd?.trades || []).filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return parseInt(sd?.trade_number) === 3; });
@@ -7098,6 +7309,22 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                               </div>
                             );
                           })()}
+
+                          {/* LJ: single + button to add a new trade for this day */}
+                          {!isSat && !cell.isOther && cell.date && isLJ && (
+                            <button onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTradeId(null);
+                              setTf({ ...EMPTY_TF, trade_date: cell.date, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
+                              setShowAddTrade(true);
+                            }} title="Dodaj trade" style={{
+                              position: "absolute", bottom: 4, right: 4,
+                              width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.cyan}`,
+                              background: `${T.cyan}25`, color: T.cyan,
+                              fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                              display: "flex", alignItems: "center", justifyContent: "center"
+                            }}>+</button>
+                          )}
                         </div>
                       );
                     })}
@@ -7190,7 +7417,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
       })()}
 
       {/* ═══ SLIDER TAB (DR only) ═══ */}
-      {subTab === "slider" && isDRLike && (() => {
+      {subTab === "slider" && isCalendarStrat && (() => {
         // Filter trades: only DR + has at least one screenshot (before or after)
         const sliderTrades = filteredTrades.filter(t => {
           let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
