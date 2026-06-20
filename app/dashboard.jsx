@@ -4806,6 +4806,7 @@ function TradingPanel({ apiKey, supa }) {
     lj_range_size: "",
     lj_play_type: "VWAP", // VWAP | BANDS | PULLBACK_35 | PULLBACK_50 | FVG | PA
     lj_screenshot_second: "",
+    lj_duration_min: "",
     req_8020: true, req_fvg: true,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
@@ -5140,7 +5141,7 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "",
+      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
       req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const row = {
@@ -5221,7 +5222,7 @@ Rules:
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
       lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
-      lj_range_size: sd.lj_range_size || "", lj_play_type: sd.lj_play_type || "VWAP", lj_screenshot_second: sd.lj_screenshot_second || "",
+      lj_range_size: sd.lj_range_size || "", lj_play_type: sd.lj_play_type || "VWAP", lj_screenshot_second: sd.lj_screenshot_second || "", lj_duration_min: sd.lj_duration_min || "",
       req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
@@ -5231,7 +5232,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", lj_play_type: "VWAP", lj_screenshot_second: "", req_8020: true, req_fvg: true };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", lj_play_type: "VWAP", lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5262,7 +5263,7 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "",
+      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
       req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const updates = {
@@ -5742,11 +5743,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Row 3: Range Size + Play Type */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 12 }}>
+              {/* Row 3: Range Size + Duration + Play Type */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Range Size</div>
                   <input type="text" value={tf.lj_range_size} onChange={e => setTf(p => ({...p, lj_range_size: e.target.value}))} placeholder="np. 45" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+                <div>
+                  <div style={label}>Czas w trade (min)</div>
+                  <input type="text" value={tf.lj_duration_min} onChange={e => setTf(p => ({...p, lj_duration_min: e.target.value}))} placeholder="np. 12" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
                 <div>
                   <div style={label}>Typ zagrania</div>
@@ -6209,6 +6214,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                           sd.lj_play_type === "PA" ? "PA" : sd.lj_play_type
                         }</strong></span>}
                         {sd.lj_range_size && <span>Range: <strong>{sd.lj_range_size}</strong></span>}
+                        {sd.lj_duration_min && <span>Czas: <strong>{sd.lj_duration_min}min</strong></span>}
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
                         {sd.trade_date && <span>{sd.trade_date}</span>}
                         <span>Emocje: <strong style={{ color: sd.lj_emotions_control !== false ? T.green : T.red }}>{sd.lj_emotions_control !== false ? "✓" : "✗"}</strong></span>
