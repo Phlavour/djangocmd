@@ -4803,6 +4803,10 @@ function TradingPanel({ apiKey, supa }) {
     // Live Journal fields:
     lj_emotions_control: true,
     lj_tactic: "IB", // IB | LUNCH_BOX | NO_TACTIC
+    lj_range_size: "",
+    lj_play_type: "VWAP", // VWAP | BANDS | PULLBACK_35 | PULLBACK_50 | FVG | PA
+    lj_screenshot_second: "",
+    req_8020: true, req_fvg: true,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -5136,6 +5140,8 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
+      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "",
+      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5215,6 +5221,8 @@ Rules:
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
       lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
+      lj_range_size: sd.lj_range_size || "", lj_play_type: sd.lj_play_type || "VWAP", lj_screenshot_second: sd.lj_screenshot_second || "",
+      req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5223,7 +5231,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", lj_play_type: "VWAP", lj_screenshot_second: "", req_8020: true, req_fvg: true };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5254,6 +5262,8 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
+      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "",
+      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5541,8 +5551,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 )}
               </div>
 
-              {/* Row 2: Pair, TF, Profit — hidden for DR */}
-              {stratType !== "DR" && (
+              {/* Row 2: Pair, TF, Profit (R) — hidden for DR-like and LJ */}
+              {!isDRLike && !isLJ && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Para</div>
@@ -5732,33 +5742,51 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Meets Requirements + Emotions */}
-              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Meets Requirements</div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => setTf(p => ({...p, meetsRequirements: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.meetsRequirements ? `${T.green}20` : T.bg2, color: tf.meetsRequirements ? T.green : T.textSoft, fontWeight: tf.meetsRequirements ? 700 : 400, borderColor: tf.meetsRequirements ? T.green : T.border }}>TAK</button>
-                      <button onClick={() => setTf(p => ({...p, meetsRequirements: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.meetsRequirements ? `${T.red}20` : T.bg2, color: !tf.meetsRequirements ? T.red : T.textSoft, fontWeight: !tf.meetsRequirements ? 700 : 400, borderColor: !tf.meetsRequirements ? T.red : T.border }}>NIE</button>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Emocje pod kontrolą</div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => setTf(p => ({...p, lj_emotions_control: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_emotions_control ? `${T.green}20` : T.bg2, color: tf.lj_emotions_control ? T.green : T.textSoft, fontWeight: tf.lj_emotions_control ? 700 : 400, borderColor: tf.lj_emotions_control ? T.green : T.border }}>TAK</button>
-                      <button onClick={() => setTf(p => ({...p, lj_emotions_control: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: !tf.lj_emotions_control ? `${T.red}20` : T.bg2, color: !tf.lj_emotions_control ? T.red : T.textSoft, fontWeight: !tf.lj_emotions_control ? 700 : 400, borderColor: !tf.lj_emotions_control ? T.red : T.border }}>NIE</button>
-                    </div>
+              {/* Row 3: Range Size + Play Type */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Range Size</div>
+                  <input type="text" value={tf.lj_range_size} onChange={e => setTf(p => ({...p, lj_range_size: e.target.value}))} placeholder="np. 45" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+                <div>
+                  <div style={label}>Typ zagrania</div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {[
+                      { id: "VWAP",        label: "VWAP",        color: T.cyan },
+                      { id: "BANDS",       label: "Wstęgi",      color: T.purple },
+                      { id: "PULLBACK_35", label: "Pullback 35", color: T.amber },
+                      { id: "PULLBACK_50", label: "Pullback 50", color: T.amber },
+                      { id: "FVG",         label: "FVG",         color: T.green },
+                      { id: "PA",          label: "Price Action", color: T.textSoft },
+                    ].map(pt => (
+                      <button key={pt.id} onClick={() => setTf(p => ({...p, lj_play_type: pt.id}))} style={{
+                        ...sel, flex: 1, padding: "6px 4px", fontSize: 10,
+                        background: tf.lj_play_type === pt.id ? `${pt.color}20` : T.bg2,
+                        color: tf.lj_play_type === pt.id ? pt.color : T.textSoft,
+                        fontWeight: tf.lj_play_type === pt.id ? 700 : 400,
+                        borderColor: tf.lj_play_type === pt.id ? pt.color : T.border,
+                      }}>{pt.label}</button>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* Requirements (6 checkboxes — default TAK) */}
+              {/* Emotions only (Meets Requirements removed — Confluences replaces it) */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Emocje pod kontrolą</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button onClick={() => setTf(p => ({...p, lj_emotions_control: true}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: tf.lj_emotions_control ? `${T.green}20` : T.bg2, color: tf.lj_emotions_control ? T.green : T.textSoft, fontWeight: tf.lj_emotions_control ? 700 : 400, borderColor: tf.lj_emotions_control ? T.green : T.border }}>TAK</button>
+                  <button onClick={() => setTf(p => ({...p, lj_emotions_control: false}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: !tf.lj_emotions_control ? `${T.red}20` : T.bg2, color: !tf.lj_emotions_control ? T.red : T.textSoft, fontWeight: !tf.lj_emotions_control ? 700 : 400, borderColor: !tf.lj_emotions_control ? T.red : T.border }}>NIE</button>
+                </div>
+              </div>
+
+              {/* Confluences (8 checkboxes — default TAK) */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>Requirements</span>
+                  <span>Confluences</span>
                   <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>(odznacz jeśli element brakuje)</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                   {[
                     { id: "req_vwap",     label: "VWAP" },
                     { id: "req_bands",    label: "Wstęgi" },
@@ -5766,6 +5794,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "req_pa",       label: "PA" },
                     { id: "req_rr",       label: "RR" },
                     { id: "req_range",    label: "Range" },
+                    { id: "req_8020",     label: "80/20" },
+                    { id: "req_fvg",      label: "FVG" },
                   ].map(r => (
                     <div key={r.id}>
                       <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
@@ -5775,6 +5805,27 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Second instrument screenshot */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>📸 Screenshot drugiego instrumentu (opcjonalnie)</div>
+                <div style={{ padding: 8, background: T.bg2, borderRadius: 8, border: `1px dashed ${T.border}` }}>
+                  {tf.lj_screenshot_second ? (
+                    <div>
+                      <img src={tf.lj_screenshot_second} alt="Second instrument" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 6, display: "block" }} />
+                      <Btn small outline onClick={() => setTf(p => ({...p, lj_screenshot_second: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>
+                    </div>
+                  ) : (
+                    <input type="file" accept="image/*" onChange={async (e) => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setTf(p => ({...p, lj_screenshot_second: reader.result}));
+                      reader.readAsDataURL(file);
+                    }} style={{ fontSize: 11, color: T.textSoft }} />
+                  )}
+                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>Wklej zdjęcie drugiego instrumentu dla porównania (np. ES gdy tradujesz NQ)</div>
                 </div>
               </div>
               </>}
@@ -6149,6 +6200,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>{sd.instrument || "NQ"}</span>
                         <span>{sd.entry_time || ""}</span>
                         <span>Taktyka: <strong style={{ color: sd.lj_tactic === "IB" ? T.green : sd.lj_tactic === "LUNCH_BOX" ? T.purple : T.textDim }}>{sd.lj_tactic === "IB" ? "IB" : sd.lj_tactic === "LUNCH_BOX" ? "Lunch Box" : "No Tactic"}</strong></span>
+                        {sd.lj_play_type && <span>Zagranie: <strong style={{ color: T.cyan }}>{
+                          sd.lj_play_type === "VWAP" ? "VWAP" :
+                          sd.lj_play_type === "BANDS" ? "Wstęgi" :
+                          sd.lj_play_type === "PULLBACK_35" ? "Pullback 35" :
+                          sd.lj_play_type === "PULLBACK_50" ? "Pullback 50" :
+                          sd.lj_play_type === "FVG" ? "FVG" :
+                          sd.lj_play_type === "PA" ? "PA" : sd.lj_play_type
+                        }</strong></span>}
+                        {sd.lj_range_size && <span>Range: <strong>{sd.lj_range_size}</strong></span>}
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
                         {sd.trade_date && <span>{sd.trade_date}</span>}
                         <span>Emocje: <strong style={{ color: sd.lj_emotions_control !== false ? T.green : T.red }}>{sd.lj_emotions_control !== false ? "✓" : "✗"}</strong></span>
