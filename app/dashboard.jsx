@@ -4804,7 +4804,8 @@ function TradingPanel({ apiKey, supa }) {
     lj_emotions_control: true,
     lj_tactic: "IB", // IB | LUNCH_BOX | NO_TACTIC
     lj_range_size: "",
-    lj_play_type: "VWAP", // VWAP | BANDS | PULLBACK_35 | PULLBACK_50 | FVG | PA
+    play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false,
+    play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false,
     lj_screenshot_second: "",
     lj_duration_min: "",
     req_8020: true, req_fvg: true,
@@ -4955,6 +4956,23 @@ function TradingPanel({ apiKey, supa }) {
     }
   };
 
+  // Paste handler for LJ second instrument screenshot
+  const handlePasteSecond = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        const url = await uploadImage(file);
+        if (url) {
+          setTf(prev => ({ ...prev, lj_screenshot_second: url }));
+        }
+      }
+    }
+  };
+
   // Claude Vision — analyze screenshot (HTS table for HTS strategy / DR-specific data for DR)
   const analyzeScreenshot = async (file, url, phase = "before") => {
     if (!apiKey) return;
@@ -4969,6 +4987,7 @@ function TradingPanel({ apiKey, supa }) {
 
       // For DR strategy use DR-specific prompts (different for before/after)
       const isDR = stratType === "DR" || stratType === "LUNCH_BOX";
+      const isLJ = stratType === "LIVE_JOURNAL";
 
       // Count trades in current strategy on a given date+instrument to suggest trade_number
       const countTradesOnDate = (date, instrument) => {
@@ -5016,6 +5035,20 @@ Rules:
 - result: determine if the trade was a WIN, LOSS, or break-even (BE). Look at the entry point and watch which side price went FIRST after entry. If price reached TP/profit target first → "WIN". If price hit stop-loss first → "LOSS". If price hovered near entry without significant move → "BE". The decisive direction is which line/level was reached FIRST chronologically (next candles after entry).
 - tp_01_hit / tp_02_hit / tp_03_hit: check whether price reached the 0.1R, 0.2R, 0.3R levels after entry. Look at horizontal levels marked "0.1", "0.2", "0.3" (or similar) and verify if any candle wick/body crossed those lines AFTER the entry point. true if reached, false otherwise
 - If unable to determine, return false for TPs and "" for result
+- Respond ONLY with JSON, nothing else`;
+      } else if (isLJ && phase === "before") {
+        promptText = `Look at this trading chart screenshot from a futures trading platform (NQ or ES, typically NinjaTrader or similar).
+
+Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "instrument": "NQ" or "ES" (read from the title bar at top of chart — e.g. "MNQ" or "NQ" → NQ, "MES" or "ES" → ES),
+  "trade_date": "YYYY-MM-DD format" (read from the bottom-of-chart status bar where the current/cursor candle date+time is shown, e.g. "Mon 06 Apr '26 10:10" → "2026-04-06". Format DD MMM 'YY. DAY ALWAYS FIRST. Months: Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec. 'YY → 20YY. If unreadable return ""),
+  "entry_time": "HH:MM 24-hour" (read from the same bottom-of-chart status bar that shows the candle date+time, e.g. "Mon 06 Apr '26 10:10" → "10:10". If only date visible without time, return "")
+}
+
+Rules:
+- instrument: "MNQ" / "NQ" → NQ; "MES" / "ES" → ES; if unsure return ""
+- Today is ${new Date().toISOString().slice(0,10)} for sanity-checking the year
 - Respond ONLY with JSON, nothing else`;
       } else {
         // HTS / V_SHAPE / MARKET_PA — original HTS table extraction
@@ -5097,6 +5130,18 @@ Rules:
             tp_02: parsed.tp_02_hit === true ? true : prev.tp_02,
             tp_03: parsed.tp_03_hit === true ? true : prev.tp_03,
           }));
+        } else if (isLJ && phase === "before") {
+          setTf(prev => {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const newDate = (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === todayStr) ? parsed.trade_date : prev.trade_date;
+            const newInstrument = (parsed.instrument === "NQ" || parsed.instrument === "ES") ? parsed.instrument : prev.instrument;
+            return {
+              ...prev,
+              instrument: newInstrument,
+              entry_time: (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : prev.entry_time,
+              trade_date: newDate,
+            };
+          });
         } else {
           setTf(prev => ({
             ...prev,
@@ -5141,7 +5186,9 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
+      lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
+      play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
+      play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
       req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const row = {
@@ -5222,7 +5269,15 @@ Rules:
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
       lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
-      lj_range_size: sd.lj_range_size || "", lj_play_type: sd.lj_play_type || "VWAP", lj_screenshot_second: sd.lj_screenshot_second || "", lj_duration_min: sd.lj_duration_min || "",
+      lj_range_size: sd.lj_range_size || "", lj_screenshot_second: sd.lj_screenshot_second || "", lj_duration_min: sd.lj_duration_min || "",
+      play_vwap:     sd.play_vwap     || sd.lj_play_type === "VWAP",
+      play_bands:    sd.play_bands    || sd.lj_play_type === "BANDS",
+      play_pb35:     sd.play_pb35     || sd.lj_play_type === "PULLBACK_35",
+      play_pb50:     sd.play_pb50     || sd.lj_play_type === "PULLBACK_50",
+      play_fvg:      sd.play_fvg      || sd.lj_play_type === "FVG",
+      play_pa:       sd.play_pa       || sd.lj_play_type === "PA",
+      play_breakout: sd.play_breakout || false,
+      play_fomo:     sd.play_fomo     || false,
       req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
@@ -5232,7 +5287,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", lj_play_type: "VWAP", lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false, play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false, lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5263,7 +5318,9 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_play_type: tf.lj_play_type || "VWAP", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
+      lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
+      play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
+      play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
       req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
     } : {};
     const updates = {
@@ -5754,23 +5811,29 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <input type="text" value={tf.lj_duration_min} onChange={e => setTf(p => ({...p, lj_duration_min: e.target.value}))} placeholder="np. 12" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
                 <div>
-                  <div style={label}>Typ zagrania</div>
+                  <div style={label}>Typ zagrania <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span></div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {[
-                      { id: "VWAP",        label: "VWAP",        color: T.cyan },
-                      { id: "BANDS",       label: "Wstęgi",      color: T.purple },
-                      { id: "PULLBACK_35", label: "Pullback 35", color: T.amber },
-                      { id: "PULLBACK_50", label: "Pullback 50", color: T.amber },
-                      { id: "FVG",         label: "FVG",         color: T.green },
-                      { id: "PA",          label: "Price Action", color: T.textSoft },
+                      { id: "play_vwap",     label: "VWAP",         color: T.cyan },
+                      { id: "play_bands",    label: "Wstęgi",       color: T.purple },
+                      { id: "play_pb35",     label: "Pullback 35",  color: T.amber },
+                      { id: "play_pb50",     label: "Pullback 50",  color: T.amber },
+                      { id: "play_fvg",      label: "FVG",          color: T.green },
+                      { id: "play_pa",       label: "Price Action", color: T.textSoft },
+                      { id: "play_breakout", label: "Breakout",     color: T.red, warning: true },
+                      { id: "play_fomo",     label: "FOMO",         color: T.red, warning: true },
                     ].map(pt => (
-                      <button key={pt.id} onClick={() => setTf(p => ({...p, lj_play_type: pt.id}))} style={{
+                      <button key={pt.id} onClick={() => setTf(p => ({...p, [pt.id]: !p[pt.id]}))} style={{
                         ...sel, flex: 1, padding: "6px 4px", fontSize: 10,
-                        background: tf.lj_play_type === pt.id ? `${pt.color}20` : T.bg2,
-                        color: tf.lj_play_type === pt.id ? pt.color : T.textSoft,
-                        fontWeight: tf.lj_play_type === pt.id ? 700 : 400,
-                        borderColor: tf.lj_play_type === pt.id ? pt.color : T.border,
-                      }}>{pt.label}</button>
+                        background: tf[pt.id] ? `${pt.color}20` : T.bg2,
+                        color: tf[pt.id] ? pt.color : T.textSoft,
+                        fontWeight: tf[pt.id] ? 700 : 400,
+                        borderColor: tf[pt.id] ? pt.color : T.border,
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                      }}>
+                        {pt.warning && <span style={{ color: T.red, fontSize: 12, fontWeight: 700 }}>⊘</span>}
+                        {tf[pt.id] && !pt.warning ? "✓ " : ""}{pt.label}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -5813,24 +5876,42 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Second instrument screenshot */}
+              {/* Second instrument screenshot — paste with Ctrl+V */}
               <div style={{ marginBottom: 12 }}>
-                <div style={label}>📸 Screenshot drugiego instrumentu (opcjonalnie)</div>
-                <div style={{ padding: 8, background: T.bg2, borderRadius: 8, border: `1px dashed ${T.border}` }}>
+                <div style={label}>📸 Screenshot drugiego instrumentu (Ctrl+V)</div>
+                <div
+                  tabIndex={0}
+                  onPaste={handlePasteSecond}
+                  style={{
+                    padding: 12, background: T.bg2, borderRadius: 8,
+                    border: `1px dashed ${T.border}`,
+                    cursor: "text", outline: "none",
+                  }}
+                  onFocus={(e) => e.currentTarget.style.borderColor = T.cyan}
+                  onBlur={(e) => e.currentTarget.style.borderColor = T.border}
+                >
                   {tf.lj_screenshot_second ? (
                     <div>
-                      <img src={tf.lj_screenshot_second} alt="Second instrument" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 6, display: "block" }} />
-                      <Btn small outline onClick={() => setTf(p => ({...p, lj_screenshot_second: ""}))} style={{ marginTop: 6 }}>✕ Remove</Btn>
+                      <img src={tf.lj_screenshot_second} alt="Second instrument" style={{ maxWidth: "100%", maxHeight: 250, borderRadius: 6, display: "block", marginBottom: 6 }} />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Btn small outline onClick={() => setTf(p => ({...p, lj_screenshot_second: ""}))}>✕ Remove</Btn>
+                        <span style={{ fontSize: 9, color: T.textDim, alignSelf: "center" }}>Click area and Ctrl+V to replace</span>
+                      </div>
                     </div>
                   ) : (
-                    <input type="file" accept="image/*" onChange={async (e) => {
-                      const file = e.target.files?.[0]; if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => setTf(p => ({...p, lj_screenshot_second: reader.result}));
-                      reader.readAsDataURL(file);
-                    }} style={{ fontSize: 11, color: T.textSoft }} />
+                    <div style={{ textAlign: "center", padding: 20 }}>
+                      <div style={{ fontSize: 12, color: T.textSoft, marginBottom: 4 }}>Kliknij tutaj i wklej Ctrl+V</div>
+                      <div style={{ fontSize: 9, color: T.textDim }}>Zdjęcie drugiego instrumentu dla porównania (np. ES gdy tradujesz NQ)</div>
+                      <div style={{ marginTop: 8 }}>
+                        <input type="file" accept="image/*" onChange={async (e) => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => setTf(p => ({...p, lj_screenshot_second: reader.result}));
+                          reader.readAsDataURL(file);
+                        }} style={{ fontSize: 10, color: T.textDim }} />
+                      </div>
+                    </div>
                   )}
-                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 4 }}>Wklej zdjęcie drugiego instrumentu dla porównania (np. ES gdy tradujesz NQ)</div>
                 </div>
               </div>
               </>}
@@ -6205,14 +6286,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         <span>{sd.instrument || "NQ"}</span>
                         <span>{sd.entry_time || ""}</span>
                         <span>Taktyka: <strong style={{ color: sd.lj_tactic === "IB" ? T.green : sd.lj_tactic === "LUNCH_BOX" ? T.purple : T.textDim }}>{sd.lj_tactic === "IB" ? "IB" : sd.lj_tactic === "LUNCH_BOX" ? "Lunch Box" : "No Tactic"}</strong></span>
-                        {sd.lj_play_type && <span>Zagranie: <strong style={{ color: T.cyan }}>{
-                          sd.lj_play_type === "VWAP" ? "VWAP" :
-                          sd.lj_play_type === "BANDS" ? "Wstęgi" :
-                          sd.lj_play_type === "PULLBACK_35" ? "Pullback 35" :
-                          sd.lj_play_type === "PULLBACK_50" ? "Pullback 50" :
-                          sd.lj_play_type === "FVG" ? "FVG" :
-                          sd.lj_play_type === "PA" ? "PA" : sd.lj_play_type
-                        }</strong></span>}
+                        {(() => {
+                          const labels = [];
+                          if (sd.play_vwap)     labels.push("VWAP");
+                          if (sd.play_bands)    labels.push("Wstęgi");
+                          if (sd.play_pb35)     labels.push("PB35");
+                          if (sd.play_pb50)     labels.push("PB50");
+                          if (sd.play_fvg)      labels.push("FVG");
+                          if (sd.play_pa)       labels.push("PA");
+                          if (sd.play_breakout) labels.push("⊘ Breakout");
+                          if (sd.play_fomo)     labels.push("⊘ FOMO");
+                          // Fallback for legacy lj_play_type single string
+                          if (labels.length === 0 && sd.lj_play_type) {
+                            const map = { VWAP: "VWAP", BANDS: "Wstęgi", PULLBACK_35: "PB35", PULLBACK_50: "PB50", FVG: "FVG", PA: "PA" };
+                            labels.push(map[sd.lj_play_type] || sd.lj_play_type);
+                          }
+                          if (labels.length === 0) return null;
+                          const hasWarning = sd.play_breakout || sd.play_fomo;
+                          return <span>Zagranie: <strong style={{ color: hasWarning ? T.red : T.cyan }}>{labels.join(", ")}</strong></span>;
+                        })()}
                         {sd.lj_range_size && <span>Range: <strong>{sd.lj_range_size}</strong></span>}
                         {sd.lj_duration_min && <span>Czas: <strong>{sd.lj_duration_min}min</strong></span>}
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
