@@ -5363,9 +5363,10 @@ Rules:
     });
     if (existing) {
       let sd = existing.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-      setDailySummaryData({ text: existing.description || "", screenshot: existing.screenshot_before || "", id: existing.id, summary_date: dateStr });
+      setDailySummaryData({ text: existing.description || "", screenshot: existing.screenshot_before || "", id: existing.id, summary_date: dateStr,
+        manual_wins: sd?.manual_wins ?? "", manual_losses: sd?.manual_losses ?? "", manual_be: sd?.manual_be ?? "" });
     } else {
-      setDailySummaryData({ text: "", screenshot: "", id: null, summary_date: dateStr });
+      setDailySummaryData({ text: "", screenshot: "", id: null, summary_date: dateStr, manual_wins: "", manual_losses: "", manual_be: "" });
     }
     setDailySummaryDate(dateStr);
   };
@@ -5373,7 +5374,12 @@ Rules:
   const saveDailySummary = async () => {
     if (!supa || !activeStrategy || !dailySummaryDate) return;
     setDailySummaryLoading(true);
-    const sdObj = { summary_date: dailySummaryDate };
+    const sdObj = {
+      summary_date: dailySummaryDate,
+      manual_wins:   dailySummaryData.manual_wins   !== "" ? Number(dailySummaryData.manual_wins)   : null,
+      manual_losses: dailySummaryData.manual_losses !== "" ? Number(dailySummaryData.manual_losses) : null,
+      manual_be:     dailySummaryData.manual_be     !== "" ? Number(dailySummaryData.manual_be)     : null,
+    };
     const payload = {
       strategy_id: activeStrategy, direction: "DAILY_SUMMARY", result: "BE", profit: 0,
       description: dailySummaryData.text || "",
@@ -7949,6 +7955,23 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
                   {hasSummary && (
                     <div style={{ marginTop: 8, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      {/* Manual counts if set */}
+                      {(sumSd?.manual_wins != null || sumSd?.manual_losses != null || sumSd?.manual_be != null) && (
+                        <div style={{ display: "flex", gap: 12, marginBottom: 8, fontSize: 11 }}>
+                          <span style={{ color: T.textDim }}>Łącznie z dnia:</span>
+                          {sumSd.manual_wins != null && <span style={{ color: T.green, fontWeight: 700 }}>{sumSd.manual_wins} WIN</span>}
+                          {sumSd.manual_losses != null && <span style={{ color: T.red, fontWeight: 700 }}>{sumSd.manual_losses} LOSS</span>}
+                          {sumSd.manual_be != null && <span style={{ color: T.amber, fontWeight: 700 }}>{sumSd.manual_be} BE</span>}
+                          {(() => {
+                            const mW = Number(sumSd.manual_wins) || 0;
+                            const mL = Number(sumSd.manual_losses) || 0;
+                            const mDec = mW + mL;
+                            if (!mDec) return null;
+                            const mWR = `${((mW / mDec) * 100).toFixed(0)}%`;
+                            return <span style={{ color: T.textSoft }}>→ WR: <strong style={{ color: mW > mL ? T.green : mL > mW ? T.red : T.textDim }}>{mWR}</strong></span>;
+                          })()}
+                        </div>
+                      )}
                       {summary.screenshot_before && (
                         <img src={summary.screenshot_before} alt="Day summary" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 6, display: "block", marginBottom: 8, cursor: "zoom-in" }}
                           onClick={() => setSliderImageModal(summary.screenshot_before)} />
@@ -8012,6 +8035,40 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Manual W/L/BE counters */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  Łącznie z dnia
+                  <span style={{ fontSize: 9, fontWeight: 400, color: "#9ca3af", marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(wliczając trade'y poza systemem)</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  {[
+                    { key: "manual_wins",   label: "WIN",  color: "#22c55e", bg: "#f0fdf4" },
+                    { key: "manual_losses", label: "LOSS", color: "#ef4444", bg: "#fef2f2" },
+                    { key: "manual_be",     label: "BE",   color: "#f59e0b", bg: "#fffbeb" },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: f.color, marginBottom: 4, textAlign: "center" }}>{f.label}</div>
+                      <input type="number" min="0" step="1" value={dailySummaryData[f.key] ?? ""} onChange={e => setDailySummaryData(p => ({...p, [f.key]: e.target.value}))} placeholder="0"
+                        style={{ width: "100%", padding: "10px 8px", borderRadius: 8, border: `1px solid ${f.color}60`, background: f.bg, color: "#111827", fontSize: 22, fontWeight: 800, textAlign: "center", outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                </div>
+                {(dailySummaryData.manual_wins !== "" || dailySummaryData.manual_losses !== "" || dailySummaryData.manual_be !== "") && (() => {
+                  const mW = Number(dailySummaryData.manual_wins) || 0;
+                  const mL = Number(dailySummaryData.manual_losses) || 0;
+                  const mBE = Number(dailySummaryData.manual_be) || 0;
+                  const mDec = mW + mL;
+                  const mWR = mDec > 0 ? `${((mW / mDec) * 100).toFixed(0)}%` : "—";
+                  return (
+                    <div style={{ marginTop: 8, padding: 8, background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb", display: "flex", gap: 16, justifyContent: "center", fontSize: 11 }}>
+                      <span style={{ color: "#6b7280" }}>Łącznie: <strong style={{ color: "#111827" }}>{mW + mL + mBE}</strong></span>
+                      <span style={{ color: "#6b7280" }}>WR: <strong style={{ color: mW > mL ? "#22c55e" : mL > mW ? "#ef4444" : "#6b7280" }}>{mWR}</strong></span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Screenshot */}
