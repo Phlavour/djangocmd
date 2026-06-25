@@ -4817,6 +4817,10 @@ function TradingPanel({ apiKey, supa }) {
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [drInstrument, setDrInstrument] = useState("NQ");
   const [dayPickerDate, setDayPickerDate] = useState(null);
+  // Daily Summary modal state (Live Journal)
+  const [dailySummaryDate, setDailySummaryDate] = useState(null); // "YYYY-MM-DD" or null
+  const [dailySummaryData, setDailySummaryData] = useState({}); // {text, screenshot, id}
+  const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
   // Slider state
   const [sliderViewMode, setSliderViewMode] = useState("single"); // "single" | "grid"
   const [sliderIndex, setSliderIndex] = useState(0);
@@ -5339,7 +5343,8 @@ Rules:
   };
 
   // Filter trades by active strategy
-  const filteredTrades = activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades;
+  const filteredTrades = (activeStrategy === "ALL" ? trades : activeStrategy ? trades.filter(t => t.strategy_id === activeStrategy) : trades)
+    .filter(t => t.direction !== "DAILY_SUMMARY");
   const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
   // Resolve strategy type with fallback to name (handles legacy rows where type is null)
   const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("live") ? "LIVE_JOURNAL" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
@@ -5348,6 +5353,44 @@ Rules:
   // Calendar/Slider helper: DR, LUNCH_BOX, LIVE_JOURNAL all show calendar + slider
   const isCalendarStrat = stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL";
   const isLJ = stratType === "LIVE_JOURNAL";
+
+  // Open Daily Summary modal for a given date
+  const openDailySummary = (dateStr) => {
+    const existing = trades.find(t => {
+      if (t.strategy_id !== activeStrategy) return false;
+      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      return t.direction === "DAILY_SUMMARY" && sd?.summary_date === dateStr;
+    });
+    if (existing) {
+      let sd = existing.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      setDailySummaryData({ text: existing.description || "", screenshot: existing.screenshot_before || "", id: existing.id, summary_date: dateStr });
+    } else {
+      setDailySummaryData({ text: "", screenshot: "", id: null, summary_date: dateStr });
+    }
+    setDailySummaryDate(dateStr);
+  };
+
+  const saveDailySummary = async () => {
+    if (!supa || !activeStrategy || !dailySummaryDate) return;
+    setDailySummaryLoading(true);
+    const sdObj = { summary_date: dailySummaryDate };
+    const payload = {
+      strategy_id: activeStrategy, direction: "DAILY_SUMMARY", result: "BE", profit: 0,
+      description: dailySummaryData.text || "",
+      screenshot_before: dailySummaryData.screenshot || "",
+      strategy_data: JSON.stringify(sdObj),
+    };
+    try {
+      if (dailySummaryData.id) {
+        await supa.patch("trading_journal", `id=eq.${dailySummaryData.id}`, payload);
+      } else {
+        const res = await supa.post("trading_journal", payload);
+        if (res?.id) setDailySummaryData(p => ({...p, id: res.id}));
+      }
+      await loadTrades();
+    } catch(e) { console.error("Daily summary save error:", e); }
+    setDailySummaryLoading(false);
+  };
 
   // Stats
   const wins = filteredTrades.filter(t => t.result === "WIN").length;
@@ -5540,6 +5583,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
             ...(isCalendarStrat ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
+            ...(isLJ ? [{id:"daily_log",l:"📋 Daily Log"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -7204,6 +7248,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         const handleDayClick = (date) => {
           if (!date) return;
+          // Live Journal: calendar click always opens Daily Summary modal
+          if (isLJ) {
+            openDailySummary(date);
+            return;
+          }
           // No trades on this day → open New Trade form with prefilled date + instrument
           if (!dayData[date] || dayData[date].count === 0) {
             setEditingTradeId(null);
@@ -7468,21 +7517,33 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             );
                           })()}
 
-                          {/* LJ: single + button to add a new trade for this day */}
-                          {!isSat && !cell.isOther && cell.date && isLJ && (
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTradeId(null);
-                              setTf({ ...EMPTY_TF, trade_date: cell.date, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
-                              setShowAddTrade(true);
-                            }} title="Dodaj trade" style={{
-                              position: "absolute", bottom: 4, right: 4,
-                              width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.cyan}`,
-                              background: `${T.cyan}25`, color: T.cyan,
-                              fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
-                              display: "flex", alignItems: "center", justifyContent: "center"
-                            }}>+</button>
-                          )}
+                          {/* LJ: summary indicator + add trade button */}
+                          {!isSat && !cell.isOther && cell.date && isLJ && (() => {
+                            const hasSummary = trades.some(t => {
+                              if (t.strategy_id !== activeStrategy) return false;
+                              let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                              return t.direction === "DAILY_SUMMARY" && sd?.summary_date === cell.date;
+                            });
+                            return (
+                              <>
+                                {hasSummary && (
+                                  <div style={{ position: "absolute", top: 4, left: 4, fontSize: 9, color: T.green, lineHeight: 1 }} title="Ma podsumowanie dnia">📋</div>
+                                )}
+                                <button onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTradeId(null);
+                                  setTf({ ...EMPTY_TF, trade_date: cell.date, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
+                                  setShowAddTrade(true);
+                                }} title="Dodaj trade" style={{
+                                  position: "absolute", bottom: 4, right: 4,
+                                  width: 22, height: 22, borderRadius: 4, border: `1px solid ${T.cyan}`,
+                                  background: `${T.cyan}25`, color: T.cyan,
+                                  fontSize: 14, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                                  display: "flex", alignItems: "center", justifyContent: "center"
+                                }}>+</button>
+                              </>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -7824,6 +7885,187 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
             )}
           </div>
+        );
+      })()}
+
+      {/* ═══ DAILY LOG TAB (LJ only) ═══ */}
+      {subTab === "daily_log" && isLJ && (() => {
+        // Collect all dates that have real trades (not DAILY_SUMMARY)
+        const realTrades = filteredTrades.filter(t => t.direction !== "DAILY_SUMMARY");
+        const summaryRecords = filteredTrades.filter(t => {
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          return t.direction === "DAILY_SUMMARY";
+        });
+        // Get sorted unique dates from real trades
+        const allDates = [...new Set(realTrades.map(t => {
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          return sd?.trade_date || "";
+        }).filter(Boolean))].sort((a, b) => b.localeCompare(a)); // newest first
+
+        if (allDates.length === 0) return (
+          <Card><div style={{ textAlign: "center", padding: 40, color: T.textDim, fontSize: 13 }}>Brak trade'ów — najpierw dodaj trade'y w Journal.</div></Card>
+        );
+
+        const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {allDates.map(date => {
+              const dayTrades = realTrades.filter(t => {
+                let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                return sd?.trade_date === date;
+              });
+              const summary = summaryRecords.find(t => {
+                let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                return sd?.summary_date === date;
+              });
+              let sumSd = summary?.strategy_data; try { if (typeof sumSd === "string") sumSd = JSON.parse(sumSd); } catch { sumSd = {}; }
+              const dayW = dayTrades.filter(t => t.result === "WIN").length;
+              const dayL = dayTrades.filter(t => t.result === "LOSS").length;
+              const dayBE = dayTrades.filter(t => t.result === "BE").length;
+              const dayDec = dayW + dayL;
+              const dayWR = dayDec > 0 ? `${((dayW/dayDec)*100).toFixed(0)}%` : "-";
+              const dayProfit = dayTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+              const dayDate = new Date(date + "T12:00:00");
+              const dayName = dayDate.toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+              const hasSummary = !!summary;
+
+              return (
+                <Card key={date}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 2 }}>{dayName}</div>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, color: T.textSoft }}>{dayTrades.length} trade{dayTrades.length !== 1 ? "s" : ""}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: dayW > dayL ? T.green : dayL > dayW ? T.red : T.textDim }}>WR: {dayWR}</span>
+                        <span style={{ fontSize: 11, color: T.textDim }}>{dayW}W / {dayL}L{dayBE > 0 ? ` / ${dayBE}BE` : ""}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: dayProfit > 0 ? T.green : dayProfit < 0 ? T.red : T.textDim }}>{fmtUSD(dayProfit)}</span>
+                      </div>
+                    </div>
+                    <Btn small onClick={() => openDailySummary(date)} style={{ background: hasSummary ? `${T.green}20` : `${T.cyan}20`, color: hasSummary ? T.green : T.cyan, border: `1px solid ${hasSummary ? T.green : T.cyan}60` }}>
+                      {hasSummary ? "✎ Edytuj podsumowanie" : "+ Dodaj podsumowanie"}
+                    </Btn>
+                  </div>
+
+                  {hasSummary && (
+                    <div style={{ marginTop: 8, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                      {summary.screenshot_before && (
+                        <img src={summary.screenshot_before} alt="Day summary" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 6, display: "block", marginBottom: 8, cursor: "zoom-in" }}
+                          onClick={() => setSliderImageModal(summary.screenshot_before)} />
+                      )}
+                      {summary.description && (
+                        <div style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{summary.description}</div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* ═══ DAILY SUMMARY MODAL (LJ) ═══ */}
+      {dailySummaryDate && isLJ && (() => {
+        const dateForDisplay = new Date(dailySummaryDate + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+        const dayTrades = filteredTrades.filter(t => {
+          if (t.direction === "DAILY_SUMMARY") return false;
+          let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+          return sd?.trade_date === dailySummaryDate;
+        });
+        const dayW = dayTrades.filter(t => t.result === "WIN").length;
+        const dayL = dayTrades.filter(t => t.result === "LOSS").length;
+        const dayBE = dayTrades.filter(t => t.result === "BE").length;
+        const dayDec = dayW + dayL;
+        const dayWR = dayDec > 0 ? `${((dayW/dayDec)*100).toFixed(0)}%` : "—";
+        const dayProfit = dayTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+        const fmtUSD = (v) => `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const close = () => setDailySummaryDate(null);
+
+        return (
+          <>
+            <div onClick={close} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 9998 }} />
+            <div style={{
+              position: "fixed", top: "5vh", left: "50%", transform: "translateX(-50%)",
+              width: "90%", maxWidth: 700, maxHeight: "90vh", overflowY: "auto",
+              zIndex: 9999, background: "#ffffff", borderRadius: 12, padding: 24,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)", border: "1px solid #e5e7eb",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #e5e7eb" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>📋 Podsumowanie dnia</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{dateForDisplay}</div>
+                </div>
+                <button onClick={close} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button>
+              </div>
+
+              {/* Day stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: "Trades", value: dayTrades.length, color: "#6b7280" },
+                  { label: "Win Rate", value: dayWR, color: dayW > dayL ? "#22c55e" : dayL > dayW ? "#ef4444" : "#6b7280" },
+                  { label: "W / L", value: `${dayW} / ${dayL}${dayBE > 0 ? ` / ${dayBE}BE` : ""}`, color: "#6b7280" },
+                  { label: "Profit", value: fmtUSD(dayProfit), color: dayProfit > 0 ? "#22c55e" : dayProfit < 0 ? "#ef4444" : "#6b7280" },
+                ].map(s => (
+                  <div key={s.label} style={{ textAlign: "center", padding: 10, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                    <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2, fontWeight: 600 }}>{s.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Screenshot */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Screenshot dnia (Ctrl+V)</div>
+                <div
+                  tabIndex={0}
+                  onPaste={async (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                      if (item.type.startsWith("image/")) {
+                        e.preventDefault();
+                        const file = item.getAsFile(); if (!file) return;
+                        const url = await uploadImage(file);
+                        if (url) setDailySummaryData(p => ({...p, screenshot: url}));
+                      }
+                    }
+                  }}
+                  style={{ padding: 10, background: "#f9fafb", borderRadius: 8, border: "1px dashed #d1d5db", outline: "none", cursor: "text" }}
+                  onFocus={e => e.currentTarget.style.borderColor = "#06b6d4"}
+                  onBlur={e => e.currentTarget.style.borderColor = "#d1d5db"}
+                >
+                  {dailySummaryData.screenshot ? (
+                    <div>
+                      <img src={dailySummaryData.screenshot} alt="Day screenshot" style={{ maxWidth: "100%", maxHeight: 250, borderRadius: 6, display: "block", marginBottom: 6 }} />
+                      <button onClick={() => setDailySummaryData(p => ({...p, screenshot: ""}))} style={{ fontSize: 10, padding: "3px 8px", border: "1px solid #d1d5db", borderRadius: 4, background: "#f9fafb", cursor: "pointer", color: "#374151" }}>✕ Remove</button>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: 16, color: "#9ca3af", fontSize: 11 }}>Kliknij tutaj i wklej Ctrl+V</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Notatki z dnia</div>
+                <textarea
+                  value={dailySummaryData.text || ""}
+                  onChange={e => setDailySummaryData(p => ({...p, text: e.target.value}))}
+                  placeholder="co poszło dobrze, co źle, wnioski, emocje, plan na jutro..."
+                  style={{ width: "100%", minHeight: 120, padding: 10, borderRadius: 8, border: "1px solid #d1d5db", background: "#f9fafb", color: "#1a1a2e", fontSize: 12, lineHeight: 1.6, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit" }}
+                />
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={saveDailySummary} disabled={dailySummaryLoading} style={{ padding: "8px 20px", background: dailySummaryLoading ? "#d1d5db" : "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: dailySummaryLoading ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 700 }}>
+                  {dailySummaryLoading ? "Saving..." : "💾 Zapisz podsumowanie"}
+                </button>
+                <button onClick={close} style={{ padding: "8px 16px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "#374151" }}>Anuluj</button>
+              </div>
+            </div>
+          </>
         );
       })()}
     </div>
