@@ -4808,7 +4808,7 @@ function TradingPanel({ apiKey, supa }) {
     play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false,
     lj_screenshot_second: "",
     lj_duration_min: "",
-    req_8020: true, req_fvg: true,
+    req_8020: true, req_fvg: true, req_instrument: true,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -4819,6 +4819,13 @@ function TradingPanel({ apiKey, supa }) {
   const [dayPickerDate, setDayPickerDate] = useState(null);
   // Daily Summary modal state (Live Journal)
   const [dailySummaryDate, setDailySummaryDate] = useState(null); // "YYYY-MM-DD" or null
+  const [weeklySummaryOutput, setWeeklySummaryOutput] = useState(""); // AI generated text
+  const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
+  const [weeklySummaryWeek, setWeeklySummaryWeek] = useState(() => {
+    // Default to current week Monday
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  });
   const [dailySummaryData, setDailySummaryData] = useState({}); // {text, screenshot, id}
   const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
   // Slider state
@@ -5193,7 +5200,7 @@ Rules:
       lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
       play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
       play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
-      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
+      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false, req_instrument: tf.req_instrument !== false,
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5282,7 +5289,7 @@ Rules:
       play_pa:       sd.play_pa       || sd.lj_play_type === "PA",
       play_breakout: sd.play_breakout || false,
       play_fomo:     sd.play_fomo     || false,
-      req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false,
+      req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false, req_instrument: sd.req_instrument !== false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5291,7 +5298,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false, play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false, lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false, play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false, lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true, req_instrument: true };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5325,7 +5332,7 @@ Rules:
       lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
       play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
       play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
-      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false,
+      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false, req_instrument: tf.req_instrument !== false,
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5397,6 +5404,150 @@ Rules:
       await loadTrades();
     } catch(e) { console.error("Daily summary save error:", e); }
     setDailySummaryLoading(false);
+  };
+
+  const generateWeeklySummary = async () => {
+    if (!apiKey || !activeStrategy) return;
+    setWeeklySummaryLoading(true);
+    setWeeklySummaryOutput("");
+
+    // Get week Mon-Fri
+    const weekStart = new Date(weeklySummaryWeek + "T12:00:00");
+    const weekDates = Array.from({length: 5}, (_, i) => {
+      const d = new Date(weekStart); d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+
+    // Collect real trades for this week
+    const weekTrades = filteredTrades.filter(t => {
+      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      return weekDates.includes(sd?.trade_date || "");
+    });
+
+    // Collect daily summaries for this week
+    const weekSummaries = trades.filter(t => {
+      if (t.strategy_id !== activeStrategy) return false;
+      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      return t.direction === "DAILY_SUMMARY" && weekDates.includes(sd?.summary_date || "");
+    });
+
+    // Build per-day data
+    const dayData = weekDates.map(date => {
+      const dayTrades = weekTrades.filter(t => {
+        let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+        return sd?.trade_date === date;
+      });
+      const summary = weekSummaries.find(t => {
+        let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+        return sd?.summary_date === date;
+      });
+      let sumSd = summary?.strategy_data; try { if (typeof sumSd === "string") sumSd = JSON.parse(sumSd); } catch { sumSd = {}; }
+
+      const dayName = new Date(date + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+      const mW   = sumSd?.manual_wins   != null ? Number(sumSd.manual_wins)   : null;
+      const mL   = sumSd?.manual_losses != null ? Number(sumSd.manual_losses) : null;
+      const mBE  = sumSd?.manual_be     != null ? Number(sumSd.manual_be)     : null;
+      const mP   = sumSd?.manual_profit != null ? Number(sumSd.manual_profit) : null;
+      const sysP = dayTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+      const profit = mP !== null ? mP : sysP;
+
+      // Trade details
+      const tradeDetails = dayTrades.map(t => {
+        let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+        const plays = [sd.play_vwap && "VWAP", sd.play_bands && "Wstęgi", sd.play_pb35 && "PB35", sd.play_pb50 && "PB50", sd.play_fvg && "FVG", sd.play_pa && "PA", sd.play_breakout && "Breakout", sd.play_fomo && "FOMO"].filter(Boolean);
+        const confluences = [
+          sd.req_vwap !== false && "VWAP", sd.req_bands !== false && "Wstęgi", sd.req_bands_5m !== false && "Wstęgi5m",
+          sd.req_pa !== false && "PA", sd.req_rr !== false && "RR", sd.req_range !== false && "Range",
+          sd.req_8020 !== false && "80/20", sd.req_fvg !== false && "FVG", sd.req_instrument !== false && "Instr.zgodność"
+        ].filter(Boolean);
+        const missing = [
+          sd.req_vwap === false && "VWAP", sd.req_bands === false && "Wstęgi", sd.req_bands_5m === false && "Wstęgi5m",
+          sd.req_pa === false && "PA", sd.req_rr === false && "RR", sd.req_range === false && "Range",
+          sd.req_8020 === false && "80/20", sd.req_fvg === false && "FVG", sd.req_instrument === false && "Instr.zgodność"
+        ].filter(Boolean);
+        return {
+          time: sd.entry_time || "?", instrument: sd.instrument || "?", result: t.result, profit: sd.profit_usd,
+          duration: sd.lj_duration_min, range_size: sd.lj_range_size, tactic: sd.lj_tactic,
+          plays, confluences_ok: confluences, confluences_missing: missing,
+          emotions: sd.lj_emotions_control !== false, reason: t.description || t.reason || "", notes: t.notes || ""
+        };
+      });
+
+      const totalTradeCount = (mW !== null || mL !== null || mBE !== null) ? ((mW||0)+(mL||0)+(mBE||0)) : dayTrades.length;
+
+      return { date, dayName, profit, tradeCount: totalTradeCount, manual_wins: mW, manual_losses: mL, manual_be: mBE, manual_profit: mP, sysProfit: sysP, notes: summary?.description || "", tradeDetails, exceeds5trades: totalTradeCount > 5, exceedsLoss: profit < -600 };
+    });
+
+    const weekProfit = dayData.reduce((s, d) => s + d.profit, 0);
+    const weekW = dayData.reduce((s, d) => s + (d.manual_wins ?? d.tradeDetails.filter(t => t.result === "WIN").length), 0);
+    const weekL = dayData.reduce((s, d) => s + (d.manual_losses ?? d.tradeDetails.filter(t => t.result === "LOSS").length), 0);
+
+    const prompt = `Jesteś trenerem tradingowym analizującym tygodniowy dziennik tradera (Live Journal). Piszesz po polsku. Bądź konkretny, merytoryczny i bezpośredni — jak mentor który szanuje czas tradera.
+
+=== DANE TYGODNIA ${weeklySummaryWeek} – ${weekDates[4]} ===
+Łącznie: ${weekW}W / ${weekL}L | Profit tygodnia: $${weekProfit.toFixed(2)}
+
+${dayData.map(d => {
+  const alerts = [];
+  if (d.exceedsLoss) alerts.push(`⚠️ DAILY LOSS LIMIT PRZEKROCZONY (-$600 limit, wynik: $${d.profit.toFixed(0)})`);
+  if (d.exceeds5trades) alerts.push(`⚠️ OVERTRADING — ${d.tradeCount} trade'ów (limit 5-6)`);
+  
+  const tradesText = d.tradeDetails.length > 0 ? d.tradeDetails.map(t =>
+    `  • ${t.time} | ${t.instrument} | ${t.result} | $${Number(t.profit||0).toFixed(0)} | Typ: ${t.plays.join("+")||"?"} | Confluences spełnione: ${t.confluences_ok.join(",")||"brak"} | Brakujące: ${t.confluences_missing.join(",")||"żadne"} | Emocje: ${t.emotions?"✓":"✗"} | Range: ${t.range_size||"?"} | Czas: ${t.duration||"?"}min | Powód: ${t.reason||"(brak)"}`
+  ).join("\n") : "  (brak trade'ów w systemie)";
+
+  return `--- ${d.dayName} ---
+${alerts.length ? alerts.join("\n") + "\n" : ""}Wynik: $${d.profit.toFixed(0)} | Trades: ${d.tradeCount} (${d.manual_wins??'?'}W / ${d.manual_losses??'?'}L / ${d.manual_be??'?'}BE)
+Trade'y:
+${tradesText}
+Notatki dzienne: ${d.notes || "(brak)"}`;
+}).join("\n\n")}
+
+=== KONIEC DANYCH ===
+
+Przygotuj analizę tygodnia w następujących sekcjach:
+
+**📊 PODSUMOWANIE TYGODNIA**
+Krótko: wynik finansowy, win rate, ogólna ocena tygodnia.
+
+**⚠️ ALERTY**
+Wymień wszystkie przekroczenia: daily loss limit (-$600), overtrading (>5-6 trade'ów). Jeśli brak — napisz "Brak alertów".
+
+**🔍 ANALIZA TRADE'ÓW**
+Które typy zagrań (VWAP, Wstęgi, PB35, PB50, FVG, PA, Breakout) dominowały i jakie miały WR? Czy jest korelacja między typem a wynikiem?
+
+**✅ ANALIZA CONFLUENCES**
+Które confluences były najczęściej spełnione? Czy trade'y z brakującymi confluences miały gorsze wyniki? Jakie confluences były najczęściej pomijane?
+
+**📏 RANGE SIZE & CZAS W TRADE'U**
+Czy jest korelacja między rozmiarem range'a a wynikiem? Jak długo trwały zwycięskie vs przegrane trade'y?
+
+**🧠 PSYCHOLOGIA & EMOCJE**
+Analiza kontroli emocji. Czy trade'y z "emocje NIE" były gorsze? Czy jest wzorzec kiedy emocje wymykały się spod kontroli?
+
+**📝 WNIOSKI Z NOTATEK**
+Kluczowe obserwacje z notatek dziennych tradera.
+
+**🎯 3 PRIORYTETY NA PRZYSZŁY TYDZIEŃ**
+Konkretne, mierzalne kroki do wdrożenia.`;
+
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 2000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.map(b => b.text || "").join("") || "Błąd generowania.";
+      setWeeklySummaryOutput(text);
+    } catch(e) {
+      setWeeklySummaryOutput("Błąd połączenia z Claude API. Sprawdź klucz API w Settings.");
+    }
+    setWeeklySummaryLoading(false);
   };
 
   // Stats
@@ -5907,14 +6058,15 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                   {[
-                    { id: "req_vwap",     label: "VWAP" },
-                    { id: "req_bands",    label: "Wstęgi" },
-                    { id: "req_bands_5m", label: "Wstęgi 5m" },
-                    { id: "req_pa",       label: "PA" },
-                    { id: "req_rr",       label: "RR" },
-                    { id: "req_range",    label: "Range" },
-                    { id: "req_8020",     label: "80/20" },
-                    { id: "req_fvg",      label: "FVG" },
+                    { id: "req_vwap",       label: "VWAP" },
+                    { id: "req_bands",      label: "Wstęgi" },
+                    { id: "req_bands_5m",   label: "Wstęgi 5m" },
+                    { id: "req_pa",         label: "PA" },
+                    { id: "req_rr",         label: "RR" },
+                    { id: "req_range",      label: "Range" },
+                    { id: "req_8020",       label: "80/20" },
+                    { id: "req_fvg",        label: "FVG" },
+                    { id: "req_instrument", label: "Zgodność instr." },
                   ].map(r => (
                     <div key={r.id}>
                       <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
@@ -7917,6 +8069,36 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+            {/* Weekly Summary generator */}
+            <Card>
+              <Heading icon="🤖">Weekly Summary — AI</Heading>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Tydzień (poniedziałek)</div>
+                  <input type="date" value={weeklySummaryWeek} onChange={e => setWeeklySummaryWeek(e.target.value)}
+                    style={{ ...sel, padding: "6px 10px", fontSize: 11 }} />
+                </div>
+                <Btn color={T.cyan} onClick={generateWeeklySummary} disabled={weeklySummaryLoading || !apiKey}>
+                  {weeklySummaryLoading ? "⏳ Generuję..." : "🤖 Generuj Weekly Summary"}
+                </Btn>
+                {!apiKey && <span style={{ fontSize: 10, color: T.red }}>Brak Claude API Key w Settings</span>}
+                {weeklySummaryOutput && <Btn small outline onClick={() => setWeeklySummaryOutput("")}>✕ Wyczyść</Btn>}
+              </div>
+
+              {weeklySummaryLoading && (
+                <div style={{ padding: 20, textAlign: "center", color: T.textSoft, fontSize: 12 }}>
+                  Analizuję tydzień — to może potrwać kilka sekund...
+                </div>
+              )}
+
+              {weeklySummaryOutput && (
+                <div style={{ padding: 16, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 12, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap", maxHeight: 600, overflowY: "auto" }}>
+                  {weeklySummaryOutput}
+                </div>
+              )}
+            </Card>
+
             {allDates.map(date => {
               const dayTrades = realTrades.filter(t => {
                 let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
