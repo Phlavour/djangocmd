@@ -5364,9 +5364,9 @@ Rules:
     if (existing) {
       let sd = existing.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
       setDailySummaryData({ text: existing.description || "", screenshot: existing.screenshot_before || "", id: existing.id, summary_date: dateStr,
-        manual_wins: sd?.manual_wins ?? "", manual_losses: sd?.manual_losses ?? "", manual_be: sd?.manual_be ?? "" });
+        manual_wins: sd?.manual_wins ?? "", manual_losses: sd?.manual_losses ?? "", manual_be: sd?.manual_be ?? "", manual_profit: sd?.manual_profit ?? "" });
     } else {
-      setDailySummaryData({ text: "", screenshot: "", id: null, summary_date: dateStr, manual_wins: "", manual_losses: "", manual_be: "" });
+      setDailySummaryData({ text: "", screenshot: "", id: null, summary_date: dateStr, manual_wins: "", manual_losses: "", manual_be: "", manual_profit: "" });
     }
     setDailySummaryDate(dateStr);
   };
@@ -5379,6 +5379,7 @@ Rules:
       manual_wins:   dailySummaryData.manual_wins   !== "" ? Number(dailySummaryData.manual_wins)   : null,
       manual_losses: dailySummaryData.manual_losses !== "" ? Number(dailySummaryData.manual_losses) : null,
       manual_be:     dailySummaryData.manual_be     !== "" ? Number(dailySummaryData.manual_be)     : null,
+      manual_profit: dailySummaryData.manual_profit !== "" ? Number(dailySummaryData.manual_profit) : null,
     };
     const payload = {
       strategy_id: activeStrategy, direction: "DAILY_SUMMARY", result: "BE", profit: 0,
@@ -7962,6 +7963,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                           {sumSd.manual_wins != null && <span style={{ color: T.green, fontWeight: 700 }}>{sumSd.manual_wins} WIN</span>}
                           {sumSd.manual_losses != null && <span style={{ color: T.red, fontWeight: 700 }}>{sumSd.manual_losses} LOSS</span>}
                           {sumSd.manual_be != null && <span style={{ color: T.amber, fontWeight: 700 }}>{sumSd.manual_be} BE</span>}
+                          {sumSd.manual_profit != null && <span style={{ color: sumSd.manual_profit > 0 ? T.green : sumSd.manual_profit < 0 ? T.red : T.textDim, fontWeight: 700 }}>${Number(sumSd.manual_profit).toFixed(2)}</span>}
                           {(() => {
                             const mW = Number(sumSd.manual_wins) || 0;
                             const mL = Number(sumSd.manual_losses) || 0;
@@ -8022,53 +8024,58 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <button onClick={close} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button>
               </div>
 
-              {/* Day stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-                {[
-                  { label: "Trades", value: dayTrades.length, color: "#6b7280" },
-                  { label: "Win Rate", value: dayWR, color: dayW > dayL ? "#22c55e" : dayL > dayW ? "#ef4444" : "#6b7280" },
-                  { label: "W / L", value: `${dayW} / ${dayL}${dayBE > 0 ? ` / ${dayBE}BE` : ""}`, color: "#6b7280" },
-                  { label: "Profit", value: fmtUSD(dayProfit), color: dayProfit > 0 ? "#22c55e" : dayProfit < 0 ? "#ef4444" : "#6b7280" },
-                ].map(s => (
-                  <div key={s.label} style={{ textAlign: "center", padding: 10, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                    <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2, fontWeight: 600 }}>{s.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
+              {/* Day stats — driven by manual input below */}
+              {(() => {
+                const mW   = Number(dailySummaryData.manual_wins)   || 0;
+                const mL   = Number(dailySummaryData.manual_losses) || 0;
+                const mBE  = Number(dailySummaryData.manual_be)     || 0;
+                const mDec = mW + mL;
+                const mTotal = mW + mL + mBE;
+                const mWR  = mDec > 0 ? `${((mW / mDec) * 100).toFixed(0)}%` : "—";
+                const mP   = dailySummaryData.manual_profit !== "" ? Number(dailySummaryData.manual_profit) : null;
+                const fmtP = (v) => v === null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+                    {[
+                      { label: "Trades",   value: mTotal > 0 ? mTotal : "—",   color: "#6b7280" },
+                      { label: "Win Rate", value: mWR, color: mW > mL ? "#22c55e" : mL > mW ? "#ef4444" : "#6b7280" },
+                      { label: "W / L",   value: mDec > 0 ? `${mW} / ${mL}${mBE > 0 ? ` / ${mBE}` : ""}` : "— / —", color: "#6b7280" },
+                      { label: "Profit",  value: fmtP(mP), color: mP == null ? "#6b7280" : mP > 0 ? "#22c55e" : mP < 0 ? "#ef4444" : "#6b7280" },
+                    ].map(s => (
+                      <div key={s.label} style={{ textAlign: "center", padding: 10, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2, fontWeight: 600 }}>{s.label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
-              {/* Manual W/L/BE counters */}
+              {/* Manual W/L/BE counters + Profit */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
                   Łącznie z dnia
                   <span style={{ fontSize: 9, fontWeight: 400, color: "#9ca3af", marginLeft: 8, textTransform: "none", letterSpacing: 0 }}>(wliczając trade'y poza systemem)</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
                   {[
-                    { key: "manual_wins",   label: "WIN",  color: "#22c55e", bg: "#f0fdf4" },
-                    { key: "manual_losses", label: "LOSS", color: "#ef4444", bg: "#fef2f2" },
-                    { key: "manual_be",     label: "BE",   color: "#f59e0b", bg: "#fffbeb" },
+                    { key: "manual_wins",   label: "WIN",    color: "#22c55e", bg: "#f0fdf4", type: "number" },
+                    { key: "manual_losses", label: "LOSS",   color: "#ef4444", bg: "#fef2f2", type: "number" },
+                    { key: "manual_be",     label: "BE",     color: "#f59e0b", bg: "#fffbeb", type: "number" },
+                    { key: "manual_profit", label: "Profit ($)", color: "#6b7280", bg: "#f9fafb", type: "text", placeholder: "np. 350 lub -120" },
                   ].map(f => (
                     <div key={f.key}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: f.color, marginBottom: 4, textAlign: "center" }}>{f.label}</div>
-                      <input type="number" min="0" step="1" value={dailySummaryData[f.key] ?? ""} onChange={e => setDailySummaryData(p => ({...p, [f.key]: e.target.value}))} placeholder="0"
-                        style={{ width: "100%", padding: "10px 8px", borderRadius: 8, border: `1px solid ${f.color}60`, background: f.bg, color: "#111827", fontSize: 22, fontWeight: 800, textAlign: "center", outline: "none", boxSizing: "border-box" }} />
+                      <input
+                        type={f.type} min="0" step={f.type === "number" ? "1" : undefined}
+                        value={dailySummaryData[f.key] ?? ""}
+                        onChange={e => setDailySummaryData(p => ({...p, [f.key]: e.target.value}))}
+                        placeholder={f.placeholder || "0"}
+                        style={{ width: "100%", padding: "10px 8px", borderRadius: 8, border: `1px solid ${f.color}60`, background: f.bg, color: "#111827", fontSize: f.key === "manual_profit" ? 16 : 22, fontWeight: 800, textAlign: "center", outline: "none", boxSizing: "border-box" }}
+                      />
                     </div>
                   ))}
                 </div>
-                {(dailySummaryData.manual_wins !== "" || dailySummaryData.manual_losses !== "" || dailySummaryData.manual_be !== "") && (() => {
-                  const mW = Number(dailySummaryData.manual_wins) || 0;
-                  const mL = Number(dailySummaryData.manual_losses) || 0;
-                  const mBE = Number(dailySummaryData.manual_be) || 0;
-                  const mDec = mW + mL;
-                  const mWR = mDec > 0 ? `${((mW / mDec) * 100).toFixed(0)}%` : "—";
-                  return (
-                    <div style={{ marginTop: 8, padding: 8, background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb", display: "flex", gap: 16, justifyContent: "center", fontSize: 11 }}>
-                      <span style={{ color: "#6b7280" }}>Łącznie: <strong style={{ color: "#111827" }}>{mW + mL + mBE}</strong></span>
-                      <span style={{ color: "#6b7280" }}>WR: <strong style={{ color: mW > mL ? "#22c55e" : mL > mW ? "#ef4444" : "#6b7280" }}>{mWR}</strong></span>
-                    </div>
-                  );
-                })()}
               </div>
 
               {/* Screenshot */}
