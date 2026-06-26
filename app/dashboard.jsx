@@ -8206,6 +8206,73 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <button onClick={close} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button>
               </div>
 
+              {/* Trades from this day — with edit buttons */}
+              {dayTrades.length > 0 && (
+                <div style={{ marginBottom: 16, padding: 12, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    Trade'y z dnia ({dayTrades.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {dayTrades
+                      .slice()
+                      .sort((a, b) => {
+                        let sa = a.strategy_data; try { if (typeof sa === "string") sa = JSON.parse(sa); } catch { sa = {}; }
+                        let sb = b.strategy_data; try { if (typeof sb === "string") sb = JSON.parse(sb); } catch { sb = {}; }
+                        return (sa?.entry_time || "").localeCompare(sb?.entry_time || "");
+                      })
+                      .map(t => {
+                        let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+                        const plays = [sd.play_vwap && "VWAP", sd.play_bands && "Wstęgi", sd.play_pb35 && "PB35", sd.play_pb50 && "PB50", sd.play_fvg && "FVG", sd.play_pa && "PA", sd.play_breakout && "⊘ Breakout", sd.play_fomo && "⊘ FOMO"].filter(Boolean);
+                        const resultColor = t.result === "WIN" ? "#22c55e" : t.result === "LOSS" ? "#ef4444" : "#f59e0b";
+                        const profit = parseFloat(sd?.profit_usd || 0);
+                        return (
+                          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#ffffff", borderRadius: 6, border: "1px solid #e5e7eb" }}>
+                            <span style={{ fontSize: 10, color: "#6b7280", minWidth: 36, fontVariantNumeric: "tabular-nums" }}>{sd.entry_time || "—"}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#0ea5e9", minWidth: 24 }}>{sd.instrument || "?"}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: resultColor, minWidth: 32 }}>{t.result}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: profit > 0 ? "#22c55e" : profit < 0 ? "#ef4444" : "#6b7280", minWidth: 52 }}>
+                              {profit >= 0 ? "+" : ""}${profit.toFixed(0)}
+                            </span>
+                            {plays.length > 0 && <span style={{ fontSize: 9, color: "#6b7280", flex: 1 }}>{plays.join(", ")}</span>}
+                            {!plays.length && <span style={{ flex: 1 }} />}
+                            <button
+                              onClick={() => { close(); setTimeout(() => startEdit(t), 50); }}
+                              style={{ padding: "3px 10px", border: "1px solid #d1d5db", background: "#f9fafb", borderRadius: 5, cursor: "pointer", fontSize: 10, color: "#374151", whiteSpace: "nowrap" }}
+                            >✎ Edytuj</button>
+                          </div>
+                        );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => {
+                      close();
+                      setTimeout(() => {
+                        setEditingTradeId(null);
+                        setTf({ ...EMPTY_TF, trade_date: dailySummaryDate, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
+                        setShowAddTrade(true);
+                      }, 50);
+                    }}
+                    style={{ marginTop: 8, width: "100%", padding: "6px", border: "1px dashed #06b6d4", background: "rgba(6,182,212,0.05)", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#06b6d4", fontWeight: 600 }}
+                  >+ Dodaj nowy trade na ten dzień</button>
+                </div>
+              )}
+
+              {dayTrades.length === 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <button
+                    onClick={() => {
+                      close();
+                      setTimeout(() => {
+                        setEditingTradeId(null);
+                        setTf({ ...EMPTY_TF, trade_date: dailySummaryDate, instrument: drInstrument === "ALL" ? "NQ" : drInstrument });
+                        setShowAddTrade(true);
+                      }, 50);
+                    }}
+                    style={{ width: "100%", padding: "10px", border: "1px dashed #06b6d4", background: "rgba(6,182,212,0.05)", borderRadius: 8, cursor: "pointer", fontSize: 12, color: "#06b6d4", fontWeight: 600 }}
+                  >+ Dodaj trade na {dateForDisplay}</button>
+                </div>
+              )}
+
               {/* Day stats — driven by manual input below */}
               {(() => {
                 const mW   = Number(dailySummaryData.manual_wins)   || 0;
