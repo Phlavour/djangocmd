@@ -4815,7 +4815,7 @@ function TradingPanel({ apiKey, supa }) {
   });
   const [visionLoading, setVisionLoading] = useState(false);
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
-  const [drInstrument, setDrInstrument] = useState("NQ");
+  const [drInstrument, setDrInstrument] = useState("ALL");
   const [dayPickerDate, setDayPickerDate] = useState(null);
   // Daily Summary modal state (Live Journal)
   const [dailySummaryDate, setDailySummaryDate] = useState(null); // "YYYY-MM-DD" or null
