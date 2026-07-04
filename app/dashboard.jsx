@@ -5397,11 +5397,40 @@ Rules:
     try {
       if (dailySummaryData.id) {
         await supa.patch("trading_journal", `id=eq.${dailySummaryData.id}`, payload);
+        await loadTrades();
       } else {
-        const res = await supa.post("trading_journal", payload);
-        if (res?.id) setDailySummaryData(p => ({...p, id: res.id}));
+        // POST requires array; Supabase returns array with inserted row
+        const res = await fetch(`${supa.url}/rest/v1/trading_journal`, {
+          method: "POST",
+          headers: { ...supa.headers, "Prefer": "return=representation" },
+          body: JSON.stringify([payload]),
+        });
+        const body = await res.json();
+        if (res.ok && Array.isArray(body) && body[0]?.id) {
+          setDailySummaryData(p => ({...p, id: body[0].id}));
+          await loadTrades();
+        } else {
+          // Fallback: minimal columns guaranteed to exist
+          console.warn("Daily summary full save failed, trying minimal:", res.status, body);
+          const minPayload = {
+            strategy_id: activeStrategy, direction: "DAILY_SUMMARY", result: "BE", profit: 0,
+            description: dailySummaryData.text || "",
+            strategy_data: JSON.stringify(sdObj),
+          };
+          const res2 = await fetch(`${supa.url}/rest/v1/trading_journal`, {
+            method: "POST",
+            headers: { ...supa.headers, "Prefer": "return=representation" },
+            body: JSON.stringify([minPayload]),
+          });
+          const body2 = await res2.json();
+          if (res2.ok && Array.isArray(body2) && body2[0]?.id) {
+            setDailySummaryData(p => ({...p, id: body2[0].id}));
+            await loadTrades();
+          } else {
+            console.error("Daily summary save failed:", res2.status, body2);
+          }
+        }
       }
-      await loadTrades();
     } catch(e) { console.error("Daily summary save error:", e); }
     setDailySummaryLoading(false);
   };
