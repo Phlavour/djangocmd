@@ -4802,13 +4802,26 @@ function TradingPanel({ apiKey, supa }) {
     idea: "SWEEP",
     // Live Journal fields:
     lj_emotions_control: true,
-    lj_tactic: "IB", // IB | LUNCH_BOX | NO_TACTIC
+    lj_tactic: "IB", // IB | LUNCH_BOX | OTHERS
+    lj_tactic_other: "", // Gap | VWAP | Wstęga (when lj_tactic === OTHERS)
+    lj_rr: "", // Risk/Reward manual e.g. 1, 0.5, 2
     lj_range_size: "",
-    play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false,
-    play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false,
-    lj_screenshot_second: "",
     lj_duration_min: "",
-    req_8020: true, req_fvg: true, req_instrument: true,
+    lj_screenshot_second: "",
+    // PA in Range multi-select
+    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false,
+    // Entry moment multi-select
+    em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false,
+    em_pullback_random: false, em_pa_fomo: false, em_8020: false,
+    // Stop Loss type (single select)
+    sl_type: "", // LH | BAND | VWAP | RANDOM
+    // Requirements (5, default true)
+    req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true,
+    // Instrument correlation (3-way)
+    lj_correlation: "TAK", // TAK | NIE | SREDNIA
+    // HTS table (Vision-read)
+    hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", // "up" | "down" | "in" | "overlap"
+    req_8020: false, req_fvg: false, req_instrument: false,
     pair: "BTC", timeframe: "15m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
@@ -5052,14 +5065,29 @@ Rules:
 
 Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 {
-  "instrument": "NQ" or "ES" (read from the title bar at top of chart — e.g. "MNQ" or "NQ" → NQ, "MES" or "ES" → ES),
-  "trade_date": "YYYY-MM-DD format" (read from the bottom-of-chart status bar where the current/cursor candle date+time is shown, e.g. "Mon 06 Apr '26 10:10" → "2026-04-06". Format DD MMM 'YY. DAY ALWAYS FIRST. Months: Jan/Feb/Mar/Apr/May/Jun/Jul/Aug/Sep/Oct/Nov/Dec. 'YY → 20YY. If unreadable return ""),
-  "entry_time": "HH:MM 24-hour" (read from the same bottom-of-chart status bar that shows the candle date+time, e.g. "Mon 06 Apr '26 10:10" → "10:10". If only date visible without time, return "")
+  "instrument": "NQ" or "ES" (read from the title bar at top of chart),
+  "trade_date": "YYYY-MM-DD" (from bottom status bar date, DAY ALWAYS FIRST, 'YY → 20YY, if unreadable return ""),
+  "entry_time": "HH:MM 24h" (from bottom status bar time, if unreadable return ""),
+  "hts": {
+    "m1":  one of: "up" | "down" | "in" | "overlap" | "",
+    "m5":  one of: "up" | "down" | "in" | "overlap" | "",
+    "m15": one of: "up" | "down" | "in" | "overlap" | "",
+    "h1":  one of: "up" | "down" | "in" | "overlap" | "",
+    "h4":  one of: "up" | "down" | "in" | "overlap" | "",
+    "d1":  one of: "up" | "down" | "in" | "overlap" | ""
+  }
 }
 
-Rules:
-- instrument: "MNQ" / "NQ" → NQ; "MES" / "ES" → ES; if unsure return ""
-- Today is ${new Date().toISOString().slice(0,10)} for sanity-checking the year
+HTS table rules (if visible — a table with timeframe rows and columns "33" and "144"):
+- Green triangle (▲) in row = "up" (price above bands, uptrend)
+- Red triangle (▼) in row = "down" (price below bands, downtrend)
+- Gray/white square (■) for PRICE row = "in" (price inside bands)
+- Gray/white square (■) for INTERVAL row = "overlap" (bands overlap on that timeframe)
+- If HTS table not visible, return "" for all hts fields
+
+Other rules:
+- instrument: "MNQ"/"NQ" → "NQ"; "MES"/"ES" → "ES"; if unsure return ""
+- Today is ${new Date().toISOString().slice(0,10)}
 - Respond ONLY with JSON, nothing else`;
       } else {
         // HTS / V_SHAPE / MARKET_PA — original HTS table extraction
@@ -5146,11 +5174,19 @@ Rules:
             const todayStr = new Date().toISOString().slice(0, 10);
             const newDate = (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === todayStr) ? parsed.trade_date : prev.trade_date;
             const newInstrument = (parsed.instrument === "NQ" || parsed.instrument === "ES") ? parsed.instrument : prev.instrument;
+            const hts = parsed.hts || {};
+            const validVal = v => ["up","down","in","overlap",""].includes(v) ? v : "";
             return {
               ...prev,
               instrument: newInstrument,
               entry_time: (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : prev.entry_time,
               trade_date: newDate,
+              hts_m1:  validVal(hts.m1  || ""),
+              hts_m5:  validVal(hts.m5  || ""),
+              hts_m15: validVal(hts.m15 || ""),
+              hts_h1:  validVal(hts.h1  || ""),
+              hts_h4:  validVal(hts.h4  || ""),
+              hts_d1:  validVal(hts.d1  || ""),
             };
           });
         } else {
@@ -5197,10 +5233,14 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
-      play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
-      play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
-      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false, req_instrument: tf.req_instrument !== false,
+      lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
+      lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false,
+      em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
+      sl_type: tf.sl_type || "",
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
+      lj_correlation: tf.lj_correlation || "TAK",
+      hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
     } : {};
     const row = {
       strategy_id: activeStrategy, description: tf.description, result: tf.result, direction: tf.direction,
@@ -5280,16 +5320,15 @@ Rules:
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
       lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
-      lj_range_size: sd.lj_range_size || "", lj_screenshot_second: sd.lj_screenshot_second || "", lj_duration_min: sd.lj_duration_min || "",
-      play_vwap:     sd.play_vwap     || sd.lj_play_type === "VWAP",
-      play_bands:    sd.play_bands    || sd.lj_play_type === "BANDS",
-      play_pb35:     sd.play_pb35     || sd.lj_play_type === "PULLBACK_35",
-      play_pb50:     sd.play_pb50     || sd.lj_play_type === "PULLBACK_50",
-      play_fvg:      sd.play_fvg      || sd.lj_play_type === "FVG",
-      play_pa:       sd.play_pa       || sd.lj_play_type === "PA",
-      play_breakout: sd.play_breakout || false,
-      play_fomo:     sd.play_fomo     || false,
-      req_8020: sd.req_8020 !== false, req_fvg: sd.req_fvg !== false, req_instrument: sd.req_instrument !== false,
+      lj_tactic_other: sd.lj_tactic_other || "", lj_rr: sd.lj_rr || "",
+      lj_range_size: sd.lj_range_size || "", lj_duration_min: sd.lj_duration_min || "", lj_screenshot_second: sd.lj_screenshot_second || "",
+      pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false,
+      em_vwap_retest: sd.em_vwap_retest || false, em_band_retest: sd.em_band_retest || false, em_5min_gap: sd.em_5min_gap || false, em_3565_retest: sd.em_3565_retest || false, em_pullback_random: sd.em_pullback_random || false, em_pa_fomo: sd.em_pa_fomo || false, em_8020: sd.em_8020 || false,
+      sl_type: sd.sl_type || "",
+      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
+      lj_correlation: sd.lj_correlation || "TAK",
+      hts_m1: sd.hts_m1 || "", hts_m5: sd.hts_m5 || "", hts_m15: sd.hts_m15 || "", hts_h1: sd.hts_h1 || "", hts_h4: sd.hts_h4 || "", hts_d1: sd.hts_d1 || "",
+      req_8020: false, req_fvg: false, req_instrument: false,
       pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -5298,7 +5337,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_range_size: "", play_vwap: false, play_bands: false, play_pb35: false, play_pb50: false, play_fvg: false, play_pa: false, play_breakout: false, play_fomo: false, lj_screenshot_second: "", lj_duration_min: "", req_8020: true, req_fvg: true, req_instrument: true };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5329,10 +5368,14 @@ Rules:
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
-      lj_range_size: tf.lj_range_size || "", lj_screenshot_second: tf.lj_screenshot_second || "", lj_duration_min: tf.lj_duration_min || "",
-      play_vwap: tf.play_vwap || false, play_bands: tf.play_bands || false, play_pb35: tf.play_pb35 || false, play_pb50: tf.play_pb50 || false,
-      play_fvg: tf.play_fvg || false, play_pa: tf.play_pa || false, play_breakout: tf.play_breakout || false, play_fomo: tf.play_fomo || false,
-      req_8020: tf.req_8020 !== false, req_fvg: tf.req_fvg !== false, req_instrument: tf.req_instrument !== false,
+      lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
+      lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false,
+      em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
+      sl_type: tf.sl_type || "",
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
+      lj_correlation: tf.lj_correlation || "TAK",
+      hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
     } : {};
     const updates = {
       description: tf.description, result: tf.result, direction: tf.direction, meets_requirements: tf.meetsRequirements,
@@ -5994,10 +6037,37 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </>}
 
               {isLJ && <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>Live Journal — Trade</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Live Journal — Trade</div>
 
-              {/* Row 1: Instrument, Tactic, Entry time */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {/* ROW 1: Direction | Result | Zysk/Strata | R/R */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Direction</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTf(p => ({...p, direction: "LONG"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "LONG" ? `${T.green}20` : T.bg2, color: tf.direction === "LONG" ? T.green : T.textSoft, fontWeight: tf.direction === "LONG" ? 700 : 400, borderColor: tf.direction === "LONG" ? T.green : T.border }}>LONG ▲</button>
+                    <button onClick={() => setTf(p => ({...p, direction: "SHORT"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "SHORT" ? `${T.red}20` : T.bg2, color: tf.direction === "SHORT" ? T.red : T.textSoft, fontWeight: tf.direction === "SHORT" ? 700 : 400, borderColor: tf.direction === "SHORT" ? T.red : T.border }}>SHORT ▼</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Result</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["WIN", T.green], ["BE", T.amber], ["LOSS", T.red]].map(([r, col]) => (
+                      <button key={r} onClick={() => setTf(p => ({...p, result: r}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === r ? `${col}20` : T.bg2, color: tf.result === r ? col : T.textSoft, fontWeight: tf.result === r ? 700 : 400, borderColor: tf.result === r ? col : T.border }}>{r}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Zysk / Strata ($)</div>
+                  <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+                <div>
+                  <div style={label}>Risk / Reward</div>
+                  <input type="text" value={tf.lj_rr} onChange={e => setTf(p => ({...p, lj_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+              </div>
+
+              {/* INSTRUMENT / TACTIC */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Instrument</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -6007,70 +6077,148 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
                 <div>
                   <div style={label}>Taktyka</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => setTf(p => ({...p, lj_tactic: "IB"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "IB" ? `${T.green}20` : T.bg2, color: tf.lj_tactic === "IB" ? T.green : T.textSoft, fontWeight: tf.lj_tactic === "IB" ? 700 : 400, borderColor: tf.lj_tactic === "IB" ? T.green : T.border }}>IB</button>
-                    <button onClick={() => setTf(p => ({...p, lj_tactic: "LUNCH_BOX"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "LUNCH_BOX" ? `${T.purple}20` : T.bg2, color: tf.lj_tactic === "LUNCH_BOX" ? T.purple : T.textSoft, fontWeight: tf.lj_tactic === "LUNCH_BOX" ? 700 : 400, borderColor: tf.lj_tactic === "LUNCH_BOX" ? T.purple : T.border }}>Lunch Box</button>
-                    <button onClick={() => setTf(p => ({...p, lj_tactic: "NO_TACTIC"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === "NO_TACTIC" ? `${T.textDim}30` : T.bg2, color: tf.lj_tactic === "NO_TACTIC" ? T.text : T.textSoft, fontWeight: tf.lj_tactic === "NO_TACTIC" ? 700 : 400, borderColor: tf.lj_tactic === "NO_TACTIC" ? T.textDim : T.border }}>No Tactic</button>
-                  </div>
-                </div>
-                <div>
-                  <div style={label}>Godzina wejścia</div>
-                  <input type="time" value={tf.entry_time} onChange={e => setTf(p => ({...p, entry_time: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
-                </div>
-              </div>
-
-              {/* Row 2: Date, Profit/Loss */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Data trade'a</div>
-                  <input type="date" value={tf.trade_date} min="2023-01-01" onChange={e => setTf(p => ({...p, trade_date: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <div style={label}>Zysk / Strata ($)</div>
-                  <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
-                </div>
-              </div>
-
-              {/* Row 3: Range Size + Duration + Play Type */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Range Size</div>
-                  <input type="text" value={tf.lj_range_size} onChange={e => setTf(p => ({...p, lj_range_size: e.target.value}))} placeholder="np. 45" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
-                </div>
-                <div>
-                  <div style={label}>Czas w trade (min)</div>
-                  <input type="text" value={tf.lj_duration_min} onChange={e => setTf(p => ({...p, lj_duration_min: e.target.value}))} placeholder="np. 12" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
-                </div>
-                <div>
-                  <div style={label}>Typ zagrania <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span></div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {[
-                      { id: "play_vwap",     label: "VWAP",         color: T.cyan },
-                      { id: "play_bands",    label: "Wstęgi",       color: T.purple },
-                      { id: "play_pb35",     label: "Pullback 35",  color: T.amber },
-                      { id: "play_pb50",     label: "Pullback 50",  color: T.amber },
-                      { id: "play_fvg",      label: "FVG",          color: T.green },
-                      { id: "play_pa",       label: "Price Action", color: T.textSoft },
-                      { id: "play_breakout", label: "Breakout",     color: T.red, warning: true },
-                      { id: "play_fomo",     label: "FOMO",         color: T.red, warning: true },
-                    ].map(pt => (
-                      <button key={pt.id} onClick={() => setTf(p => ({...p, [pt.id]: !p[pt.id]}))} style={{
-                        ...sel, flex: 1, padding: "6px 4px", fontSize: 10,
-                        background: tf[pt.id] ? `${pt.color}20` : T.bg2,
-                        color: tf[pt.id] ? pt.color : T.textSoft,
-                        fontWeight: tf[pt.id] ? 700 : 400,
-                        borderColor: tf[pt.id] ? pt.color : T.border,
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                      }}>
-                        {pt.warning && <span style={{ color: T.red, fontSize: 12, fontWeight: 700 }}>⊘</span>}
-                        {tf[pt.id] && !pt.warning ? "✓ " : ""}{pt.label}
-                      </button>
+                    {[["IB", T.green, "IB"], ["LUNCH_BOX", T.purple, "Lunch Box"], ["OTHERS", T.amber, "Others"]].map(([id, col, lbl]) => (
+                      <button key={id} onClick={() => setTf(p => ({...p, lj_tactic: id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === id ? `${col}20` : T.bg2, color: tf.lj_tactic === id ? col : T.textSoft, fontWeight: tf.lj_tactic === id ? 700 : 400, borderColor: tf.lj_tactic === id ? col : T.border }}>{lbl}</button>
                     ))}
                   </div>
+                  {tf.lj_tactic === "OTHERS" && (
+                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                      {["Gap", "VWAP", "Wstęga"].map(opt => (
+                        <button key={opt} onClick={() => setTf(p => ({...p, lj_tactic_other: p.lj_tactic_other === opt ? "" : opt}))} style={{ ...sel, flex: 1, padding: "5px 4px", fontSize: 10, background: tf.lj_tactic_other === opt ? `${T.amber}20` : T.bg2, color: tf.lj_tactic_other === opt ? T.amber : T.textSoft, fontWeight: tf.lj_tactic_other === opt ? 700 : 400, borderColor: tf.lj_tactic_other === opt ? T.amber : T.border }}>{tf.lj_tactic_other === opt ? "✓ " : ""}{opt}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Emotions only (Meets Requirements removed — Confluences replaces it) */}
+              {/* TIMING: Date | Entry Time | Duration | Range Size */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: T.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Timing</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                  <div>
+                    <div style={label}>Data</div>
+                    <input type="date" value={tf.trade_date} min="2023-01-01" onChange={e => setTf(p => ({...p, trade_date: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <div style={label}>Godzina wejścia</div>
+                    <input type="time" value={tf.entry_time} onChange={e => setTf(p => ({...p, entry_time: e.target.value}))} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <div style={label}>Czas w trade (min)</div>
+                    <input type="text" value={tf.lj_duration_min} onChange={e => setTf(p => ({...p, lj_duration_min: e.target.value}))} placeholder="np. 12" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                  </div>
+                  <div>
+                    <div style={label}>Range Size</div>
+                    <input type="text" value={tf.lj_range_size} onChange={e => setTf(p => ({...p, lj_range_size: e.target.value}))} placeholder="np. 45" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* PA IN RANGE */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Price Action w Range'u <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span></div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {[
+                    { id: "pa_double_top",   label: "Double Top" },
+                    { id: "pa_boundary",     label: "Przy granicy" },
+                    { id: "pa_reverse_poi",  label: "Reverse z POI" },
+                    { id: "pa_choppy",       label: "Choppy" },
+                    { id: "pa_below_band",   label: "Zejście pod wstęgę i reversal" },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => setTf(p => ({...p, [opt.id]: !p[opt.id]}))} style={{ ...sel, flex: 1, padding: "6px 6px", fontSize: 10, background: tf[opt.id] ? `${T.cyan}20` : T.bg2, color: tf[opt.id] ? T.cyan : T.textSoft, fontWeight: tf[opt.id] ? 700 : 400, borderColor: tf[opt.id] ? T.cyan : T.border }}>
+                      {tf[opt.id] ? "✓ " : ""}{opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* MOMENT WEJSCIA */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Moment wejścia <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span></div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {[
+                    { id: "em_vwap_retest",     label: "VWAP Retest" },
+                    { id: "em_band_retest",      label: "Wstęga Retest" },
+                    { id: "em_5min_gap",         label: "5min GAP" },
+                    { id: "em_3565_retest",      label: "35/65 Retest" },
+                    { id: "em_pullback_random",  label: "Pullback Random" },
+                    { id: "em_pa_fomo",          label: "⊘ PA FOMO" },
+                    { id: "em_8020",             label: "80/20" },
+                  ].map(opt => {
+                    const isFomo = opt.id === "em_pa_fomo";
+                    const activeColor = isFomo ? T.red : T.purple;
+                    return (
+                      <button key={opt.id} onClick={() => setTf(p => ({...p, [opt.id]: !p[opt.id]}))} style={{ ...sel, flex: 1, padding: "6px 6px", fontSize: 10, background: tf[opt.id] ? `${activeColor}20` : T.bg2, color: tf[opt.id] ? activeColor : T.textSoft, fontWeight: tf[opt.id] ? 700 : 400, borderColor: tf[opt.id] ? activeColor : T.border }}>
+                        {tf[opt.id] ? "✓ " : ""}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* STOP LOSS */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Stop Loss</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[
+                    { id: "LH",     label: "L/H" },
+                    { id: "BAND",   label: "Wstęga" },
+                    { id: "VWAP",   label: "VWAP" },
+                    { id: "RANDOM", label: "⊘ Random", warn: true },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => setTf(p => ({...p, sl_type: p.sl_type === opt.id ? "" : opt.id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.sl_type === opt.id ? `${opt.warn ? T.red : T.cyan}20` : T.bg2, color: tf.sl_type === opt.id ? (opt.warn ? T.red : T.cyan) : T.textSoft, fontWeight: tf.sl_type === opt.id ? 700 : 400, borderColor: tf.sl_type === opt.id ? (opt.warn ? T.red : T.cyan) : T.border }}>
+                      {tf.sl_type === opt.id ? "✓ " : ""}{opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* REQUIREMENTS — auto-count */}
+              {(() => {
+                const reqs = [
+                  { id: "req_vwap", label: "VWAP" },
+                  { id: "req_bands", label: "Wstęgi" },
+                  { id: "req_bands_5m", label: "Wstęgi 5min" },
+                  { id: "req_rr", label: "RR" },
+                  { id: "req_range", label: "Range" },
+                ];
+                const met = reqs.filter(r => tf[r.id] !== false).length;
+                const pct = Math.round((met / reqs.length) * 100);
+                return (
+                  <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${met >= 4 ? T.green : met >= 3 ? T.amber : T.red}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div style={{ ...label }}>Requirements</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: met >= 4 ? T.green : met >= 3 ? T.amber : T.red }}>{met}/{reqs.length} spełnionych ({pct}%)</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8 }}>
+                      {reqs.map(r => (
+                        <div key={r.id}>
+                          <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button onClick={() => setTf(p => ({...p, [r.id]: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] ? `${T.green}20` : T.bg2, color: tf[r.id] ? T.green : T.textSoft, fontWeight: tf[r.id] ? 700 : 400, borderColor: tf[r.id] ? T.green : T.border }}>TAK</button>
+                            <button onClick={() => setTf(p => ({...p, [r.id]: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] === false ? `${T.red}20` : T.bg2, color: tf[r.id] === false ? T.red : T.textSoft, fontWeight: tf[r.id] === false ? 700 : 400, borderColor: tf[r.id] === false ? T.red : T.border }}>NIE</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* KORELACJA DRUGIEGO INSTRUMENTU */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Korelacja drugiego instrumentu</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[["TAK", T.green], ["NIE", T.red], ["SREDNIA", T.amber]].map(([val, col]) => (
+                    <button key={val} onClick={() => setTf(p => ({...p, lj_correlation: val}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: tf.lj_correlation === val ? `${col}20` : T.bg2, color: tf.lj_correlation === val ? col : T.textSoft, fontWeight: tf.lj_correlation === val ? 700 : 400, borderColor: tf.lj_correlation === val ? col : T.border }}>
+                      {val === "SREDNIA" ? "Średnia" : val}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* EMOCJE */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Emocje pod kontrolą</div>
                 <div style={{ display: "flex", gap: 4 }}>
@@ -6079,49 +6227,50 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Confluences (8 checkboxes — default TAK) */}
+              {/* HTS TABLE */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                <div style={{ ...label, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>Confluences</span>
-                  <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>(odznacz jeśli element brakuje)</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ ...label }}>HTS — Trend per interwał</div>
+                  <span style={{ fontSize: 9, color: T.textDim }}>auto-detected from screenshot</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
-                  {[
-                    { id: "req_vwap",       label: "VWAP" },
-                    { id: "req_bands",      label: "Wstęgi" },
-                    { id: "req_bands_5m",   label: "Wstęgi 5m" },
-                    { id: "req_pa",         label: "PA" },
-                    { id: "req_rr",         label: "RR" },
-                    { id: "req_range",      label: "Range" },
-                    { id: "req_8020",       label: "80/20" },
-                    { id: "req_fvg",        label: "FVG" },
-                    { id: "req_instrument", label: "Zgodność instr." },
-                  ].map(r => (
-                    <div key={r.id}>
-                      <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => setTf(p => ({...p, [r.id]: true}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] ? `${T.green}20` : T.bg2, color: tf[r.id] ? T.green : T.textSoft, fontWeight: tf[r.id] ? 700 : 400, borderColor: tf[r.id] ? T.green : T.border }}>TAK</button>
-                        <button onClick={() => setTf(p => ({...p, [r.id]: false}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf[r.id] === false ? `${T.red}20` : T.bg2, color: tf[r.id] === false ? T.red : T.textSoft, fontWeight: tf[r.id] === false ? 700 : 400, borderColor: tf[r.id] === false ? T.red : T.border }}>NIE</button>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+                  {[["hts_m1","m1"], ["hts_m5","m5"], ["hts_m15","m15"], ["hts_h1","h1"], ["hts_h4","h4"], ["hts_d1","d1"]].map(([key, lbl]) => {
+                    const val = tf[key];
+                    const opts = [
+                      { v: "up",      icon: "▲", color: T.green,   title: "Trend wzrostowy" },
+                      { v: "down",    icon: "▼", color: T.red,     title: "Trend spadkowy" },
+                      { v: "in",      icon: "■", color: T.textDim, title: "Cena we wstędze" },
+                      { v: "overlap", icon: "■", color: T.amber,   title: "Wstęgi się nachodzą" },
+                    ];
+                    const current = opts.find(o => o.v === val);
+                    return (
+                      <div key={key} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, fontWeight: 700 }}>{lbl.toUpperCase()}</div>
+                        <div style={{ position: "relative" }}>
+                          <select value={val} onChange={e => setTf(p => ({...p, [key]: e.target.value}))} style={{ ...sel, width: "100%", textAlign: "center", padding: "6px 2px", fontSize: 16, fontWeight: 700, color: current?.color || T.textDim, background: val ? `${current?.color || T.textDim}15` : T.bg2, borderColor: current?.color || T.border }}>
+                            <option value="">—</option>
+                            <option value="up">▲</option>
+                            <option value="down">▼</option>
+                            <option value="in">■ in</option>
+                            <option value="overlap">■ ovlp</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 9, color: T.textDim, justifyContent: "center" }}>
+                  <span><span style={{ color: T.green }}>▲</span> powyżej wstęg</span>
+                  <span><span style={{ color: T.red }}>▼</span> poniżej wstęg</span>
+                  <span><span style={{ color: T.textDim }}>■</span> w wstędze</span>
+                  <span><span style={{ color: T.amber }}>■</span> wstęgi nachodzą</span>
                 </div>
               </div>
 
-              {/* Second instrument screenshot — paste with Ctrl+V */}
+              {/* SCREENSHOT DRUGIEGO INSTRUMENTU */}
               <div style={{ marginBottom: 12 }}>
                 <div style={label}>📸 Screenshot drugiego instrumentu (Ctrl+V)</div>
-                <div
-                  tabIndex={0}
-                  onPaste={handlePasteSecond}
-                  style={{
-                    padding: 12, background: T.bg2, borderRadius: 8,
-                    border: `1px dashed ${T.border}`,
-                    cursor: "text", outline: "none",
-                  }}
-                  onFocus={(e) => e.currentTarget.style.borderColor = T.cyan}
-                  onBlur={(e) => e.currentTarget.style.borderColor = T.border}
-                >
+                <div tabIndex={0} onPaste={handlePasteSecond} style={{ padding: 12, background: T.bg2, borderRadius: 8, border: `1px dashed ${T.border}`, cursor: "text", outline: "none" }} onFocus={(e) => e.currentTarget.style.borderColor = T.cyan} onBlur={(e) => e.currentTarget.style.borderColor = T.border}>
                   {tf.lj_screenshot_second ? (
                     <div>
                       <img src={tf.lj_screenshot_second} alt="Second instrument" style={{ maxWidth: "100%", maxHeight: 250, borderRadius: 6, display: "block", marginBottom: 6 }} />
@@ -6133,14 +6282,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   ) : (
                     <div style={{ textAlign: "center", padding: 20 }}>
                       <div style={{ fontSize: 12, color: T.textSoft, marginBottom: 4 }}>Kliknij tutaj i wklej Ctrl+V</div>
-                      <div style={{ fontSize: 9, color: T.textDim }}>Zdjęcie drugiego instrumentu dla porównania (np. ES gdy tradujesz NQ)</div>
+                      <div style={{ fontSize: 9, color: T.textDim }}>Screenshot drugiego instrumentu dla porównania (np. ES gdy tradujesz NQ)</div>
                       <div style={{ marginTop: 8 }}>
-                        <input type="file" accept="image/*" onChange={async (e) => {
-                          const file = e.target.files?.[0]; if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = () => setTf(p => ({...p, lj_screenshot_second: reader.result}));
-                          reader.readAsDataURL(file);
-                        }} style={{ fontSize: 10, color: T.textDim }} />
+                        <input type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setTf(p => ({...p, lj_screenshot_second: reader.result})); reader.readAsDataURL(file); }} style={{ fontSize: 10, color: T.textDim }} />
                       </div>
                     </div>
                   )}
