@@ -5061,34 +5061,32 @@ Rules:
 - If unable to determine, return false for TPs and "" for result
 - Respond ONLY with JSON, nothing else`;
       } else if (isLJ && phase === "before") {
-        promptText = `Look at this trading chart screenshot from a futures trading platform (NQ or ES, typically NinjaTrader or similar).
+        promptText = `Look at this trading chart screenshot from a futures trading platform.
 
 Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 {
-  "instrument": "NQ" or "ES" (read from the title bar at top of chart),
-  "trade_date": "YYYY-MM-DD" (from bottom status bar date, DAY ALWAYS FIRST, 'YY → 20YY, if unreadable return ""),
-  "entry_time": "HH:MM 24h" (from bottom status bar time, if unreadable return ""),
+  "instrument": "NQ" or "ES",
+  "trade_date": "YYYY-MM-DD",
+  "entry_time": "HH:MM",
   "hts": {
-    "m1":  one of: "up" | "down" | "in" | "overlap" | "",
-    "m5":  one of: "up" | "down" | "in" | "overlap" | "",
-    "m15": one of: "up" | "down" | "in" | "overlap" | "",
-    "h1":  one of: "up" | "down" | "in" | "overlap" | "",
-    "h4":  one of: "up" | "down" | "in" | "overlap" | "",
-    "d1":  one of: "up" | "down" | "in" | "overlap" | ""
+    "m1": "", "m5": "", "m15": "", "h1": "", "h4": "", "d1": ""
   }
 }
 
-HTS table rules (if visible — a table with timeframe rows and columns "33" and "144"):
-- Green triangle (▲) in row = "up" (price above bands, uptrend)
-- Red triangle (▼) in row = "down" (price below bands, downtrend)
-- Gray/white square (■) for PRICE row = "in" (price inside bands)
-- Gray/white square (■) for INTERVAL row = "overlap" (bands overlap on that timeframe)
-- If HTS table not visible, return "" for all hts fields
+INSTRUMENT: Read from title bar at top left. "Micro E-mini Nasdaq" or "MNQ" → "NQ". "Micro E-mini S&P" or "MES" → "ES". "NQ" → "NQ". "ES" → "ES".
 
-Other rules:
-- instrument: "MNQ"/"NQ" → "NQ"; "MES"/"ES" → "ES"; if unsure return ""
-- Today is ${new Date().toISOString().slice(0,10)}
-- Respond ONLY with JSON, nothing else`;
+DATE & TIME: Read from the bottom status bar (dark bar at very bottom of chart, shows something like "Wed 08 Jul '26 23:00"). Extract date → YYYY-MM-DD (day first: 08 Jul '26 → 2026-07-08). Extract time → HH:MM 24h.
+
+HTS TABLE: Look for a small table in the bottom-right corner of the chart labeled "HTS  33  144" with rows for m1, m5, m15, H1, H4, D1. Each row has symbols under the 33 and 144 columns.
+
+For EACH timeframe row, determine the overall trend using this logic:
+- If BOTH columns show green triangle (▲) → "up"
+- If BOTH columns show red triangle (▼) → "down"  
+- If one shows ▲ and other shows ▼ → "mixed" (use "in")
+- If any column shows gray/white square (■) → check if it's "in band" (price inside) or "overlap" (bands overlap). For the TIMEFRAME rows (not a price row), square means bands overlap → "overlap"
+- If row not visible or unclear → ""
+
+Today is ${new Date().toISOString().slice(0, 10)}. Respond ONLY with JSON.`;
       } else {
         // HTS / V_SHAPE / MARKET_PA — original HTS table extraction
         promptText = `Look at this trading chart screenshot. In the bottom-right corner there should be an HTS table with trend indicators and values.
@@ -5131,7 +5129,7 @@ Rules:
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 500,
+          model: "claude-sonnet-4-6", max_tokens: 500,
           messages: [{ role: "user", content: [
             { type: "image", source: { type: "base64", media_type: "image/png", data: base64 } },
             { type: "text", text: promptText }
@@ -5872,7 +5870,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
                 </div>
-                {stratType !== "HTS" && stratType !== "DR" && (
+                {stratType !== "HTS" && stratType !== "DR" && !isDRLike && !isLJ && (
                 <div>
                   <div style={label}>Meets Requirements</div>
                   <div style={{ display: "flex", gap: 6 }}>
