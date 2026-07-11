@@ -4809,7 +4809,7 @@ function TradingPanel({ apiKey, supa }) {
     lj_duration_min: "",
     lj_screenshot_second: "",
     // PA in Range multi-select
-    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false,
+    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false,
     // Entry moment multi-select
     em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false,
     em_pullback_random: false, em_pa_fomo: false, em_8020: false,
@@ -5077,13 +5077,14 @@ INSTRUMENT: Read from title bar at top left. "Micro E-mini Nasdaq" or "MNQ" → 
 
 DATE & TIME: Read from the bottom status bar (dark bar at very bottom of chart, shows something like "Wed 08 Jul '26 23:00"). Extract date → YYYY-MM-DD (day first: 08 Jul '26 → 2026-07-08). Extract time → HH:MM 24h.
 
-HTS TABLE: Look for a small table in the bottom-right corner of the chart labeled "HTS  33  144" with rows for m1, m5, m15, H1, H4, D1. Each row has symbols under the 33 and 144 columns.
+HTS TABLE: Look for a small table in the bottom-right corner labeled "HTS  33  144" with rows for m1, m5, m15, H1, H4, D1.
 
-For EACH timeframe row, determine the overall trend using this logic:
-- If BOTH columns show green triangle (▲) → "up"
-- If BOTH columns show red triangle (▼) → "down"  
-- If one shows ▲ and other shows ▼ → "mixed" (use "in")
-- If any column shows gray/white square (■) → check if it's "in band" (price inside) or "overlap" (bands overlap). For the TIMEFRAME rows (not a price row), square means bands overlap → "overlap"
+IMPORTANT: Read ONLY the FIRST symbol column (the one directly after the timeframe label, BEFORE the "33" column). Ignore the "33" and "144" columns entirely.
+
+For each timeframe row, the first symbol means:
+- Green triangle (▲) → "up"
+- Red triangle (▼) → "down"
+- Gray/white square (■) → "overlap" (bands overlap on that timeframe)
 - If row not visible or unclear → ""
 
 Today is ${new Date().toISOString().slice(0, 10)}. Respond ONLY with JSON.`;
@@ -5233,7 +5234,7 @@ Rules:
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
-      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false,
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
       sl_type: tf.sl_type || "",
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
@@ -5320,7 +5321,7 @@ Rules:
       lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
       lj_tactic_other: sd.lj_tactic_other || "", lj_rr: sd.lj_rr || "",
       lj_range_size: sd.lj_range_size || "", lj_duration_min: sd.lj_duration_min || "", lj_screenshot_second: sd.lj_screenshot_second || "",
-      pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false,
+      pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false, pa_trend: sd.pa_trend || false,
       em_vwap_retest: sd.em_vwap_retest || false, em_band_retest: sd.em_band_retest || false, em_5min_gap: sd.em_5min_gap || false, em_3565_retest: sd.em_3565_retest || false, em_pullback_random: sd.em_pullback_random || false, em_pa_fomo: sd.em_pa_fomo || false, em_8020: sd.em_8020 || false,
       sl_type: sd.sl_type || "",
       req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
@@ -5335,7 +5336,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5368,7 +5369,7 @@ Rules:
       lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
-      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false,
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
       sl_type: tf.sl_type || "",
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
@@ -6080,13 +6081,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <button key={id} onClick={() => setTf(p => ({...p, lj_tactic: id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === id ? `${col}20` : T.bg2, color: tf.lj_tactic === id ? col : T.textSoft, fontWeight: tf.lj_tactic === id ? 700 : 400, borderColor: tf.lj_tactic === id ? col : T.border }}>{lbl}</button>
                     ))}
                   </div>
-                  {tf.lj_tactic === "OTHERS" && (
+                    {tf.lj_tactic === "OTHERS" && (
                     <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                      {["Gap", "VWAP", "Wstęga"].map(opt => (
+                      {["Gap", "VWAP", "Wstęga", "10am GAP"].map(opt => (
                         <button key={opt} onClick={() => setTf(p => ({...p, lj_tactic_other: p.lj_tactic_other === opt ? "" : opt}))} style={{ ...sel, flex: 1, padding: "5px 4px", fontSize: 10, background: tf.lj_tactic_other === opt ? `${T.amber}20` : T.bg2, color: tf.lj_tactic_other === opt ? T.amber : T.textSoft, fontWeight: tf.lj_tactic_other === opt ? 700 : 400, borderColor: tf.lj_tactic_other === opt ? T.amber : T.border }}>{tf.lj_tactic_other === opt ? "✓ " : ""}{opt}</button>
                       ))}
                     </div>
-                  )}
+                    )}
                 </div>
               </div>
 
@@ -6123,6 +6124,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "pa_reverse_poi",  label: "Reverse z POI" },
                     { id: "pa_choppy",       label: "Choppy" },
                     { id: "pa_below_band",   label: "Zejście pod wstęgę i reversal" },
+                    { id: "pa_trend",        label: "Trend" },
                   ].map(opt => (
                     <button key={opt.id} onClick={() => setTf(p => ({...p, [opt.id]: !p[opt.id]}))} style={{ ...sel, flex: 1, padding: "6px 6px", fontSize: 10, background: tf[opt.id] ? `${T.cyan}20` : T.bg2, color: tf[opt.id] ? T.cyan : T.textSoft, fontWeight: tf[opt.id] ? 700 : 400, borderColor: tf[opt.id] ? T.cyan : T.border }}>
                       {tf[opt.id] ? "✓ " : ""}{opt.label}
