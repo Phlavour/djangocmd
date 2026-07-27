@@ -5855,7 +5855,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <Heading icon="✎" right={isModal ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
-              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || isDRLike) ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || isDRLike || isLJ) ? "1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5864,14 +5864,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, direction: "NO_TRADE", result: "BE", profit: "0", profit_usd: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "NO_TRADE" ? `${T.textDim}30` : T.bg2, color: tf.direction === "NO_TRADE" ? T.text : T.textSoft, fontWeight: tf.direction === "NO_TRADE" ? 700 : 400, borderColor: tf.direction === "NO_TRADE" ? T.textDim : T.border }}>NO TRADE</button>
                   </div>
                 </div>
-                <div>
+                {!isLJ && <div>
                   <div style={label}>Result</div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
                     <button onClick={() => setTf(p => ({...p, result: "BE", profit: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "BE" ? `${T.amber}20` : T.bg2, color: tf.result === "BE" ? T.amber : T.textSoft, fontWeight: tf.result === "BE" ? 700 : 400, borderColor: tf.result === "BE" ? T.amber : T.border }}>BE</button>
                     <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
                   </div>
-                </div>
+                </div>}
                 {stratType !== "HTS" && stratType !== "DR" && !isDRLike && !isLJ && (
                 <div>
                   <div style={label}>Meets Requirements</div>
