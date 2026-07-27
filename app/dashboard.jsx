@@ -8623,7 +8623,7 @@ function BotsPlaceholder() {
 // ═══════════════════════════════════════════════════════════════
 
 export default function App() {
-  const [nav, setNav] = useState("twitter");
+  const [nav, setNav] = useState("trading");
   const [time, setTime] = useState(new Date());
   const [isDark, setIsDark] = useState(false);
   const [apiKey, setApiKey] = useState(() => {
