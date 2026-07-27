@@ -6039,15 +6039,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {isLJ && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Live Journal — Trade</div>
 
-              {/* ROW 1: Direction | Result | Zysk/Strata | R/R */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Direction</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => setTf(p => ({...p, direction: "LONG"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "LONG" ? `${T.green}20` : T.bg2, color: tf.direction === "LONG" ? T.green : T.textSoft, fontWeight: tf.direction === "LONG" ? 700 : 400, borderColor: tf.direction === "LONG" ? T.green : T.border }}>LONG ▲</button>
-                    <button onClick={() => setTf(p => ({...p, direction: "SHORT"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.direction === "SHORT" ? `${T.red}20` : T.bg2, color: tf.direction === "SHORT" ? T.red : T.textSoft, fontWeight: tf.direction === "SHORT" ? 700 : 400, borderColor: tf.direction === "SHORT" ? T.red : T.border }}>SHORT ▼</button>
-                  </div>
+              {/* TAKTYKA — na górze */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Taktyka</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {[["IB", T.green, "IB"], ["LUNCH_BOX", T.purple, "Lunch Box"], ["OTHERS", T.amber, "Others"]].map(([id, col, lbl]) => (
+                    <button key={id} onClick={() => setTf(p => ({...p, lj_tactic: id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === id ? `${col}20` : T.bg2, color: tf.lj_tactic === id ? col : T.textSoft, fontWeight: tf.lj_tactic === id ? 700 : 400, borderColor: tf.lj_tactic === id ? col : T.border }}>{lbl}</button>
+                  ))}
                 </div>
+                {tf.lj_tactic === "OTHERS" && (
+                  <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                    {["Gap", "VWAP", "Wstęga", "10am GAP"].map(opt => (
+                      <button key={opt} onClick={() => setTf(p => ({...p, lj_tactic_other: p.lj_tactic_other === opt ? "" : opt}))} style={{ ...sel, flex: 1, padding: "5px 4px", fontSize: 10, background: tf.lj_tactic_other === opt ? `${T.amber}20` : T.bg2, color: tf.lj_tactic_other === opt ? T.amber : T.textSoft, fontWeight: tf.lj_tactic_other === opt ? 700 : 400, borderColor: tf.lj_tactic_other === opt ? T.amber : T.border }}>{tf.lj_tactic_other === opt ? "✓ " : ""}{opt}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ROW 1: Result | Instrument | Zysk/Strata | R/R */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Result</div>
                   <div style={{ display: "flex", gap: 4 }}>
@@ -6057,18 +6067,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                 </div>
                 <div>
-                  <div style={label}>Zysk / Strata ($)</div>
-                  <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
-                </div>
-                <div>
-                  <div style={label}>Risk / Reward</div>
-                  <input type="text" value={tf.lj_rr} onChange={e => setTf(p => ({...p, lj_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
-                </div>
-              </div>
-
-              {/* INSTRUMENT / TACTIC */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 12 }}>
-                <div>
                   <div style={label}>Instrument</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => setTf(p => ({...p, instrument: "NQ"}))} style={{ ...sel, flex: 1, background: tf.instrument === "NQ" ? `${T.cyan}20` : T.bg2, color: tf.instrument === "NQ" ? T.cyan : T.textSoft, fontWeight: tf.instrument === "NQ" ? 700 : 400, borderColor: tf.instrument === "NQ" ? T.cyan : T.border }}>NQ</button>
@@ -6076,19 +6074,12 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                 </div>
                 <div>
-                  <div style={label}>Taktyka</div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {[["IB", T.green, "IB"], ["LUNCH_BOX", T.purple, "Lunch Box"], ["OTHERS", T.amber, "Others"]].map(([id, col, lbl]) => (
-                      <button key={id} onClick={() => setTf(p => ({...p, lj_tactic: id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === id ? `${col}20` : T.bg2, color: tf.lj_tactic === id ? col : T.textSoft, fontWeight: tf.lj_tactic === id ? 700 : 400, borderColor: tf.lj_tactic === id ? col : T.border }}>{lbl}</button>
-                    ))}
-                  </div>
-                    {tf.lj_tactic === "OTHERS" && (
-                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                      {["Gap", "VWAP", "Wstęga", "10am GAP"].map(opt => (
-                        <button key={opt} onClick={() => setTf(p => ({...p, lj_tactic_other: p.lj_tactic_other === opt ? "" : opt}))} style={{ ...sel, flex: 1, padding: "5px 4px", fontSize: 10, background: tf.lj_tactic_other === opt ? `${T.amber}20` : T.bg2, color: tf.lj_tactic_other === opt ? T.amber : T.textSoft, fontWeight: tf.lj_tactic_other === opt ? 700 : 400, borderColor: tf.lj_tactic_other === opt ? T.amber : T.border }}>{tf.lj_tactic_other === opt ? "✓ " : ""}{opt}</button>
-                      ))}
-                    </div>
-                    )}
+                  <div style={label}>Zysk / Strata ($)</div>
+                  <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                </div>
+                <div>
+                  <div style={label}>Risk / Reward</div>
+                  <input type="text" value={tf.lj_rr} onChange={e => setTf(p => ({...p, lj_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
 
