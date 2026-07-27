@@ -8873,11 +8873,11 @@ Jedno zdanie mobilizujące.`;
                 <input autoFocus value={newTaskLabel} onChange={e => setNewTaskLabel(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTaskLabel(""); } }}
                   placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
-                <DCBtn small color={T.green} onClick={addTask}>Dodaj</Btn>
-                <DCBtn small style={{ background: "#fff", color: "#6b7280", border: "1px solid #e5e7eb" }} onClick={() => { setAddingTask(false); setNewTaskLabel(""); }}>Anuluj</Btn>
+                <DCBtn small color={T.green} onClick={addTask}>Dodaj</DCBtn>
+                <DCBtn small style={{ background: "#fff", color: "#6b7280", border: "1px solid #e5e7eb" }} onClick={() => { setAddingTask(false); setNewTaskLabel(""); }}>Anuluj</DCBtn>
               </div>
             ) : (
-              <DCBtn small onClick={() => setAddingTask(true)}>+ Nowe zadanie</Btn>
+              <DCBtn small onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
             )}
           </DCCard>
         </div>
@@ -8994,7 +8994,7 @@ Jedno zdanie mobilizujące.`;
               <div>
                 <DCBtn color={T.cyan} onClick={generateAISummary} disabled={weekSummaryLoading || !apiKey} style={{ marginBottom: 12 }}>
                   {weekSummaryLoading ? "⏳ Generuję..." : "🤖 Generuj AI podsumowanie tygodnia"}
-                </Btn>
+                </DCBtn>
                 {!apiKey && <div style={{ fontSize: 10, color: T.red, marginBottom: 8 }}>Brak Claude API Key w Settings</div>}
                 {weekSummaryOutput && (
                   <div style={{ fontSize: 11, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap", maxHeight: 400, overflowY: "auto", padding: 12, background: T.bg2, borderRadius: 8 }}>
