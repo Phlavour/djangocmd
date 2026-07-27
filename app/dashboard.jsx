@@ -8929,7 +8929,7 @@ function DailyCheckPanel({ supa, apiKey }) {
     <div style={{ padding: 20, background: "#f3f4f6", minHeight: "calc(100vh - 60px)", color: DC.text }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* COL 1: Calendar + Manage tasks */}
+        {/* COL 1: Calendar + Dziś + Dzienna Rutyna */}
         <div>
           <DCCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -8969,32 +8969,6 @@ function DailyCheckPanel({ supa, apiKey }) {
             </div>
           </DCCard>
 
-          {/* Dzienna Rutyna */}
-          <DCCard>
-            <DCHead icon="🔄">Dzienna Rutyna</DCHead>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
-              {tasks.map(t => (
-                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}>
-                  <span style={{ flex: 1 }}>{t.label}</span>
-                  <button onClick={() => deleteTask(t.task_key)} title="Usuń z rutyny" style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}>✕</button>
-                </div>
-              ))}
-            </div>
-            {addingTask ? (
-              <div style={{ display: "flex", gap: 6 }}>
-                <input autoFocus value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
-                <DCBtn small bg={DC.green} onClick={addTask}>Dodaj</DCBtn>
-                <DCBtn small style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => { setAddingTask(false); setNewTask(""); }}>Anuluj</DCBtn>
-              </div>
-            ) : (
-              <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
-            )}
-          </DCCard>
-        </div>
-
-        {/* COL 2: Today tasks + Day summary + Weekly */}
-        <div>
-          {/* Today tasks */}
           <DCCard style={{ marginBottom: 16 }}>
             <DCHead icon="📋">
               {selectedDay === today
@@ -9037,6 +9011,32 @@ function DailyCheckPanel({ supa, apiKey }) {
             </div>
           </DCCard>
 
+          {/* Dzienna Rutyna */}
+          <DCCard>
+            <DCHead icon="🔄">Dzienna Rutyna</DCHead>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+              {tasks.map(t => (
+                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}>
+                  <span style={{ flex: 1 }}>{t.label}</span>
+                  <button onClick={() => deleteTask(t.task_key)} title="Usuń z rutyny" style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {addingTask ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input autoFocus value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
+                <DCBtn small bg={DC.green} onClick={addTask}>Dodaj</DCBtn>
+                <DCBtn small style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => { setAddingTask(false); setNewTask(""); }}>Anuluj</DCBtn>
+              </div>
+            ) : (
+              <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
+            )}
+          </DCCard>
+        </div>
+        </div>
+
+        {/* COL 2: Tasks */}
+        <div>
           {/* Daily one-off tasks */}
           <DCCard style={{ marginBottom: 16 }}>
             <DCHead icon="📌">Taski na ten dzień</DCHead>
