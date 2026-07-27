@@ -8578,30 +8578,55 @@ const DCBtn = ({ children, onClick, bg, disabled, small, style: sx }) => (
 
 function DailyCheckPanel({ supa, apiKey }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [monthStart, setMonthStart] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,7); });
+  const getWeekKey = (dateStr) => {
+    const d = new Date(dateStr + "T12:00:00");
+    const dow = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - dow);
+    return d.toISOString().slice(0, 10); // Mon of that week
+  };
+
+  const [monthStart, setMonthStart] = useState(() => new Date().toISOString().slice(0, 7));
   const [checklist, setChecklist] = useState({});
-  const [dayNotes, setDayNotes] = useState({});
+  const [dayNotes, setDayNotes] = useState({});  // keyed by task: `date_taskkey`
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
-  const [weekStart, setWeekStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return d.toISOString().slice(0,10); });
+  const [weekStart, setWeekStart] = useState(() => getWeekKey(today));
   const [weekTab, setWeekTab] = useState("overview");
   const [aiOut, setAiOut] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [addingTask, setAddingTask] = useState(false);
-  const [noteModal, setNoteModal] = useState(null);
+  const [noteModal, setNoteModal] = useState(null); // {date, key, label}
   const [noteText, setNoteText] = useState("");
   const [tick, setTick] = useState(0);
-  const reload = () => setTick(t => t+1);
+  const reload = () => setTick(t => t + 1);
 
+  // Day summary state (per day textarea)
+  const [daySum, setDaySum] = useState({}); // {date: text}
+  const [daySumSaving, setDaySumSaving] = useState({});
+  const [selectedDay, setSelectedDay] = useState(today);
+
+  // Weekly/Monthly notes
+  const [weekNote, setWeekNote] = useState("");
+  const [monthNote, setMonthNote] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  // Plans (week + month todo lists)
+  const [weekPlan, setWeekPlan] = useState([]); // [{id, text, completed}]
+  const [monthPlan, setMonthPlan] = useState([]);
+  const [newWeekItem, setNewWeekItem] = useState("");
+  const [newMonthItem, setNewMonthItem] = useState("");
+  const [planTab, setPlanTab] = useState("week"); // week | month
+
+  // Load checklist + tasks
   useEffect(() => {
     if (!supa?.url) return;
     let dead = false;
     setLoading(true);
     Promise.all([
-      fetch(`${supa.url}/rest/v1/checklist_tasks?active=eq.true&order=sort_order.asc`, { headers: supa.headers }).then(r=>r.json()),
-      fetch(`${supa.url}/rest/v1/daily_checklist?check_date=gte.${monthStart}-01&check_date=lte.${monthStart}-31`, { headers: supa.headers }).then(r=>r.json()),
+      fetch(`${supa.url}/rest/v1/checklist_tasks?active=eq.true&order=sort_order.asc`, { headers: supa.headers }).then(r => r.json()),
+      fetch(`${supa.url}/rest/v1/daily_checklist?check_date=gte.${monthStart}-01&check_date=lte.${monthStart}-31`, { headers: supa.headers }).then(r => r.json()),
     ]).then(([t, rows]) => {
       if (dead) return;
       if (Array.isArray(t)) setTasks(t);
@@ -8613,6 +8638,36 @@ function DailyCheckPanel({ supa, apiKey }) {
       setLoading(false);
     }).catch(e => { if (!dead) { console.error(e); setLoading(false); } });
     return () => { dead = true; };
+  }, [monthStart, supa?.url, tick]);
+
+  // Load daily summaries for current month
+  useEffect(() => {
+    if (!supa?.url) return;
+    fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.day&note_date=gte.${monthStart}-01&note_date=lte.${monthStart}-31`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => {
+        if (!Array.isArray(rows)) return;
+        const ds = {};
+        rows.forEach(r => { ds[r.note_date] = r.content || ""; });
+        setDaySum(ds);
+      }).catch(console.error);
+  }, [monthStart, supa?.url, tick]);
+
+  // Load weekly note + plan when weekStart changes
+  useEffect(() => {
+    if (!supa?.url) return;
+    fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.week&note_date=eq.${weekStart}`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => { if (Array.isArray(rows) && rows[0]) setWeekNote(rows[0].content || ""); else setWeekNote(""); }).catch(console.error);
+    fetch(`${supa.url}/rest/v1/plan_items?plan_type=eq.week&plan_date=eq.${weekStart}&order=sort_order.asc`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => { if (Array.isArray(rows)) setWeekPlan(rows); else setWeekPlan([]); }).catch(console.error);
+  }, [weekStart, supa?.url, tick]);
+
+  // Load monthly note + plan when monthStart changes
+  useEffect(() => {
+    if (!supa?.url) return;
+    fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.month&note_date=eq.${monthStart}`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => { if (Array.isArray(rows) && rows[0]) setMonthNote(rows[0].content || ""); else setMonthNote(""); }).catch(console.error);
+    fetch(`${supa.url}/rest/v1/plan_items?plan_type=eq.month&plan_date=eq.${monthStart}&order=sort_order.asc`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => { if (Array.isArray(rows)) setMonthPlan(rows); else setMonthPlan([]); }).catch(console.error);
   }, [monthStart, supa?.url, tick]);
 
   const toggle = async (date, task_key) => {
@@ -8642,76 +8697,170 @@ function DailyCheckPanel({ supa, apiKey }) {
     setNoteModal(null);
   };
 
+  const saveDaySum = async (date, content) => {
+    setDaySumSaving(p => ({...p, [date]: true}));
+    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ note_type: "day", note_date: date, content }]),
+    }).catch(console.error);
+    setDaySumSaving(p => ({...p, [date]: false}));
+  };
+
+  const saveWeekNote = async () => {
+    setNotesSaving(true);
+    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ note_type: "week", note_date: weekStart, content: weekNote }]),
+    }).catch(console.error);
+    setNotesSaving(false);
+  };
+
+  const saveMonthNote = async () => {
+    setNotesSaving(true);
+    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ note_type: "month", note_date: monthStart, content: monthNote }]),
+    }).catch(console.error);
+    setNotesSaving(false);
+  };
+
+  const addPlanItem = async (type) => {
+    const text = type === "week" ? newWeekItem : newMonthItem;
+    if (!text.trim()) return;
+    const date = type === "week" ? weekStart : monthStart;
+    const order = (type === "week" ? weekPlan : monthPlan).length;
+    const res = await fetch(`${supa.url}/rest/v1/plan_items`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "return=representation" },
+      body: JSON.stringify([{ plan_type: type, plan_date: date, text: text.trim(), completed: false, sort_order: order }]),
+    }).then(r => r.json()).catch(() => null);
+    if (Array.isArray(res) && res[0]) {
+      if (type === "week") { setWeekPlan(p => [...p, res[0]]); setNewWeekItem(""); }
+      else { setMonthPlan(p => [...p, res[0]]); setNewMonthItem(""); }
+    }
+  };
+
+  const togglePlanItem = async (type, item) => {
+    const newVal = !item.completed;
+    const setter = type === "week" ? setWeekPlan : setMonthPlan;
+    setter(p => p.map(i => i.id === item.id ? {...i, completed: newVal} : i));
+    await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${item.id}`, {
+      method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
+      body: JSON.stringify({ completed: newVal }),
+    }).catch(console.error);
+  };
+
+  const deletePlanItem = async (type, id) => {
+    const setter = type === "week" ? setWeekPlan : setMonthPlan;
+    setter(p => p.filter(i => i.id !== id));
+    await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${id}`, { method: "DELETE", headers: supa.headers }).catch(console.error);
+  };
+
   const addTask = async () => {
     if (!newTask.trim()) return;
-    const key = newTask.trim().toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+    const key = newTask.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
     await fetch(`${supa.url}/rest/v1/checklist_tasks`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "return=minimal" },
-      body: JSON.stringify([{ task_key: key, label: newTask.trim(), sort_order: tasks.length+1, active: true }]),
+      body: JSON.stringify([{ task_key: key, label: newTask.trim(), sort_order: tasks.length + 1, active: true }]),
     }).catch(console.error);
     setNewTask(""); setAddingTask(false); reload();
   };
 
-  // Calendar helpers
   const [year, month] = monthStart.split("-").map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDow = (new Date(year, month-1, 1).getDay() + 6) % 7;
-  const days = Array.from({length: daysInMonth}, (_, i) => `${monthStart}-${String(i+1).padStart(2,"0")}`);
-  const score = d => { const done = tasks.filter(t => checklist[`${d}_${t.task_key}`]).length; const tot = tasks.length; return { done, tot, pct: tot ? Math.round(done/tot*100) : 0 }; };
-  const col = pct => pct>=80 ? DC.green : pct>=50 ? DC.amber : pct>0 ? DC.red : DC.dim;
+  const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+  const days = Array.from({ length: daysInMonth }, (_, i) => `${monthStart}-${String(i + 1).padStart(2, "0")}`);
+  const score = d => { const done = tasks.filter(t => checklist[`${d}_${t.task_key}`]).length; const tot = tasks.length; return { done, tot, pct: tot ? Math.round(done / tot * 100) : 0 }; };
+  const col = pct => pct >= 80 ? DC.green : pct >= 50 ? DC.amber : pct > 0 ? DC.red : DC.dim;
 
-  const wkDates = Array.from({length:7}, (_,i) => { const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().slice(0,10); });
-  const wkTotal = wkDates.reduce((s,d) => s + score(d).done, 0);
-  const wkMax = wkDates.reduce((s,d) => s + score(d).tot, 0);
-  const wkPct = wkMax > 0 ? Math.round(wkTotal/wkMax*100) : 0;
+  const wkDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart + "T12:00:00"); d.setDate(d.getDate() + i); return d.toISOString().slice(0, 10); });
+  const wkTotal = wkDates.reduce((s, d) => s + score(d).done, 0);
+  const wkMax = wkDates.reduce((s, d) => s + score(d).tot, 0);
+  const wkPct = wkMax > 0 ? Math.round(wkTotal / wkMax * 100) : 0;
 
   const genAI = async () => {
     if (!apiKey) return;
     setAiLoading(true); setAiOut("");
     const data = wkDates.map(d => {
-      const dl = new Date(d+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long"});
-      return `${dl}:\n${tasks.map(t => `  ${checklist[`${d}_${t.task_key}`]?"✅":"❌"} ${t.label}${dayNotes[`${d}_${t.task_key}`] ? ` (${dayNotes[`${d}_${t.task_key}`]})`:""}`).join("\n")}`;
+      const dl = new Date(d + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+      const tasks_lines = tasks.map(t => `  ${checklist[`${d}_${t.task_key}`] ? "✅" : "❌"} ${t.label}`).join("\n");
+      const note = daySum[d] ? `  Notatka: ${daySum[d]}` : "";
+      return `${dl}:\n${tasks_lines}${note ? "\n" + note : ""}`;
     }).join("\n\n");
+    const weekNoteText = weekNote ? `\nNotatki tygodniowe: ${weekNote}` : "";
+    const wPlan = weekPlan.length > 0 ? `\nPlan tygodnia: ${weekPlan.map(i => `${i.completed ? "✅" : "❌"} ${i.text}`).join(", ")}` : "";
     fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:`Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik: ${wkTotal}/${wkMax} (${wkPct}%)\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**`}]})
-    }).then(r=>r.json()).then(d=>{ setAiOut(d.content?.map(b=>b.text||"").join("")||"Błąd."); }).catch(()=>setAiOut("Błąd API.")).finally(()=>setAiLoading(false));
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)${weekNoteText}${wPlan}\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**` }] })
+    }).then(r => r.json()).then(d => { setAiOut(d.content?.map(b => b.text || "").join("") || "Błąd."); }).catch(() => setAiOut("Błąd API.")).finally(() => setAiLoading(false));
   };
 
   const sel = { background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" };
+  const textarea = (value, onChange, placeholder, rows = 3) => (
+    <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows} style={{ width: "100%", padding: 10, borderRadius: 8, border: `1px solid ${DC.border}`, fontSize: 12, color: DC.text, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit", background: "#fff", lineHeight: 1.6 }} />
+  );
+
+  const PlanList = ({ type, items, newItem, setNewItem }) => (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+        {items.length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak zadań — dodaj poniżej</div>}
+        {items.map(item => (
+          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
+            <button onClick={() => togglePlanItem(type, item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+            </button>
+            <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
+            <button onClick={() => deletePlanItem(type, item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === "Enter" && addPlanItem(type)} placeholder="Nowe zadanie..." style={{ ...sel, flex: 1 }} />
+        <DCBtn small bg={DC.cyan} onClick={() => addPlanItem(type)}>Dodaj</DCBtn>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ padding: 20, background: "#f3f4f6", minHeight: "calc(100vh - 60px)", color: DC.text }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20, maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* LEFT: Calendar */}
+        {/* COL 1: Calendar + Manage tasks */}
         <div>
           <DCCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <button onClick={() => { const d = new Date(year, month-2, 1); setMonthStart(d.toISOString().slice(0,7)); }} style={{ ...sel, padding: "5px 12px" }}>‹</button>
+              <button onClick={() => { const d = new Date(year, month - 2, 1); setMonthStart(d.toISOString().slice(0, 7)); }} style={{ ...sel, padding: "5px 12px" }}>‹</button>
               <div style={{ fontSize: 15, fontWeight: 700, color: DC.text, textTransform: "capitalize" }}>
-                {new Date(year, month-1, 1).toLocaleDateString("pl-PL",{month:"long",year:"numeric"})}
+                {new Date(year, month - 1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}
               </div>
-              <button onClick={() => { const d = new Date(year, month, 1); setMonthStart(d.toISOString().slice(0,7)); }} style={{ ...sel, padding: "5px 12px" }}>›</button>
+              <button onClick={() => { const d = new Date(year, month, 1); setMonthStart(d.toISOString().slice(0, 7)); }} style={{ ...sel, padding: "5px 12px" }}>›</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 4 }}>
-              {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d => <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700, color:DC.dim, padding:"3px 0" }}>{d}</div>)}
+              {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d => <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: DC.dim, padding: "3px 0" }}>{d}</div>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3 }}>
-              {Array.from({length:firstDow}).map((_,i) => <div key={`e${i}`}/>)}
+              {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
               {days.map(date => {
                 const isT = date === today;
-                const {done, tot, pct} = score(date);
+                const isSel = date === selectedDay;
+                const { done, tot, pct } = score(date);
                 const c = col(pct);
+                const hasDayNote = !!daySum[date];
                 return (
-                  <div key={date} onClick={() => { const d=new Date(date+"T12:00:00"); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); setWeekStart(d.toISOString().slice(0,10)); }} style={{ minHeight:60, border:`1px solid ${isT?DC.cyan:DC.border}`, borderRadius:8, padding:5, cursor:"pointer", background: isT?"#e0f2fe":"#fff", position:"relative", transition:"border-color .15s" }} onMouseEnter={e=>e.currentTarget.style.borderColor=DC.cyan} onMouseLeave={e=>e.currentTarget.style.borderColor=isT?DC.cyan:DC.border}>
-                    <div style={{ fontSize:11, fontWeight:isT?800:600, color:isT?DC.cyan:DC.soft }}>{parseInt(date.slice(8))}</div>
-                    {tot>0 && <>
-                      <div style={{ fontSize:13, fontWeight:800, color:c, lineHeight:1.1 }}>{pct}%</div>
-                      <div style={{ fontSize:8, color:DC.dim }}>{done}/{tot}</div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:2, marginTop:3 }}>
-                        {tasks.map(t=><div key={t.task_key} title={t.label} style={{ width:5, height:5, borderRadius:"50%", background:checklist[`${date}_${t.task_key}`]?DC.green:DC.border }}/>)}
+                  <div key={date} onClick={() => { setSelectedDay(date); const d = new Date(date + "T12:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); setWeekStart(d.toISOString().slice(0, 10)); }} style={{ minHeight: 60, border: `2px solid ${isSel ? DC.cyan : isT ? "#93c5fd" : DC.border}`, borderRadius: 8, padding: 5, cursor: "pointer", background: isSel ? "#e0f2fe" : isT ? "#f0f9ff" : "#fff", position: "relative", transition: "border-color .15s" }} onMouseEnter={e => e.currentTarget.style.borderColor = DC.cyan} onMouseLeave={e => e.currentTarget.style.borderColor = isSel ? DC.cyan : isT ? "#93c5fd" : DC.border}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ fontSize: 11, fontWeight: isT ? 800 : 600, color: isT ? DC.cyan : DC.soft }}>{parseInt(date.slice(8))}</div>
+                      {hasDayNote && <div title="Ma notatkę" style={{ fontSize: 8, color: DC.amber }}>✏️</div>}
+                    </div>
+                    {tot > 0 && <>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: c, lineHeight: 1.1 }}>{pct}%</div>
+                      <div style={{ fontSize: 8, color: DC.dim }}>{done}/{tot}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 3 }}>
+                        {tasks.map(t => <div key={t.task_key} title={t.label} style={{ width: 5, height: 5, borderRadius: "50%", background: checklist[`${date}_${t.task_key}`] ? DC.green : DC.border }} />)}
                       </div>
                     </>}
                   </div>
@@ -8723,103 +8872,143 @@ function DailyCheckPanel({ supa, apiKey }) {
           {/* Manage tasks */}
           <DCCard>
             <DCHead icon="⚙️">Zarządzaj zadaniami</DCHead>
-            <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
-              {tasks.map(t => <div key={t.task_key} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:DC.bg2, borderRadius:6, fontSize:12, color:DC.text }}>
-                <span style={{ flex:1 }}>{t.label}</span>
-                <span style={{ fontSize:9, color:DC.dim }}>{t.task_key}</span>
-              </div>)}
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+              {tasks.map(t => <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}><span style={{ flex: 1 }}>{t.label}</span><span style={{ fontSize: 9, color: DC.dim }}>{t.task_key}</span></div>)}
             </div>
             {addingTask ? (
-              <div style={{ display:"flex", gap:6 }}>
-                <input autoFocus value={newTask} onChange={e=>setNewTask(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addTask();if(e.key==="Escape"){setAddingTask(false);setNewTask("");}}} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex:1 }} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <input autoFocus value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
                 <DCBtn small bg={DC.green} onClick={addTask}>Dodaj</DCBtn>
-                <DCBtn small style={{ background:"#fff", color:DC.soft, border:`1px solid ${DC.border}` }} onClick={()=>{setAddingTask(false);setNewTask("");}}>Anuluj</DCBtn>
+                <DCBtn small style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => { setAddingTask(false); setNewTask(""); }}>Anuluj</DCBtn>
               </div>
             ) : (
-              <DCBtn small bg={DC.cyan} onClick={()=>setAddingTask(true)}>+ Nowe zadanie</DCBtn>
+              <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
             )}
           </DCCard>
         </div>
 
-        {/* RIGHT: Today + Weekly */}
+        {/* COL 2: Today tasks + Day summary + Weekly */}
         <div>
-          <DCCard style={{ marginBottom:16 }}>
-            <DCHead icon="📋">Dzisiaj — {new Date(today+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long"})}</DCHead>
-            {loading ? <div style={{ color:DC.dim, fontSize:12 }}>Ładowanie...</div> : tasks.length===0 ? <div style={{ color:DC.dim, fontSize:12 }}>Brak zadań.</div> : (
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {/* Today tasks */}
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHead icon="📋">
+              {selectedDay === today
+                ? `Dzisiaj — ${new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}`
+                : new Date(selectedDay + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+              }
+            </DCHead>
+            {loading ? <div style={{ color: DC.dim, fontSize: 12 }}>Ładowanie...</div> : tasks.length === 0 ? <div style={{ color: DC.dim, fontSize: 12 }}>Brak zadań.</div> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {tasks.map(t => {
-                  const k = `${today}_${t.task_key}`;
+                  const k = `${selectedDay}_${t.task_key}`;
                   const done = checklist[k];
                   const note = dayNotes[k];
                   return (
-                    <div key={t.task_key} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", background:done?`${DC.green}12`:"#fff", borderRadius:8, border:`1px solid ${done?DC.green:DC.border}`, transition:"all .2s" }}>
-                      <button onClick={()=>!saving[k]&&toggle(today,t.task_key)} style={{ width:22, height:22, borderRadius:6, border:`2px solid ${done?DC.green:DC.border}`, background:done?DC.green:"transparent", cursor:saving[k]?"wait":"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                        {done && <span style={{ color:"#fff", fontSize:12, fontWeight:800 }}>✓</span>}
+                    <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: done ? `${DC.green}12` : "#fff", borderRadius: 8, border: `1px solid ${done ? DC.green : DC.border}`, transition: "all .2s" }}>
+                      <button onClick={() => !saving[k] && toggle(selectedDay, t.task_key)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${done ? DC.green : DC.border}`, background: done ? DC.green : "transparent", cursor: saving[k] ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {done && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800 }}>✓</span>}
                       </button>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:13, fontWeight:done?700:500, color:done?DC.green:DC.text }}>{t.label}</div>
-                        {note && <div style={{ fontSize:10, color:DC.dim, marginTop:2, fontStyle:"italic" }}>{note}</div>}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: done ? 700 : 500, color: done ? DC.green : DC.text }}>{t.label}</div>
+                        {note && <div style={{ fontSize: 10, color: DC.dim, marginTop: 2, fontStyle: "italic" }}>{note}</div>}
                       </div>
-                      <button onClick={()=>{setNoteModal({date:today,key:t.task_key,label:t.label});setNoteText(note||"");}} style={{ fontSize:12, color:DC.dim, background:"none", border:"none", cursor:"pointer" }} title="Notatka">📝</button>
+                      <button onClick={() => { setNoteModal({ date: selectedDay, key: t.task_key, label: t.label }); setNoteText(note || ""); }} style={{ fontSize: 12, color: DC.dim, background: "none", border: "none", cursor: "pointer" }} title="Notatka">📝</button>
                     </div>
                   );
                 })}
-                {(() => { const {done,tot,pct}=score(today); return <div style={{ marginTop:4, padding:"8px 12px", background:DC.bg2, borderRadius:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}><span style={{ fontSize:11, color:DC.soft }}>{done}/{tot} zadań</span><span style={{ fontSize:16, fontWeight:800, color:col(pct) }}>{pct}%</span></div>; })()}
+                {(() => { const { done, tot, pct } = score(selectedDay); return <div style={{ marginTop: 4, padding: "8px 12px", background: DC.bg2, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 11, color: DC.soft }}>{done}/{tot} zadań</span><span style={{ fontSize: 16, fontWeight: 800, color: col(pct) }}>{pct}%</span></div>; })()}
               </div>
             )}
+
+            {/* Daily summary textarea */}
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${DC.border}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: DC.soft, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Podsumowanie dnia</div>
+              {textarea(daySum[selectedDay] || "", e => setDaySum(p => ({...p, [selectedDay]: e.target.value})), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                <DCBtn small bg={DC.green} disabled={daySumSaving[selectedDay]} onClick={() => saveDaySum(selectedDay, daySum[selectedDay] || "")}>
+                  {daySumSaving[selectedDay] ? "Zapisuję..." : "💾 Zapisz"}
+                </DCBtn>
+              </div>
+            </div>
           </DCCard>
 
-          {/* Weekly */}
+          {/* Weekly summary + plans */}
           <DCCard>
-            <div style={{ display:"flex", gap:0, marginBottom:12, borderBottom:`1px solid ${DC.border}`, paddingBottom:0 }}>
-              {[["overview","📊 Przegląd"],["ai","🤖 AI Analiza"]].map(([id,lbl])=>(
-                <button key={id} onClick={()=>setWeekTab(id)} style={{ padding:"7px 12px", fontSize:11, fontWeight:weekTab===id?700:400, color:weekTab===id?DC.cyan:DC.soft, background:"none", border:"none", borderBottom:weekTab===id?`2px solid ${DC.cyan}`:"2px solid transparent", cursor:"pointer", marginBottom:-1 }}>{lbl}</button>
-              ))}
-              <div style={{ flex:1 }}/>
-              <input type="date" value={weekStart} onChange={e=>setWeekStart(e.target.value)} style={{ ...sel, fontSize:10, padding:"3px 6px", alignSelf:"center" }} />
+            {/* Week selector */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: DC.text }}>
+                Tydzień: {new Date(weekStart + "T12:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} – {new Date(new Date(weekStart + "T12:00:00").setDate(new Date(weekStart + "T12:00:00").getDate() + 6)).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button onClick={() => { const d = new Date(weekStart + "T12:00:00"); d.setDate(d.getDate() - 7); setWeekStart(d.toISOString().slice(0, 10)); }} style={{ ...sel, padding: "3px 8px" }}>‹</button>
+                <button onClick={() => { const d = new Date(weekStart + "T12:00:00"); d.setDate(d.getDate() + 7); setWeekStart(d.toISOString().slice(0, 10)); }} style={{ ...sel, padding: "3px 8px" }}>›</button>
+              </div>
             </div>
 
-            {weekTab==="overview" && (
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: `1px solid ${DC.border}` }}>
+              {[["overview","📊 Postęp"],["notes","📝 Notatki"],["plan","✅ Plan"],["ai","🤖 AI"]].map(([id, lbl]) => (
+                <button key={id} onClick={() => setWeekTab(id)} style={{ padding: "7px 12px", fontSize: 11, fontWeight: weekTab === id ? 700 : 400, color: weekTab === id ? DC.cyan : DC.soft, background: "none", border: "none", borderBottom: weekTab === id ? `2px solid ${DC.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
+              ))}
+            </div>
+
+            {weekTab === "overview" && (
               <div>
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                    <span style={{ fontSize:11, color:DC.soft }}>Tydzień: {wkTotal}/{wkMax}</span>
-                    <span style={{ fontSize:14, fontWeight:800, color:col(wkPct) }}>{wkPct}%</span>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: DC.soft }}>Checklista: {wkTotal}/{wkMax}</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: col(wkPct) }}>{wkPct}%</span>
                   </div>
-                  <div style={{ height:8, background:DC.border, borderRadius:4, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${wkPct}%`, background:col(wkPct), borderRadius:4, transition:"width .4s" }}/>
+                  <div style={{ height: 8, background: DC.border, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${wkPct}%`, background: col(wkPct), borderRadius: 4, transition: "width .4s" }} />
                   </div>
                 </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
-                  {tasks.map(t => {
-                    const done = wkDates.filter(d=>checklist[`${d}_${t.task_key}`]).length;
-                    const pct = Math.round(done/7*100);
-                    return <div key={t.task_key}>
-                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}><span style={{ fontSize:11, color:DC.text }}>{t.label}</span><span style={{ fontSize:11, fontWeight:700, color:col(pct) }}>{done}/7</span></div>
-                      <div style={{ height:5, background:DC.border, borderRadius:3, overflow:"hidden" }}><div style={{ height:"100%", width:`${pct}%`, background:col(pct), borderRadius:3 }}/></div>
-                    </div>;
-                  })}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                  {tasks.map(t => { const done = wkDates.filter(d => checklist[`${d}_${t.task_key}`]).length; const pct = Math.round(done / 7 * 100); return <div key={t.task_key}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}><span style={{ fontSize: 11, color: DC.text }}>{t.label}</span><span style={{ fontSize: 11, fontWeight: 700, color: col(pct) }}>{done}/7</span></div><div style={{ height: 5, background: DC.border, borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: col(pct), borderRadius: 3 }} /></div></div>; })}
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
-                  {wkDates.map(d => {
-                    const {pct,done,tot}=score(d); const isT=d===today;
-                    const dl=new Date(d+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"short"});
-                    return <div key={d} style={{ textAlign:"center" }}>
-                      <div style={{ fontSize:9, color:isT?DC.cyan:DC.dim, marginBottom:3, fontWeight:isT?700:400 }}>{dl}</div>
-                      <div style={{ width:32, height:32, borderRadius:8, background:tot>0?`${col(pct)}20`:"#f9fafb", border:`2px solid ${isT?DC.cyan:(tot>0?col(pct):DC.border)}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto", fontSize:10, fontWeight:700, color:tot>0?col(pct):DC.dim }}>{tot>0?pct:"—"}</div>
-                    </div>;
-                  })}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+                  {wkDates.map(d => { const { pct, done, tot } = score(d); const isT = d === today; const dl = new Date(d + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "short" }); return <div key={d} style={{ textAlign: "center" }}><div style={{ fontSize: 9, color: isT ? DC.cyan : DC.dim, marginBottom: 3, fontWeight: isT ? 700 : 400 }}>{dl}</div><div style={{ width: 32, height: 32, borderRadius: 8, background: tot > 0 ? `${col(pct)}20` : "#f9fafb", border: `2px solid ${isT ? DC.cyan : (tot > 0 ? col(pct) : DC.border)}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 10, fontWeight: 700, color: tot > 0 ? col(pct) : DC.dim }}>{tot > 0 ? pct : "—"}</div></div>; })}
                 </div>
               </div>
             )}
 
-            {weekTab==="ai" && (
+            {weekTab === "notes" && (
               <div>
-                <DCBtn bg={DC.cyan} onClick={genAI} disabled={aiLoading||!apiKey} style={{ marginBottom:10, width:"100%" }}>
-                  {aiLoading?"⏳ Generuję...":"🤖 Generuj AI podsumowanie tygodnia"}
+                <div style={{ fontSize: 11, color: DC.soft, marginBottom: 6, fontWeight: 600 }}>Notatki tygodniowe</div>
+                {textarea(weekNote, e => setWeekNote(e.target.value), "Podsumowanie tygodnia, refleksje, co warto zapamiętać...", 5)}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                  <span style={{ fontSize: 10, color: DC.dim }}>Autosave przy kliknięciu Zapisz</span>
+                  <DCBtn small bg={DC.green} disabled={notesSaving} onClick={saveWeekNote}>{notesSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
+                </div>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${DC.border}` }}>
+                  <div style={{ fontSize: 11, color: DC.soft, marginBottom: 6, fontWeight: 600 }}>Notatki miesięczne — {new Date(year, month - 1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</div>
+                  {textarea(monthNote, e => setMonthNote(e.target.value), "Podsumowanie miesiąca, cele, priorytety...", 4)}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                    <DCBtn small bg={DC.green} disabled={notesSaving} onClick={saveMonthNote}>{notesSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {weekTab === "plan" && (
+              <div>
+                <div style={{ display: "flex", gap: 0, marginBottom: 12, borderBottom: `1px solid ${DC.border}` }}>
+                  {[["week", "Plan tygodnia"], ["month", "Plan miesiąca"]].map(([id, lbl]) => (
+                    <button key={id} onClick={() => setPlanTab(id)} style={{ padding: "6px 12px", fontSize: 11, fontWeight: planTab === id ? 700 : 400, color: planTab === id ? DC.cyan : DC.soft, background: "none", border: "none", borderBottom: planTab === id ? `2px solid ${DC.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
+                  ))}
+                </div>
+                {planTab === "week" && <PlanList type="week" items={weekPlan} newItem={newWeekItem} setNewItem={setNewWeekItem} />}
+                {planTab === "month" && <PlanList type="month" items={monthPlan} newItem={newMonthItem} setNewItem={setNewMonthItem} />}
+              </div>
+            )}
+
+            {weekTab === "ai" && (
+              <div>
+                <DCBtn bg={DC.cyan} onClick={genAI} disabled={aiLoading || !apiKey} style={{ marginBottom: 10, width: "100%" }}>
+                  {aiLoading ? "⏳ Generuję..." : "🤖 Generuj AI podsumowanie tygodnia"}
                 </DCBtn>
-                {!apiKey && <div style={{ fontSize:10, color:DC.red, marginBottom:8 }}>Brak Claude API Key w Settings</div>}
-                {aiOut && <div style={{ fontSize:11, lineHeight:1.8, color:DC.text, whiteSpace:"pre-wrap", maxHeight:350, overflowY:"auto", padding:12, background:DC.bg2, borderRadius:8, border:`1px solid ${DC.border}` }}>{aiOut}</div>}
+                {!apiKey && <div style={{ fontSize: 10, color: DC.red, marginBottom: 8 }}>Brak Claude API Key w Settings</div>}
+                {aiOut && <div style={{ fontSize: 11, lineHeight: 1.8, color: DC.text, whiteSpace: "pre-wrap", maxHeight: 350, overflowY: "auto", padding: 12, background: DC.bg2, borderRadius: 8, border: `1px solid ${DC.border}` }}>{aiOut}</div>}
               </div>
             )}
           </DCCard>
@@ -8828,13 +9017,13 @@ function DailyCheckPanel({ supa, apiKey }) {
 
       {/* Note modal */}
       {noteModal && <>
-        <div onClick={()=>setNoteModal(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9998 }}/>
-        <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", zIndex:9999, background:"#fff", borderRadius:12, padding:24, width:380, boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-          <div style={{ fontSize:13, fontWeight:700, color:DC.text, marginBottom:12 }}>📝 {noteModal.label}</div>
-          <textarea autoFocus value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Dodaj notatkę..." style={{ width:"100%", minHeight:80, padding:10, borderRadius:8, border:`1px solid ${DC.border}`, fontSize:12, color:DC.text, resize:"vertical", boxSizing:"border-box", outline:"none", fontFamily:"inherit" }}/>
-          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+        <div onClick={() => setNoteModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9998 }} />
+        <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 9999, background: "#fff", borderRadius: 12, padding: 24, width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: DC.text, marginBottom: 12 }}>📝 {noteModal.label}</div>
+          <textarea autoFocus value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Dodaj notatkę..." style={{ width: "100%", minHeight: 80, padding: 10, borderRadius: 8, border: `1px solid ${DC.border}`, fontSize: 12, color: DC.text, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <DCBtn bg={DC.green} onClick={saveNote}>💾 Zapisz</DCBtn>
-            <DCBtn style={{ background:"#fff", color:DC.soft, border:`1px solid ${DC.border}` }} onClick={()=>setNoteModal(null)}>Anuluj</DCBtn>
+            <DCBtn style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => setNoteModal(null)}>Anuluj</DCBtn>
           </div>
         </div>
       </>}
