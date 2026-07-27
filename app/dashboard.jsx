@@ -8574,20 +8574,42 @@ const PLAN_CATS = [
 ];
 
 // Module-level to avoid remount on every keystroke
-function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, newCat, onNewCatChange }) {
+function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, onEdit, newCat, onNewCatChange }) {
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const startEdit = (item) => { setEditingId(item.id); setEditText(item.text); };
+  const commitEdit = (item) => {
+    if (editText.trim() && editText.trim() !== item.text) onEdit(item.id, editText.trim());
+    setEditingId(null);
+  };
+
   return (
     <div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
         {items.length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak zadań — dodaj poniżej</div>}
         {items.map(item => {
           const cat = PLAN_CATS.find(c => c.id === item.category);
+          const isEditing = editingId === item.id;
           return (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${isEditing ? DC.cyan : item.completed ? DC.green : DC.border}` }}>
               <button onClick={() => onToggle(item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
               </button>
-              {cat && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
-              <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
+              {cat && !isEditing && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
+              {isEditing ? (
+                <input
+                  autoFocus
+                  value={editText}
+                  onChange={e => setEditText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") commitEdit(item); if (e.key === "Escape") setEditingId(null); }}
+                  onBlur={() => commitEdit(item)}
+                  style={{ flex: 1, fontSize: 12, padding: "2px 6px", border: `1px solid ${DC.cyan}`, borderRadius: 4, outline: "none", fontFamily: "inherit", color: DC.text }}
+                />
+              ) : (
+                <span onDoubleClick={() => startEdit(item)} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none", cursor: "text" }} title="Kliknij dwukrotnie aby edytować">{item.text}</span>
+              )}
+              {!isEditing && <button onClick={() => startEdit(item)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }} title="Edytuj">✎</button>}
               <button onClick={() => onDelete(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
             </div>
           );
@@ -8828,6 +8850,15 @@ function DailyCheckPanel({ supa, apiKey }) {
     await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${id}`, { method: "DELETE", headers: supa.headers }).catch(console.error);
   };
 
+  const editPlanItem = async (type, id, text) => {
+    const setter = type === "week" ? setWeekPlan : setMonthPlan;
+    setter(p => p.map(i => i.id === id ? {...i, text} : i));
+    await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${id}`, {
+      method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
+      body: JSON.stringify({ text }),
+    }).catch(console.error);
+  };
+
   const addTask = async () => {
     if (!newTask.trim()) return;
     const key = newTask.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
@@ -8890,6 +8921,17 @@ function DailyCheckPanel({ supa, apiKey }) {
     setDayTasksList(p => ({...p, [selectedDay]: (p[selectedDay] || []).filter(x => x.id !== id)}));
     await fetch(`${supa.url}/rest/v1/daily_tasks?id=eq.${id}`, { method: "DELETE", headers: supa.headers }).catch(console.error);
   };
+
+  const editDayTask = async (id, text) => {
+    setDayTasksList(p => ({...p, [selectedDay]: (p[selectedDay] || []).map(x => x.id === id ? {...x, text} : x)}));
+    await fetch(`${supa.url}/rest/v1/daily_tasks?id=eq.${id}`, {
+      method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
+      body: JSON.stringify({ text }),
+    }).catch(console.error);
+  };
+
+  const [editingDayTaskId, setEditingDayTaskId] = useState(null);
+  const [editingDayTaskText, setEditingDayTaskText] = useState("");
 
   const [year, month] = monthStart.split("-").map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -9043,13 +9085,22 @@ function DailyCheckPanel({ supa, apiKey }) {
               {(dayTasksList[selectedDay] || []).length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak dodatkowych tasków</div>}
               {(dayTasksList[selectedDay] || []).map(item => {
                 const cat = PLAN_CATS.find(c => c.id === item.category);
+                const isEd = editingDayTaskId === item.id;
                 return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${isEd ? DC.cyan : item.completed ? DC.green : DC.border}` }}>
                     <button onClick={() => toggleDayTask(item.id)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
                     </button>
-                    {cat && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
-                    <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
+                    {cat && !isEd && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
+                    {isEd ? (
+                      <input autoFocus value={editingDayTaskText} onChange={e => setEditingDayTaskText(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") { editDayTask(item.id, editingDayTaskText.trim() || item.text); setEditingDayTaskId(null); } if (e.key === "Escape") setEditingDayTaskId(null); }}
+                        onBlur={() => { editDayTask(item.id, editingDayTaskText.trim() || item.text); setEditingDayTaskId(null); }}
+                        style={{ flex: 1, fontSize: 12, padding: "2px 6px", border: `1px solid ${DC.cyan}`, borderRadius: 4, outline: "none", fontFamily: "inherit", color: DC.text }} />
+                    ) : (
+                      <span onDoubleClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none", cursor: "text" }} title="Kliknij dwukrotnie aby edytować">{item.text}</span>
+                    )}
+                    {!isEd && <button onClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }} title="Edytuj">✎</button>}
                     <button onClick={() => deleteDayTask(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
                   </div>
                 );
@@ -9069,7 +9120,7 @@ function DailyCheckPanel({ supa, apiKey }) {
             <DCHead icon="📅">Taski na ten tydzień
               <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(weekStart + "T12:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} – {new Date(new Date(weekStart + "T12:00:00").setDate(new Date(weekStart + "T12:00:00").getDate() + 6)).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}</span>
             </DCHead>
-            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />
+            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />
           </DCCard>
 
           {/* Month tasks */}
@@ -9077,7 +9128,7 @@ function DailyCheckPanel({ supa, apiKey }) {
             <DCHead icon="📆">Taski na ten miesiąc
               <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(parseInt(monthStart.slice(0,4)), parseInt(monthStart.slice(5,7))-1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</span>
             </DCHead>
-            <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />
+            <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} onEdit={(id, text) => editPlanItem("month", id, text)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />
           </DCCard>
 
           {/* Weekly summary */}
