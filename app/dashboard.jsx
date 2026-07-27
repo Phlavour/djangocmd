@@ -4794,7 +4794,7 @@ function TradingPanel({ apiKey, supa }) {
     tp_01: false, tp_02: false, tp_03: false,
     account_type: "EVAL", account_passed: false, account_burned: false,
     smt: false, highs_lows: false,
-    req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true,
+    req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true,
     entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false,
     second_instrument_reached: false, could_reduce_sl: false,
     additional_entries: "0",
@@ -4815,8 +4815,9 @@ function TradingPanel({ apiKey, supa }) {
     em_pullback_random: false, em_pa_fomo: false, em_8020: false,
     // Stop Loss type (single select)
     sl_type: "", // LH | BAND | VWAP | RANDOM
+    lj_formation: "", // LOW_HIGH | HIGH_LOW
     // Requirements (5, default true)
-    req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true,
+    req_vwap: true, req_bands: true, req_rr: true, req_range: true,
     // Instrument correlation (3-way)
     lj_correlation: "TAK", // TAK | NIE | SREDNIA
     // HTS table (Vision-read)
@@ -5224,7 +5225,7 @@ Rules:
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
       smt: tf.smt || false, highs_lows: tf.highs_lows || false,
-      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false,
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false, entry_vwap: tf.entry_vwap || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
@@ -5236,8 +5237,8 @@ Rules:
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
       pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
-      sl_type: tf.sl_type || "",
-      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
+      sl_type: tf.sl_type || "", lj_formation: tf.lj_formation || "",
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       lj_correlation: tf.lj_correlation || "TAK",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
     } : {};
@@ -5311,7 +5312,7 @@ Rules:
       tp_01: sd.tp_01 || false, tp_02: sd.tp_02 || false, tp_03: sd.tp_03 || false,
       account_type: sd.account_type || "EVAL", account_passed: sd.account_passed || false, account_burned: sd.account_burned || false,
       smt: sd.smt || false, highs_lows: sd.highs_lows || false,
-      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false,
+      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false,
       req_pa: sd.req_pa !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
       entry_pullback: sd.entry_pullback || false, entry_boundary: sd.entry_boundary || false, entry_pa: sd.entry_pa || false, entry_bands: sd.entry_bands || false, entry_vwap: sd.entry_vwap || false,
       second_instrument_reached: sd.second_instrument_reached || false, could_reduce_sl: sd.could_reduce_sl || false,
@@ -5323,8 +5324,8 @@ Rules:
       lj_range_size: sd.lj_range_size || "", lj_duration_min: sd.lj_duration_min || "", lj_screenshot_second: sd.lj_screenshot_second || "",
       pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false, pa_trend: sd.pa_trend || false,
       em_vwap_retest: sd.em_vwap_retest || false, em_band_retest: sd.em_band_retest || false, em_5min_gap: sd.em_5min_gap || false, em_3565_retest: sd.em_3565_retest || false, em_pullback_random: sd.em_pullback_random || false, em_pa_fomo: sd.em_pa_fomo || false, em_8020: sd.em_8020 || false,
-      sl_type: sd.sl_type || "",
-      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_bands_5m: sd.req_bands_5m !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
+      sl_type: sd.sl_type || "", lj_formation: sd.lj_formation || "",
+      req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
       lj_correlation: sd.lj_correlation || "TAK",
       hts_m1: sd.hts_m1 || "", hts_m5: sd.hts_m5 || "", hts_m15: sd.hts_m15 || "", hts_h1: sd.hts_h1 || "", hts_h4: sd.hts_h4 || "", hts_d1: sd.hts_d1 || "",
       req_8020: false, req_fvg: false, req_instrument: false,
@@ -5336,7 +5337,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_bands_5m: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", req_vwap: true, req_bands: true, req_bands_5m: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5359,7 +5360,7 @@ Rules:
       tp_01: tf.tp_01 || false, tp_02: tf.tp_02 || false, tp_03: tf.tp_03 || false,
       account_type: tf.account_type || "EVAL", account_passed: tf.account_passed || false, account_burned: tf.account_burned || false,
       smt: tf.smt || false, highs_lows: tf.highs_lows || false,
-      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false,
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false,
       req_pa: tf.req_pa !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       entry_pullback: tf.entry_pullback || false, entry_boundary: tf.entry_boundary || false, entry_pa: tf.entry_pa || false, entry_bands: tf.entry_bands || false, entry_vwap: tf.entry_vwap || false,
       second_instrument_reached: tf.second_instrument_reached || false, could_reduce_sl: tf.could_reduce_sl || false,
@@ -5371,8 +5372,8 @@ Rules:
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
       pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
-      sl_type: tf.sl_type || "",
-      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_bands_5m: tf.req_bands_5m !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
+      sl_type: tf.sl_type || "", lj_formation: tf.lj_formation || "",
+      req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
       lj_correlation: tf.lj_correlation || "TAK",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
     } : {};
@@ -5527,12 +5528,12 @@ Rules:
         let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
         const plays = [sd.play_vwap && "VWAP", sd.play_bands && "Wstęgi", sd.play_pb35 && "PB35", sd.play_pb50 && "PB50", sd.play_fvg && "FVG", sd.play_pa && "PA", sd.play_breakout && "Breakout", sd.play_fomo && "FOMO"].filter(Boolean);
         const confluences = [
-          sd.req_vwap !== false && "VWAP", sd.req_bands !== false && "Wstęgi", sd.req_bands_5m !== false && "Wstęgi5m",
+          sd.req_vwap !== false && "VWAP", sd.req_bands !== false && "Wstęgi",
           sd.req_pa !== false && "PA", sd.req_rr !== false && "RR", sd.req_range !== false && "Range",
           sd.req_8020 !== false && "80/20", sd.req_fvg !== false && "FVG", sd.req_instrument !== false && "Instr.zgodność"
         ].filter(Boolean);
         const missing = [
-          sd.req_vwap === false && "VWAP", sd.req_bands === false && "Wstęgi", sd.req_bands_5m === false && "Wstęgi5m",
+          sd.req_vwap === false && "VWAP", sd.req_bands === false && "Wstęgi",
           sd.req_pa === false && "PA", sd.req_rr === false && "RR", sd.req_range === false && "Range",
           sd.req_8020 === false && "80/20", sd.req_fvg === false && "FVG", sd.req_instrument === false && "Instr.zgodność"
         ].filter(Boolean);
@@ -6174,24 +6175,36 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
+              {/* FORMACJA */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Formacja</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => setTf(p => ({...p, lj_formation: p.lj_formation === "LOW_HIGH" ? "" : "LOW_HIGH"}))} style={{ ...sel, flex: 1, padding: "8px 6px", background: tf.lj_formation === "LOW_HIGH" ? `${T.green}20` : T.bg2, color: tf.lj_formation === "LOW_HIGH" ? T.green : T.textSoft, fontWeight: tf.lj_formation === "LOW_HIGH" ? 700 : 400, borderColor: tf.lj_formation === "LOW_HIGH" ? T.green : T.border }}>
+                    {tf.lj_formation === "LOW_HIGH" ? "✓ " : ""}LOW &gt; HIGH 🟢↑
+                  </button>
+                  <button onClick={() => setTf(p => ({...p, lj_formation: p.lj_formation === "HIGH_LOW" ? "" : "HIGH_LOW"}))} style={{ ...sel, flex: 1, padding: "8px 6px", background: tf.lj_formation === "HIGH_LOW" ? `${T.red}20` : T.bg2, color: tf.lj_formation === "HIGH_LOW" ? T.red : T.textSoft, fontWeight: tf.lj_formation === "HIGH_LOW" ? 700 : 400, borderColor: tf.lj_formation === "HIGH_LOW" ? T.red : T.border }}>
+                    {tf.lj_formation === "HIGH_LOW" ? "✓ " : ""}HIGH &gt; LOW 🔴↓
+                  </button>
+                </div>
+              </div>
+
               {/* REQUIREMENTS — auto-count */}
               {(() => {
                 const reqs = [
                   { id: "req_vwap", label: "VWAP" },
                   { id: "req_bands", label: "Wstęgi" },
-                  { id: "req_bands_5m", label: "Wstęgi 5min" },
                   { id: "req_rr", label: "RR" },
                   { id: "req_range", label: "Range" },
                 ];
                 const met = reqs.filter(r => tf[r.id] !== false).length;
                 const pct = Math.round((met / reqs.length) * 100);
                 return (
-                  <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${met >= 4 ? T.green : met >= 3 ? T.amber : T.red}` }}>
+                  <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${met >= 3 ? T.green : met >= 2 ? T.amber : T.red}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <div style={{ ...label }}>Requirements</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: met >= 4 ? T.green : met >= 3 ? T.amber : T.red }}>{met}/{reqs.length} spełnionych ({pct}%)</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: met >= 3 ? T.green : met >= 2 ? T.amber : T.red }}>{met}/{reqs.length} spełnionych ({pct}%)</div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
                       {reqs.map(r => (
                         <div key={r.id}>
                           <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>{r.label}</div>
@@ -6428,7 +6441,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   {[
                     { id: "req_vwap",     label: "VWAP" },
                     { id: "req_bands",    label: "Wstęgi" },
-                    { id: "req_bands_5m", label: "Wstęgi 5m" },
+                    
                     { id: "req_pa",       label: "PA" },
                     { id: "req_rr",       label: "RR" },
                     { id: "req_range",    label: "Range" },
