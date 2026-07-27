@@ -279,6 +279,7 @@ const LoadingDots = () => {
 const NAV = [
   { id: "twitter", icon: "𝕏", label: "Twitter" },
   { id: "trading", icon: "📊", label: "Trading" },
+  { id: "daily", icon: "✅", label: "Daily Check" },
   { id: "health", icon: "♥", label: "Health", disabled: true },
   { id: "bots", icon: "⬡", label: "Bots", disabled: true },
 ];
@@ -8553,6 +8554,426 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 // HEALTH PANEL (placeholder)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// DAILY CHECK PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function DailyCheckPanel({ supa, apiKey }) {
+  const T = useMemo(() => buildTheme("DARK"), []);
+  const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, padding: "6px 10px", fontFamily: "'Satoshi',sans-serif", fontSize: 11, cursor: "pointer", outline: "none" };
+  const label = { fontSize: 10, fontWeight: 700, color: T.textSoft, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [viewDate, setViewDate] = useState(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10);
+  });
+  const [checklist, setChecklist] = useState({}); // { "2026-07-08_brzuszki": true, ... }
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [savingKeys, setSavingKeys] = useState({});
+  const [weeklyTab, setWeeklyTab] = useState("overview"); // overview | ai
+  const [weekSummaryOutput, setWeekSummaryOutput] = useState("");
+  const [weekSummaryLoading, setWeekSummaryLoading] = useState(false);
+  const [selectedWeekStart, setSelectedWeekStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  });
+  const [newTaskLabel, setNewTaskLabel] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
+  const [dayNoteModal, setDayNoteModal] = useState(null); // { date, task_key, label }
+  const [dayNoteText, setDayNoteText] = useState("");
+  const [dayNotes, setDayNotes] = useState({}); // { "2026-07-08_brzuszki": "some note" }
+
+  // Load tasks + checklist data
+  const loadData = async () => {
+    if (!supa) return;
+    setLoading(true);
+    try {
+      const [tasksRes, checkRes] = await Promise.all([
+        supa.get("checklist_tasks", "active=eq.true&order=sort_order.asc"),
+        supa.get("daily_checklist", `check_date=gte.${viewDate.slice(0,7)}-01&check_date=lte.${viewDate.slice(0,7)}-31&order=check_date.asc`),
+      ]);
+      if (Array.isArray(tasksRes)) setTasks(tasksRes);
+      if (Array.isArray(checkRes)) {
+        const cl = {}, notes = {};
+        checkRes.forEach(r => {
+          cl[`${r.check_date}_${r.task_key}`] = r.completed;
+          if (r.notes) notes[`${r.check_date}_${r.task_key}`] = r.notes;
+        });
+        setChecklist(cl);
+        setDayNotes(notes);
+      }
+    } catch(e) { console.error("Daily checklist load error:", e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, [viewDate, supa]);
+
+  const toggleTask = async (date, task_key) => {
+    const k = `${date}_${task_key}`;
+    const newVal = !checklist[k];
+    setSavingKeys(p => ({...p, [k]: true}));
+    setChecklist(p => ({...p, [k]: newVal}));
+    try {
+      const res = await fetch(`${supa.url}/rest/v1/daily_checklist`, {
+        method: "POST",
+        headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify([{ check_date: date, task_key, completed: newVal, notes: dayNotes[k] || "" }]),
+      });
+      if (!res.ok) { setChecklist(p => ({...p, [k]: !newVal})); }
+    } catch(e) { setChecklist(p => ({...p, [k]: !newVal})); }
+    setSavingKeys(p => ({...p, [k]: false}));
+  };
+
+  const saveNote = async () => {
+    if (!dayNoteModal) return;
+    const { date, task_key } = dayNoteModal;
+    const k = `${date}_${task_key}`;
+    setDayNotes(p => ({...p, [k]: dayNoteText}));
+    try {
+      await fetch(`${supa.url}/rest/v1/daily_checklist`, {
+        method: "POST",
+        headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify([{ check_date: date, task_key, completed: checklist[k] || false, notes: dayNoteText }]),
+      });
+    } catch(e) {}
+    setDayNoteModal(null);
+  };
+
+  const addTask = async () => {
+    if (!newTaskLabel.trim()) return;
+    const task_key = newTaskLabel.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    try {
+      await fetch(`${supa.url}/rest/v1/checklist_tasks`, {
+        method: "POST",
+        headers: { ...supa.headers, "Prefer": "return=minimal" },
+        body: JSON.stringify([{ task_key, label: newTaskLabel.trim(), sort_order: tasks.length + 1, active: true }]),
+      });
+      setNewTaskLabel(""); setAddingTask(false);
+      await loadData();
+    } catch(e) {}
+  };
+
+  // Calendar helpers
+  const monthStart = new Date(viewDate + "T12:00:00");
+  monthStart.setDate(1);
+  const monthYear = monthStart.toLocaleDateString("pl-PL", { month: "long", year: "numeric" });
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const firstDayOfWeek = (monthStart.getDay() + 6) % 7; // Mon=0
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(monthStart); d.setDate(i + 1);
+    return d.toISOString().slice(0, 10);
+  });
+
+  const getDayScore = (date) => {
+    const done = tasks.filter(t => checklist[`${date}_${t.task_key}`]).length;
+    return { done, total: tasks.length, pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0 };
+  };
+
+  const getWeekDates = (weekStart) => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart + "T12:00:00"); d.setDate(d.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+
+  const weekDates = getWeekDates(selectedWeekStart);
+  const weekScores = weekDates.map(d => ({ date: d, ...getDayScore(d) }));
+  const weekTotal = weekScores.reduce((s, d) => s + d.done, 0);
+  const weekMax = weekScores.reduce((s, d) => s + d.total, 0);
+  const weekPct = weekMax > 0 ? Math.round((weekTotal / weekMax) * 100) : 0;
+
+  const generateAISummary = async () => {
+    if (!apiKey) return;
+    setWeekSummaryLoading(true);
+    setWeekSummaryOutput("");
+
+    const weekData = weekDates.map(date => {
+      const dateLabel = new Date(date + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+      const taskLines = tasks.map(t => {
+        const done = checklist[`${date}_${t.task_key}`];
+        const note = dayNotes[`${date}_${t.task_key}`] || "";
+        return `  ${done ? "✅" : "❌"} ${t.label}${note ? ` (notatka: ${note})` : ""}`;
+      }).join("\n");
+      return `${dateLabel}:\n${taskLines}`;
+    }).join("\n\n");
+
+    const prompt = `Jesteś coachem lifestyle'owym analizującym tygodniowe dane o nawykach. Piszesz po polsku. Bądź konkretny, motywujący ale szczery.
+
+=== DANE TYGODNIA ${selectedWeekStart} ===
+Wynik ogólny: ${weekTotal}/${weekMax} zadań (${weekPct}%)
+
+${weekData}
+
+=== KONIEC DANYCH ===
+
+Przygotuj analizę w sekcjach:
+
+**📊 WYNIK TYGODNIA**
+Krótkie podsumowanie: ile procent zadań ukończono, ocena ogólna.
+
+**✅ CO POSZŁO DOBRZE**
+Które nawyki były najlepiej realizowane? Które dni były najlepsze?
+
+**⚠️ CO WYMAGA UWAGI**
+Które nawyki były zaniedbywane? Wzorce (np. zawsze ❌ w środy)?
+
+**🎯 3 KONKRETNE KROKI NA PRZYSZŁY TYDZIEŃ**
+Mierzalne, możliwe do wdrożenia od razu.
+
+**💪 MOTYWACJA**
+Jedno zdanie mobilizujące.`;
+
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
+      });
+      const data = await resp.json();
+      setWeekSummaryOutput(data.content?.map(b => b.text || "").join("") || "Błąd generowania.");
+    } catch(e) { setWeekSummaryOutput("Błąd połączenia z Claude API."); }
+    setWeekSummaryLoading(false);
+  };
+
+  const scoreColor = (pct) => pct >= 80 ? T.green : pct >= 50 ? T.amber : pct > 0 ? T.red : T.textDim;
+
+  return (
+    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
+
+        {/* LEFT: Calendar */}
+        <div>
+          <Card style={{ marginBottom: 16 }}>
+            {/* Month nav */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <button onClick={() => {
+                const d = new Date(viewDate + "T12:00:00"); d.setMonth(d.getMonth() - 1); d.setDate(1);
+                setViewDate(d.toISOString().slice(0, 10));
+              }} style={{ ...sel, padding: "6px 12px" }}>‹</button>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textTransform: "capitalize" }}>{monthYear}</div>
+              <button onClick={() => {
+                const d = new Date(viewDate + "T12:00:00"); d.setMonth(d.getMonth() + 1); d.setDate(1);
+                setViewDate(d.toISOString().slice(0, 10));
+              }} style={{ ...sel, padding: "6px 12px" }}>›</button>
+            </div>
+
+            {/* Day headers */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+              {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d => (
+                <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: T.textDim, padding: "4px 0" }}>{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+              {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
+              {days.map(date => {
+                const isToday = date === today;
+                const { done, total, pct } = getDayScore(date);
+                const dayNum = parseInt(date.slice(8));
+                const hasAny = done > 0;
+                const col = scoreColor(pct);
+                return (
+                  <div key={date} onClick={() => setSelectedWeekStart(() => {
+                    const d = new Date(date + "T12:00:00");
+                    const dow = (d.getDay() + 6) % 7;
+                    d.setDate(d.getDate() - dow);
+                    return d.toISOString().slice(0, 10);
+                  })} style={{
+                    minHeight: 64, border: `1px solid ${isToday ? T.cyan : T.border}`,
+                    borderRadius: 8, padding: 6, cursor: "pointer", position: "relative",
+                    background: isToday ? `${T.cyan}10` : T.bg2,
+                    transition: "all .15s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = T.cyan}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = isToday ? T.cyan : T.border}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 600, color: isToday ? T.cyan : T.textSoft, marginBottom: 4 }}>{dayNum}</div>
+                    {total > 0 && (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: col, lineHeight: 1 }}>{pct}%</div>
+                        <div style={{ fontSize: 9, color: T.textDim }}>{done}/{total}</div>
+                        {/* Mini task dots */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 4 }}>
+                          {tasks.map(t => (
+                            <div key={t.task_key} title={t.label} style={{ width: 6, height: 6, borderRadius: "50%", background: checklist[`${date}_${t.task_key}`] ? T.green : T.border }} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Add task */}
+          <Card>
+            <Heading icon="⚙️">Zarządzaj zadaniami</Heading>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {tasks.map(t => (
+                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: T.bg2, borderRadius: 6 }}>
+                  <span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.label}</span>
+                  <span style={{ fontSize: 9, color: T.textDim }}>{t.task_key}</span>
+                </div>
+              ))}
+            </div>
+            {addingTask ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input autoFocus value={newTaskLabel} onChange={e => setNewTaskLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTaskLabel(""); } }}
+                  placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
+                <Btn small color={T.green} onClick={addTask}>Dodaj</Btn>
+                <Btn small outline onClick={() => { setAddingTask(false); setNewTaskLabel(""); }}>Anuluj</Btn>
+              </div>
+            ) : (
+              <Btn small onClick={() => setAddingTask(true)}>+ Nowe zadanie</Btn>
+            )}
+          </Card>
+        </div>
+
+        {/* RIGHT: Daily tasks + Weekly summary */}
+        <div>
+          {/* Today / selected day tasks */}
+          <Card style={{ marginBottom: 16 }}>
+            <Heading icon="📋">Dzisiaj — {new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}</Heading>
+            {loading ? (
+              <div style={{ color: T.textDim, fontSize: 12 }}>Ładowanie...</div>
+            ) : tasks.length === 0 ? (
+              <div style={{ color: T.textDim, fontSize: 12 }}>Brak zadań — dodaj je poniżej.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {tasks.map(t => {
+                  const k = `${today}_${t.task_key}`;
+                  const done = checklist[k];
+                  const saving = savingKeys[k];
+                  const note = dayNotes[k];
+                  return (
+                    <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: done ? `${T.green}12` : T.bg2, borderRadius: 8, border: `1px solid ${done ? T.green : T.border}`, transition: "all .2s" }}>
+                      <button onClick={() => !saving && toggleTask(today, t.task_key)} style={{
+                        width: 22, height: 22, borderRadius: 6, border: `2px solid ${done ? T.green : T.border}`,
+                        background: done ? T.green : "transparent", cursor: saving ? "wait" : "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      }}>
+                        {done && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800 }}>✓</span>}
+                      </button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: done ? 700 : 500, color: done ? T.green : T.text, textDecoration: done ? "none" : "none" }}>{t.label}</div>
+                        {note && <div style={{ fontSize: 10, color: T.textDim, marginTop: 2, fontStyle: "italic" }}>{note}</div>}
+                      </div>
+                      <button onClick={() => { setDayNoteModal({ date: today, task_key: t.task_key, label: t.label }); setDayNoteText(note || ""); }} style={{ fontSize: 10, color: T.textDim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }} title="Dodaj notatkę">📝</button>
+                    </div>
+                  );
+                })}
+                {/* Score */}
+                {(() => {
+                  const { done, total, pct } = getDayScore(today);
+                  return (
+                    <div style={{ marginTop: 4, padding: "8px 12px", background: T.bg2, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: T.textSoft }}>Dzisiaj: {done}/{total} zadań</span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor(pct) }}>{pct}%</span>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </Card>
+
+          {/* Weekly summary */}
+          <Card>
+            <div style={{ display: "flex", gap: 0, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 0 }}>
+              {[["overview", "📊 Przegląd"], ["ai", "🤖 AI Analiza"]].map(([id, lbl]) => (
+                <button key={id} onClick={() => setWeeklyTab(id)} style={{ padding: "8px 14px", fontSize: 11, fontWeight: weeklyTab === id ? 700 : 400, color: weeklyTab === id ? T.cyan : T.textSoft, background: "none", border: "none", borderBottom: weeklyTab === id ? `2px solid ${T.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
+              ))}
+              <div style={{ flex: 1 }} />
+              <input type="date" value={selectedWeekStart} onChange={e => setSelectedWeekStart(e.target.value)} style={{ ...sel, fontSize: 10, padding: "4px 8px", alignSelf: "center" }} />
+            </div>
+
+            {weeklyTab === "overview" && (
+              <div>
+                {/* Week score bar */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: T.textSoft }}>Tydzień: {weekTotal}/{weekMax}</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: scoreColor(weekPct) }}>{weekPct}%</span>
+                  </div>
+                  <div style={{ height: 8, background: T.border, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${weekPct}%`, background: scoreColor(weekPct), borderRadius: 4, transition: "width .4s" }} />
+                  </div>
+                </div>
+
+                {/* Per-task weekly breakdown */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {tasks.map(t => {
+                    const done = weekDates.filter(d => checklist[`${d}_${t.task_key}`]).length;
+                    const pct = Math.round((done / 7) * 100);
+                    return (
+                      <div key={t.task_key}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                          <span style={{ fontSize: 11, color: T.text }}>{t.label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor(pct) }}>{done}/7</span>
+                        </div>
+                        <div style={{ height: 5, background: T.border, borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: scoreColor(pct), borderRadius: 3 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Per-day dots */}
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                  {weekDates.map(d => {
+                    const { done, total, pct } = getDayScore(d);
+                    const dayLbl = new Date(d + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "short" });
+                    const isT = d === today;
+                    return (
+                      <div key={d} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 9, color: isT ? T.cyan : T.textDim, marginBottom: 3, fontWeight: isT ? 700 : 400 }}>{dayLbl}</div>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: total > 0 ? `${scoreColor(pct)}20` : T.bg2, border: `2px solid ${isT ? T.cyan : (total > 0 ? scoreColor(pct) : T.border)}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 10, fontWeight: 700, color: total > 0 ? scoreColor(pct) : T.textDim }}>
+                          {total > 0 ? `${pct}` : "—"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {weeklyTab === "ai" && (
+              <div>
+                <Btn color={T.cyan} onClick={generateAISummary} disabled={weekSummaryLoading || !apiKey} style={{ marginBottom: 12 }}>
+                  {weekSummaryLoading ? "⏳ Generuję..." : "🤖 Generuj AI podsumowanie tygodnia"}
+                </Btn>
+                {!apiKey && <div style={{ fontSize: 10, color: T.red, marginBottom: 8 }}>Brak Claude API Key w Settings</div>}
+                {weekSummaryOutput && (
+                  <div style={{ fontSize: 11, lineHeight: 1.8, color: T.text, whiteSpace: "pre-wrap", maxHeight: 400, overflowY: "auto", padding: 12, background: T.bg2, borderRadius: 8 }}>
+                    {weekSummaryOutput}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* Note modal */}
+      {dayNoteModal && (
+        <>
+          <div onClick={() => setDayNoteModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 9998 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 9999, background: "#fff", borderRadius: 12, padding: 24, width: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 12 }}>📝 Notatka — {dayNoteModal.label}</div>
+            <textarea autoFocus value={dayNoteText} onChange={e => setDayNoteText(e.target.value)} placeholder="Dodaj notatkę do tego zadania..." style={{ width: "100%", minHeight: 80, padding: 10, borderRadius: 8, border: "1px solid #d1d5db", fontSize: 12, color: "#111827", resize: "vertical", boxSizing: "border-box", outline: "none" }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button onClick={saveNote} style={{ padding: "8px 16px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>💾 Zapisz</button>
+              <button onClick={() => setDayNoteModal(null)} style={{ padding: "8px 14px", border: "1px solid #d1d5db", background: "#f9fafb", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Anuluj</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HealthPanel({ T: theme }) {
   const [tab, setTab] = useState("overview");
 
@@ -8778,6 +9199,7 @@ export default function App() {
       <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
         {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} twitterApiKey={twitterApiKey} />}
         {nav === "trading" && <TradingPanel apiKey={apiKey} supa={supa} />}
+        {nav === "daily" && <DailyCheckPanel supa={supa} apiKey={apiKey} />}
         {nav === "health" && <HealthPanel T={T} />}
         {nav === "bots" && <BotsPlaceholder />}
       </div>
