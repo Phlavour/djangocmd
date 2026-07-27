@@ -8558,25 +8558,33 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 // DAILY CHECK PANEL
 // ═══════════════════════════════════════════════════════════════
 
+// Light-theme sub-components (defined outside to avoid remount on render)
+const DC_COLORS = {
+  bg: "#ffffff", bg2: "#f9fafb", border: "#e5e7eb", borderHi: "#d1d5db",
+  text: "#111827", textSoft: "#6b7280", textDim: "#9ca3af",
+  green: "#22c55e", red: "#ef4444", amber: "#f59e0b", cyan: "#0ea5e9", purple: "#8b5cf6",
+};
+const DCCard = ({ children, style: sx }) => (
+  <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,.07)", marginBottom: 0, ...sx }}>{children}</div>
+);
+const DCHeading = ({ children, icon }) => (
+  <div style={{ marginBottom: 14, fontSize: 12, fontWeight: 700, color: "#111827", textTransform: "uppercase", letterSpacing: ".06em", display: "flex", alignItems: "center", gap: 6 }}>
+    {icon && <span style={{ opacity: .6 }}>{icon}</span>}{children}
+  </div>
+);
+const DCBtn = ({ children, onClick, color, disabled, small, outline, style: sx }) => (
+  <button onClick={onClick} disabled={disabled} style={{
+    padding: small ? "5px 10px" : "8px 16px",
+    background: outline ? "#fff" : (color || "#0ea5e9"),
+    color: outline ? "#6b7280" : "#fff",
+    border: outline ? "1px solid #e5e7eb" : "none",
+    borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: small ? 10 : 12, fontWeight: 600, opacity: disabled ? .5 : 1, ...sx
+  }}>{children}</button>
+);
+
 function DailyCheckPanel({ supa, apiKey }) {
-  // Light theme colors for this panel
-  const T = {
-    bg: "#ffffff", bg2: "#f9fafb", surface: "#f3f4f6", surfaceAlt: "#e9ecef",
-    card: "#ffffff", border: "#e5e7eb", borderHi: "#d1d5db",
-    text: "#111827", textSoft: "#6b7280", textDim: "#9ca3af",
-    green: "#22c55e", red: "#ef4444", amber: "#f59e0b",
-    cyan: "#0ea5e9", purple: "#8b5cf6",
-  };
-  // Local light-themed components
-  const LCard = ({ children, style: sx }) => (
-    <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,.06)", ...sx }}>{children}</div>
-  );
-  const LHeading = ({ children, icon }) => (
-    <div style={{ marginBottom: 14, fontSize: 12, fontWeight: 700, color: "#111827", textTransform: "uppercase", letterSpacing: ".06em" }}>{icon && <span style={{ marginRight: 6, opacity: .6 }}>{icon}</span>}{children}</div>
-  );
-  const LBtn = ({ children, onClick, color, disabled, small, style: sx }) => (
-    <button onClick={onClick} disabled={disabled} style={{ padding: small ? "5px 10px" : "8px 16px", background: color || "#0ea5e9", color: "#fff", border: "none", borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer", fontSize: small ? 10 : 12, fontWeight: 600, opacity: disabled ? .5 : 1, ...sx }}>{children}</button>
-  );
+  const T = DC_COLORS;
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, padding: "6px 10px", fontFamily: "'Satoshi',sans-serif", fontSize: 11, cursor: "pointer", outline: "none" };
   const label = { fontSize: 10, fontWeight: 700, color: T.textSoft, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 };
 
@@ -8599,11 +8607,12 @@ function DailyCheckPanel({ supa, apiKey }) {
   const [addingTask, setAddingTask] = useState(false);
   const [dayNoteModal, setDayNoteModal] = useState(null); // { date, task_key, label }
   const [dayNoteText, setDayNoteText] = useState("");
-  const [dayNotes, setDayNotes] = useState({}); // { "2026-07-08_brzuszki": "some note" }
+  const [reloadTick, setReloadTick] = useState(0);
+  const triggerReload = () => setReloadTick(t => t + 1);
 
   // Load tasks + checklist data
   const loadData = async () => {
-    if (!supa) return;
+    if (!supa?.url) return;
     setLoading(true);
     try {
       const [tasksRes, checkRes] = await Promise.all([
@@ -8624,7 +8633,32 @@ function DailyCheckPanel({ supa, apiKey }) {
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [viewDate, supa?.url]);
+  useEffect(() => {
+    if (!supa?.url) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const [tasksRes, checkRes] = await Promise.all([
+          fetch(`${supa.url}/rest/v1/checklist_tasks?active=eq.true&order=sort_order.asc`, { headers: supa.headers }).then(r => r.json()),
+          fetch(`${supa.url}/rest/v1/daily_checklist?check_date=gte.${viewDate.slice(0,7)}-01&check_date=lte.${viewDate.slice(0,7)}-31&order=check_date.asc`, { headers: supa.headers }).then(r => r.json()),
+        ]);
+        if (cancelled) return;
+        if (Array.isArray(tasksRes)) setTasks(tasksRes);
+        if (Array.isArray(checkRes)) {
+          const cl = {}, notes = {};
+          checkRes.forEach(r => {
+            cl[`${r.check_date}_${r.task_key}`] = r.completed;
+            if (r.notes) notes[`${r.check_date}_${r.task_key}`] = r.notes;
+          });
+          setChecklist(cl); setDayNotes(notes);
+        }
+      } catch(e) { console.error("load error:", e); }
+      if (!cancelled) setLoading(false);
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [viewDate, supa?.url, reloadTick]);
 
   const toggleTask = async (date, task_key) => {
     const k = `${date}_${task_key}`;
@@ -8667,7 +8701,7 @@ function DailyCheckPanel({ supa, apiKey }) {
         body: JSON.stringify([{ task_key, label: newTaskLabel.trim(), sort_order: tasks.length + 1, active: true }]),
       });
       setNewTaskLabel(""); setAddingTask(false);
-      await loadData();
+      triggerReload();
     } catch(e) {}
   };
 
@@ -8754,12 +8788,12 @@ Jedno zdanie mobilizujące.`;
   const scoreColor = (pct) => pct >= 80 ? T.green : pct >= 50 ? T.amber : pct > 0 ? T.red : T.textDim;
 
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", background: "#f3f4f6", minHeight: "calc(100vh - 60px)" }}>
+    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", background: "#f3f4f6", minHeight: "calc(100vh - 60px)", color: "#111827" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
 
         {/* LEFT: Calendar */}
         <div>
-          <LCard style={{ marginBottom: 16 }}>
+          <DCCard style={{ marginBottom: 16 }}>
             {/* Month nav */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <button onClick={() => {
@@ -8821,11 +8855,11 @@ Jedno zdanie mobilizujące.`;
                 );
               })}
             </div>
-          </LCard>
+          </DCCard>
 
           {/* Add task */}
-          <LCard>
-            <LHeading icon="⚙️">Zarządzaj zadaniami</LHeading>
+          <DCCard>
+            <DCHeading icon="⚙️">Zarządzaj zadaniami</DCHeading>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
               {tasks.map(t => (
                 <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: T.bg2, borderRadius: 6 }}>
@@ -8839,20 +8873,20 @@ Jedno zdanie mobilizujące.`;
                 <input autoFocus value={newTaskLabel} onChange={e => setNewTaskLabel(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTaskLabel(""); } }}
                   placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
-                <LBtn small color={T.green} onClick={addTask}>Dodaj</Btn>
-                <LBtn small style={{ background: "#fff", color: "#6b7280", border: "1px solid #e5e7eb" }} onClick={() => { setAddingTask(false); setNewTaskLabel(""); }}>Anuluj</Btn>
+                <DCBtn small color={T.green} onClick={addTask}>Dodaj</Btn>
+                <DCBtn small style={{ background: "#fff", color: "#6b7280", border: "1px solid #e5e7eb" }} onClick={() => { setAddingTask(false); setNewTaskLabel(""); }}>Anuluj</Btn>
               </div>
             ) : (
-              <LBtn small onClick={() => setAddingTask(true)}>+ Nowe zadanie</Btn>
+              <DCBtn small onClick={() => setAddingTask(true)}>+ Nowe zadanie</Btn>
             )}
-          </LCard>
+          </DCCard>
         </div>
 
         {/* RIGHT: Daily tasks + Weekly summary */}
         <div>
           {/* Today / selected day tasks */}
-          <LCard style={{ marginBottom: 16 }}>
-            <LHeading icon="📋">Dzisiaj — {new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}</LHeading>
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHeading icon="📋">Dzisiaj — {new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}</DCHeading>
             {loading ? (
               <div style={{ color: T.textDim, fontSize: 12 }}>Ładowanie...</div>
             ) : tasks.length === 0 ? (
@@ -8893,10 +8927,10 @@ Jedno zdanie mobilizujące.`;
                 })()}
               </div>
             )}
-          </LCard>
+          </DCCard>
 
           {/* Weekly summary */}
-          <LCard>
+          <DCCard>
             <div style={{ display: "flex", gap: 0, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 0 }}>
               {[["overview", "📊 Przegląd"], ["ai", "🤖 AI Analiza"]].map(([id, lbl]) => (
                 <button key={id} onClick={() => setWeeklyTab(id)} style={{ padding: "8px 14px", fontSize: 11, fontWeight: weeklyTab === id ? 700 : 400, color: weeklyTab === id ? T.cyan : T.textSoft, background: "none", border: "none", borderBottom: weeklyTab === id ? `2px solid ${T.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
@@ -8958,7 +8992,7 @@ Jedno zdanie mobilizujące.`;
 
             {weeklyTab === "ai" && (
               <div>
-                <LBtn color={T.cyan} onClick={generateAISummary} disabled={weekSummaryLoading || !apiKey} style={{ marginBottom: 12 }}>
+                <DCBtn color={T.cyan} onClick={generateAISummary} disabled={weekSummaryLoading || !apiKey} style={{ marginBottom: 12 }}>
                   {weekSummaryLoading ? "⏳ Generuję..." : "🤖 Generuj AI podsumowanie tygodnia"}
                 </Btn>
                 {!apiKey && <div style={{ fontSize: 10, color: T.red, marginBottom: 8 }}>Brak Claude API Key w Settings</div>}
@@ -8969,7 +9003,7 @@ Jedno zdanie mobilizujące.`;
                 )}
               </div>
             )}
-          </LCard>
+          </DCCard>
         </div>
       </div>
 
@@ -9213,7 +9247,7 @@ export default function App() {
       </div>
 
       {/* CONTENT */}
-      <div style={{ padding: "24px 28px", maxWidth: 1360, margin: "0 auto" }}>
+      <div style={{ padding: nav === "daily" ? 0 : "24px 28px", maxWidth: nav === "daily" ? "100%" : 1360, margin: "0 auto", background: nav === "daily" ? "#f3f4f6" : "transparent" }}>
         {nav === "twitter" && <TwitterPanel apiKey={apiKey} supa={supa} twitterApiKey={twitterApiKey} />}
         {nav === "trading" && <TradingPanel apiKey={apiKey} supa={supa} />}
         {nav === "daily" && <DailyCheckPanel supa={supa} apiKey={apiKey} />}
