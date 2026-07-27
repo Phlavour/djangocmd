@@ -4890,7 +4890,7 @@ function TradingPanel({ apiKey, supa }) {
     { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
     { id: "DR", label: "DR", desc: "NQ/ES, session, entry hour, USD profit" },
     { id: "LUNCH_BOX", label: "Lunch Box", desc: "Same as DR + IDEA (Sweep / 50% Range), no TP" },
-    { id: "LIVE_JOURNAL", label: "Live Journal", desc: "Bieżące trade'y — emocje, wymagania, taktyka" },
+    { id: "LIVE_JOURNAL", label: "IB", desc: "Bieżące trade'y — wymagania, confluences, HTS" },
   ];
   const saveStrategy = async () => {
     if (!newStratName.trim()) return;
@@ -5855,7 +5855,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <Heading icon="✎" right={isModal ? <button onClick={() => { setShowAddTrade(false); setEditingTradeId(null); setTf(EMPTY_TF); }} style={{ padding: "4px 10px", border: "1px solid #d1d5db", background: "#f8f9fa", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#1a1a2e" }}>✕ Close</button> : null}>{editingTradeId ? "Edit Trade" : "New Trade"}</Heading>
 
               {/* Row 1: Direction, Result, (Meets Req — not for HTS / DR) */}
-              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || isDRLike || isLJ) ? "1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: (stratType === "HTS" || isDRLike) ? "1fr 1fr" : isLJ ? "1fr 1fr 1fr" : "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Direction</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -5870,6 +5870,21 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, result: "WIN"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "WIN" ? `${T.green}20` : T.bg2, color: tf.result === "WIN" ? T.green : T.textSoft, fontWeight: tf.result === "WIN" ? 700 : 400, borderColor: tf.result === "WIN" ? T.green : T.border }}>WIN</button>
                     <button onClick={() => setTf(p => ({...p, result: "BE", profit: "0"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "BE" ? `${T.amber}20` : T.bg2, color: tf.result === "BE" ? T.amber : T.textSoft, fontWeight: tf.result === "BE" ? 700 : 400, borderColor: tf.result === "BE" ? T.amber : T.border }}>BE</button>
                     <button onClick={() => setTf(p => ({...p, result: "LOSS"}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === "LOSS" ? `${T.red}20` : T.bg2, color: tf.result === "LOSS" ? T.red : T.textSoft, fontWeight: tf.result === "LOSS" ? 700 : 400, borderColor: tf.result === "LOSS" ? T.red : T.border }}>LOSS</button>
+                  </div>
+                </div>}
+                {isLJ && <div>
+                  <div style={label}>Result</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["WIN", T.green], ["BE", T.amber], ["LOSS", T.red]].map(([r, col]) => (
+                      <button key={r} onClick={() => setTf(p => ({...p, result: r}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === r ? `${col}20` : T.bg2, color: tf.result === r ? col : T.textSoft, fontWeight: tf.result === r ? 700 : 400, borderColor: tf.result === r ? col : T.border }}>{r}</button>
+                    ))}
+                  </div>
+                </div>}
+                {isLJ && <div>
+                  <div style={label}>Instrument</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setTf(p => ({...p, instrument: "NQ"}))} style={{ ...sel, flex: 1, background: tf.instrument === "NQ" ? `${T.cyan}20` : T.bg2, color: tf.instrument === "NQ" ? T.cyan : T.textSoft, fontWeight: tf.instrument === "NQ" ? 700 : 400, borderColor: tf.instrument === "NQ" ? T.cyan : T.border }}>NQ</button>
+                    <button onClick={() => setTf(p => ({...p, instrument: "ES"}))} style={{ ...sel, flex: 1, background: tf.instrument === "ES" ? `${T.purple}20` : T.bg2, color: tf.instrument === "ES" ? T.purple : T.textSoft, fontWeight: tf.instrument === "ES" ? 700 : 400, borderColor: tf.instrument === "ES" ? T.purple : T.border }}>ES</button>
                   </div>
                 </div>}
                 {stratType !== "HTS" && stratType !== "DR" && !isDRLike && !isLJ && (
@@ -6037,42 +6052,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </>}
 
               {isLJ && <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Live Journal — Trade</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>IB — Trade</div>
 
-              {/* TAKTYKA — na górze */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={label}>Taktyka</div>
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {[["IB", T.green, "IB"], ["LUNCH_BOX", T.purple, "Lunch Box"], ["OTHERS", T.amber, "Others"]].map(([id, col, lbl]) => (
-                    <button key={id} onClick={() => setTf(p => ({...p, lj_tactic: id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.lj_tactic === id ? `${col}20` : T.bg2, color: tf.lj_tactic === id ? col : T.textSoft, fontWeight: tf.lj_tactic === id ? 700 : 400, borderColor: tf.lj_tactic === id ? col : T.border }}>{lbl}</button>
-                  ))}
-                </div>
-                {tf.lj_tactic === "OTHERS" && (
-                  <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                    {["Gap", "VWAP", "Wstęga", "10am GAP"].map(opt => (
-                      <button key={opt} onClick={() => setTf(p => ({...p, lj_tactic_other: p.lj_tactic_other === opt ? "" : opt}))} style={{ ...sel, flex: 1, padding: "5px 4px", fontSize: 10, background: tf.lj_tactic_other === opt ? `${T.amber}20` : T.bg2, color: tf.lj_tactic_other === opt ? T.amber : T.textSoft, fontWeight: tf.lj_tactic_other === opt ? 700 : 400, borderColor: tf.lj_tactic_other === opt ? T.amber : T.border }}>{tf.lj_tactic_other === opt ? "✓ " : ""}{opt}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* ROW 1: Result | Instrument | Zysk/Strata | R/R */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Result</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {[["WIN", T.green], ["BE", T.amber], ["LOSS", T.red]].map(([r, col]) => (
-                      <button key={r} onClick={() => setTf(p => ({...p, result: r}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.result === r ? `${col}20` : T.bg2, color: tf.result === r ? col : T.textSoft, fontWeight: tf.result === r ? 700 : 400, borderColor: tf.result === r ? col : T.border }}>{r}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div style={label}>Instrument</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, instrument: "NQ"}))} style={{ ...sel, flex: 1, background: tf.instrument === "NQ" ? `${T.cyan}20` : T.bg2, color: tf.instrument === "NQ" ? T.cyan : T.textSoft, fontWeight: tf.instrument === "NQ" ? 700 : 400, borderColor: tf.instrument === "NQ" ? T.cyan : T.border }}>NQ</button>
-                    <button onClick={() => setTf(p => ({...p, instrument: "ES"}))} style={{ ...sel, flex: 1, background: tf.instrument === "ES" ? `${T.purple}20` : T.bg2, color: tf.instrument === "ES" ? T.purple : T.textSoft, fontWeight: tf.instrument === "ES" ? 700 : 400, borderColor: tf.instrument === "ES" ? T.purple : T.border }}>ES</button>
-                  </div>
-                </div>
+              {/* ROW 1 LJ: Zysk/Strata | R/R */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Zysk / Strata ($)</div>
                   <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
@@ -6082,7 +6065,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <input type="text" value={tf.lj_rr} onChange={e => setTf(p => ({...p, lj_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
-
               {/* TIMING: Date | Entry Time | Duration | Range Size */}
               <div style={{ marginBottom: 6 }}>
                 <div style={{ fontSize: 10, color: T.textDim, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Timing</div>
