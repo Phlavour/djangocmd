@@ -9065,7 +9065,23 @@ function DailyCheckPanel({ supa, apiKey }) {
             </div>
           </DCCard>
 
-          {/* Weekly summary + plans */}
+          {/* Week tasks */}
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHead icon="📅">Taski na ten tydzień
+              <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(weekStart + "T12:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} – {new Date(new Date(weekStart + "T12:00:00").setDate(new Date(weekStart + "T12:00:00").getDate() + 6)).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}</span>
+            </DCHead>
+            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />
+          </DCCard>
+
+          {/* Month tasks */}
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHead icon="📆">Taski na ten miesiąc
+              <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(parseInt(monthStart.slice(0,4)), parseInt(monthStart.slice(5,7))-1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</span>
+            </DCHead>
+            <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />
+          </DCCard>
+
+          {/* Weekly summary */}
           <DCCard>
             {/* Week selector */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -9080,7 +9096,7 @@ function DailyCheckPanel({ supa, apiKey }) {
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: 0, marginBottom: 14, borderBottom: `1px solid ${DC.border}` }}>
-              {[["overview","📊 Postęp"],["notes","📝 Notatki"],["plan","✅ Plan"],["ai","🤖 AI"]].map(([id, lbl]) => (
+              {[["overview","📊 Postęp"],["notes","📝 Notatki"],["ai","🤖 AI"]].map(([id, lbl]) => (
                 <button key={id} onClick={() => setWeekTab(id)} style={{ padding: "7px 12px", fontSize: 11, fontWeight: weekTab === id ? 700 : 400, color: weekTab === id ? DC.cyan : DC.soft, background: "none", border: "none", borderBottom: weekTab === id ? `2px solid ${DC.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
               ))}
             </div>
@@ -9120,18 +9136,6 @@ function DailyCheckPanel({ supa, apiKey }) {
                     <DCBtn small bg={DC.green} disabled={notesSaving} onClick={saveMonthNote}>{notesSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {weekTab === "plan" && (
-              <div>
-                <div style={{ display: "flex", gap: 0, marginBottom: 12, borderBottom: `1px solid ${DC.border}` }}>
-                  {[["week", "Plan tygodnia"], ["month", "Plan miesiąca"]].map(([id, lbl]) => (
-                    <button key={id} onClick={() => setPlanTab(id)} style={{ padding: "6px 12px", fontSize: 11, fontWeight: planTab === id ? 700 : 400, color: planTab === id ? DC.cyan : DC.soft, background: "none", border: "none", borderBottom: planTab === id ? `2px solid ${DC.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
-                  ))}
-                </div>
-                {planTab === "week" && <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />}
-                {planTab === "month" && <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />}
               </div>
             )}
 
