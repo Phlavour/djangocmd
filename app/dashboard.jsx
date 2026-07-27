@@ -9033,7 +9033,6 @@ function DailyCheckPanel({ supa, apiKey }) {
             )}
           </DCCard>
         </div>
-        </div>
 
         {/* COL 2: Tasks */}
         <div>
