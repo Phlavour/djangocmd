@@ -8680,9 +8680,14 @@ function DailyCheckPanel({ supa, apiKey }) {
       if (dead) return;
       if (Array.isArray(t)) setTasks(t);
       if (Array.isArray(rows)) {
-        const cl = {}, nt = {};
-        rows.forEach(r => { cl[`${r.check_date}_${r.task_key}`] = r.completed === true; if (r.notes) nt[`${r.check_date}_${r.task_key}`] = r.notes; });
-        setChecklist(cl); setDayNotes(nt);
+        const cl = {}, nt = {}, ex = {};
+        rows.forEach(r => {
+          const k = `${r.check_date}_${r.task_key}`;
+          cl[k] = r.completed === true;
+          ex[k] = true; // this row exists in DB
+          if (r.notes) nt[k] = r.notes;
+        });
+        setChecklist(cl); setDayNotes(nt); setChecklistExists(ex);
       }
       setLoading(false);
     }).catch(e => { if (!dead) { console.error(e); setLoading(false); } });
@@ -8719,17 +8724,31 @@ function DailyCheckPanel({ supa, apiKey }) {
       .then(r => r.json()).then(rows => { if (Array.isArray(rows)) setMonthPlan(rows); else setMonthPlan([]); }).catch(console.error);
   }, [monthStart, supa?.url, tick]);
 
+  // Track which checklist keys exist in DB (have been saved before)
+  const [checklistExists, setChecklistExists] = useState({});
+
   const toggle = async (date, task_key) => {
     const k = `${date}_${task_key}`;
     const val = !checklist[k];
     setSaving(p => ({...p, [k]: true}));
     setChecklist(p => ({...p, [k]: val}));
     try {
-      await fetch(`${supa.url}/rest/v1/daily_checklist`, {
-        method: "POST",
-        headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify([{ check_date: date, task_key, completed: val, notes: dayNotes[k] || "" }]),
-      });
+      if (checklistExists[k]) {
+        // Row exists — PATCH it
+        await fetch(`${supa.url}/rest/v1/daily_checklist?check_date=eq.${date}&task_key=eq.${task_key}`, {
+          method: "PATCH",
+          headers: { ...supa.headers, "Prefer": "return=minimal" },
+          body: JSON.stringify({ completed: val }),
+        });
+      } else {
+        // Row doesn't exist — INSERT
+        await fetch(`${supa.url}/rest/v1/daily_checklist`, {
+          method: "POST",
+          headers: { ...supa.headers, "Prefer": "return=minimal" },
+          body: JSON.stringify([{ check_date: date, task_key, completed: val, notes: dayNotes[k] || "" }]),
+        });
+        setChecklistExists(p => ({...p, [k]: true}));
+      }
     } catch { setChecklist(p => ({...p, [k]: !val})); }
     setSaving(p => ({...p, [k]: false}));
   };
