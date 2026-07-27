@@ -8564,6 +8564,53 @@ const DC = {
   green: "#22c55e", red: "#ef4444", amber: "#f59e0b", cyan: "#0ea5e9",
 };
 
+const PLAN_CATS = [
+  { id: "zdrowie",  label: "Zdrowie",       color: "#22c55e" },
+  { id: "trading",  label: "Trading",        color: "#0ea5e9" },
+  { id: "praca",    label: "Praca",          color: "#8b5cf6" },
+  { id: "social",   label: "X i Social",     color: "#f59e0b" },
+  { id: "natka",    label: "Natka",          color: "#ec4899" },
+  { id: "inne",     label: "Inne",           color: "#9ca3af" },
+];
+
+// Module-level to avoid remount on every keystroke
+function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, newCat, onNewCatChange }) {
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+        {items.length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak zadań — dodaj poniżej</div>}
+        {items.map(item => {
+          const cat = PLAN_CATS.find(c => c.id === item.category);
+          return (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
+              <button onClick={() => onToggle(item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+              </button>
+              {cat && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
+              <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
+              <button onClick={() => onDelete(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
+            </div>
+          );
+        })}
+      </div>
+      {/* Add row */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <select value={newCat} onChange={e => onNewCatChange(e.target.value)} style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 8px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
+          {PLAN_CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
+        <input
+          value={newItem}
+          onChange={e => onNewItemChange(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && onAdd()}
+          placeholder="Nowe zadanie..."
+          style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, outline: "none", fontFamily: "inherit", flex: 1, minWidth: 120 }}
+        />
+        <DCBtn small bg={DC.cyan} onClick={onAdd}>Dodaj</DCBtn>
+      </div>
+    </div>
+  );
+}
+
 const DCCard = ({ children, style: sx }) => (
   <div style={{ background: DC.card, border: `1px solid ${DC.border}`, borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,.07)", ...sx }}>{children}</div>
 );
@@ -8617,6 +8664,8 @@ function DailyCheckPanel({ supa, apiKey }) {
   const [monthPlan, setMonthPlan] = useState([]);
   const [newWeekItem, setNewWeekItem] = useState("");
   const [newMonthItem, setNewMonthItem] = useState("");
+  const [newWeekCat, setNewWeekCat] = useState("inne");
+  const [newMonthCat, setNewMonthCat] = useState("inne");
   const [planTab, setPlanTab] = useState("week"); // week | month
 
   // Load checklist + tasks
@@ -8729,13 +8778,14 @@ function DailyCheckPanel({ supa, apiKey }) {
 
   const addPlanItem = async (type) => {
     const text = type === "week" ? newWeekItem : newMonthItem;
+    const category = type === "week" ? newWeekCat : newMonthCat;
     if (!text.trim()) return;
     const date = type === "week" ? weekStart : monthStart;
     const order = (type === "week" ? weekPlan : monthPlan).length;
     const res = await fetch(`${supa.url}/rest/v1/plan_items`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "return=representation" },
-      body: JSON.stringify([{ plan_type: type, plan_date: date, text: text.trim(), completed: false, sort_order: order }]),
+      body: JSON.stringify([{ plan_type: type, plan_date: date, text: text.trim(), completed: false, sort_order: order, category }]),
     }).then(r => r.json()).catch(() => null);
     if (Array.isArray(res) && res[0]) {
       if (type === "week") { setWeekPlan(p => [...p, res[0]]); setNewWeekItem(""); }
@@ -8802,27 +8852,6 @@ function DailyCheckPanel({ supa, apiKey }) {
   const sel = { background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" };
   const textarea = (value, onChange, placeholder, rows = 3) => (
     <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows} style={{ width: "100%", padding: 10, borderRadius: 8, border: `1px solid ${DC.border}`, fontSize: 12, color: DC.text, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit", background: "#fff", lineHeight: 1.6 }} />
-  );
-
-  const PlanList = ({ type, items, newItem, setNewItem }) => (
-    <div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-        {items.length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak zadań — dodaj poniżej</div>}
-        {items.map(item => (
-          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
-            <button onClick={() => togglePlanItem(type, item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
-            </button>
-            <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
-            <button onClick={() => deletePlanItem(type, item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer" }}>✕</button>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <input value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === "Enter" && addPlanItem(type)} placeholder="Nowe zadanie..." style={{ ...sel, flex: 1 }} />
-        <DCBtn small bg={DC.cyan} onClick={() => addPlanItem(type)}>Dodaj</DCBtn>
-      </div>
-    </div>
   );
 
   return (
@@ -8997,8 +9026,8 @@ function DailyCheckPanel({ supa, apiKey }) {
                     <button key={id} onClick={() => setPlanTab(id)} style={{ padding: "6px 12px", fontSize: 11, fontWeight: planTab === id ? 700 : 400, color: planTab === id ? DC.cyan : DC.soft, background: "none", border: "none", borderBottom: planTab === id ? `2px solid ${DC.cyan}` : "2px solid transparent", cursor: "pointer", marginBottom: -1 }}>{lbl}</button>
                   ))}
                 </div>
-                {planTab === "week" && <PlanList type="week" items={weekPlan} newItem={newWeekItem} setNewItem={setNewWeekItem} />}
-                {planTab === "month" && <PlanList type="month" items={monthPlan} newItem={newMonthItem} setNewItem={setNewMonthItem} />}
+                {planTab === "week" && <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />}
+                {planTab === "month" && <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />}
               </div>
             )}
 
