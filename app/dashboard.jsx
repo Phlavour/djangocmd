@@ -4801,7 +4801,7 @@ function TradingPanel({ apiKey, supa }) {
     bands_overlap: false,
     idea: "SWEEP",
     // Live Journal fields:
-    lj_emotions_control: true,
+    lj_range_break: "NIE", // NIE | 0.1 | 0.2 | 0.3 | 0.4+
     lj_tactic: "IB", // IB | LUNCH_BOX | OTHERS
     lj_tactic_other: "", // Gap | VWAP | Wstęga (when lj_tactic === OTHERS)
     lj_rr: "", // Risk/Reward manual e.g. 1, 0.5, 2
@@ -5232,7 +5232,7 @@ Rules:
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
-      lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
+      lj_range_break: tf.lj_range_break || "NIE", lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
       pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
@@ -5319,7 +5319,7 @@ Rules:
       additional_entries: sd.additional_entries || "0",
       bands_overlap: sd.bands_overlap || false,
       idea: sd.idea || "SWEEP",
-      lj_emotions_control: sd.lj_emotions_control !== false, lj_tactic: sd.lj_tactic || "IB",
+      lj_range_break: sd.lj_range_break || "NIE", lj_tactic: sd.lj_tactic || "IB",
       lj_tactic_other: sd.lj_tactic_other || "", lj_rr: sd.lj_rr || "",
       lj_range_size: sd.lj_range_size || "", lj_duration_min: sd.lj_duration_min || "", lj_screenshot_second: sd.lj_screenshot_second || "",
       pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false, pa_trend: sd.pa_trend || false,
@@ -5337,7 +5337,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_emotions_control: true, lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5367,7 +5367,7 @@ Rules:
       additional_entries: tf.additional_entries || "0",
       bands_overlap: tf.bands_overlap || false,
       idea: tf.idea || "SWEEP",
-      lj_emotions_control: tf.lj_emotions_control !== false, lj_tactic: tf.lj_tactic || "IB",
+      lj_range_break: tf.lj_range_break || "NIE", lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
       pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
@@ -5541,7 +5541,7 @@ Rules:
           time: sd.entry_time || "?", instrument: sd.instrument || "?", result: t.result, profit: sd.profit_usd,
           duration: sd.lj_duration_min, range_size: sd.lj_range_size, tactic: sd.lj_tactic,
           plays, confluences_ok: confluences, confluences_missing: missing,
-          emotions: sd.lj_emotions_control !== false, reason: t.description || t.reason || "", notes: t.notes || ""
+          range_break: sd.lj_range_break || "NIE", reason: t.description || t.reason || "", notes: t.notes || ""
         };
       });
 
@@ -6231,12 +6231,17 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* EMOCJE */}
+              {/* PRZEBIŁA RANGE */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 10, color: T.textSoft, marginBottom: 4, textAlign: "center", fontWeight: 600 }}>Emocje pod kontrolą</div>
+                <div style={{ ...label, marginBottom: 8 }}>Cena przebiła range</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => setTf(p => ({...p, lj_emotions_control: true}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: tf.lj_emotions_control ? `${T.green}20` : T.bg2, color: tf.lj_emotions_control ? T.green : T.textSoft, fontWeight: tf.lj_emotions_control ? 700 : 400, borderColor: tf.lj_emotions_control ? T.green : T.border }}>TAK</button>
-                  <button onClick={() => setTf(p => ({...p, lj_emotions_control: false}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: !tf.lj_emotions_control ? `${T.red}20` : T.bg2, color: !tf.lj_emotions_control ? T.red : T.textSoft, fontWeight: !tf.lj_emotions_control ? 700 : 400, borderColor: !tf.lj_emotions_control ? T.red : T.border }}>NIE</button>
+                  {["NIE", "0,1", "0,2", "0,3", "0,4+"].map(opt => {
+                    const active = tf.lj_range_break === opt;
+                    const color = opt === "NIE" ? T.textDim : T.cyan;
+                    return (
+                      <button key={opt} onClick={() => setTf(p => ({...p, lj_range_break: opt}))} style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${color}20` : T.bg2, color: active ? color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? color : T.border }}>{opt}</button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -6589,8 +6594,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 { id: "tac_IB", label: "Tactic: IB" },
                 { id: "tac_LB", label: "Tactic: Lunch Box" },
                 { id: "tac_NONE", label: "Tactic: None" },
-                { id: "emo_yes", label: "Emocje ✓" },
-                { id: "emo_no", label: "Emocje ✗" },
+                { id: "emo_yes", label: "Bez przebicia" },
+                { id: "emo_no", label: "Przebicie range" },
               ] : []),
             ].map(opt => (
               <button key={opt.id} onClick={() => setSortMode(opt.id)} style={{
@@ -6622,8 +6627,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             else if (sortMode === "tac_IB") sorted = sorted.filter(t => getSd(t).lj_tactic === "IB");
             else if (sortMode === "tac_LB") sorted = sorted.filter(t => getSd(t).lj_tactic === "LUNCH_BOX");
             else if (sortMode === "tac_NONE") sorted = sorted.filter(t => getSd(t).lj_tactic === "NO_TACTIC");
-            else if (sortMode === "emo_yes") sorted = sorted.filter(t => getSd(t).lj_emotions_control !== false);
-            else if (sortMode === "emo_no")  sorted = sorted.filter(t => getSd(t).lj_emotions_control === false);
+            else if (sortMode === "emo_yes") sorted = sorted.filter(t => (getSd(t).lj_range_break || "NIE") === "NIE");
+            else if (sortMode === "emo_no")  sorted = sorted.filter(t => (getSd(t).lj_range_break || "NIE") !== "NIE");
 
             return sorted.map(t => {
             let trends = t.trends || {};
@@ -6698,7 +6703,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         {sd.lj_duration_min && <span>Czas: <strong>{sd.lj_duration_min}min</strong></span>}
                         <span>Profit: <strong style={{ color: parseFloat(sd.profit_usd || 0) > 0 ? T.green : parseFloat(sd.profit_usd || 0) < 0 ? T.red : T.textDim }}>${(parseFloat(sd.profit_usd || 0)).toFixed(2)}</strong></span>
                         {sd.trade_date && <span>{sd.trade_date}</span>}
-                        <span>Emocje: <strong style={{ color: sd.lj_emotions_control !== false ? T.green : T.red }}>{sd.lj_emotions_control !== false ? "✓" : "✗"}</strong></span>
+                        {sd.lj_range_break && sd.lj_range_break !== "NIE" && <span>Przebicie: <strong style={{ color: T.cyan }}>{sd.lj_range_break}</strong></span>}
                       </> : null;
                     })()}
                     {t.rsi && <span>RSI: <strong>{t.rsi}</strong></span>}
@@ -7158,7 +7163,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               if (simFilters.trade_number !== "ALL" && String(sd?.trade_number) !== simFilters.trade_number) return false;
               if (simFilters.lj_tactic !== undefined && simFilters.lj_tactic !== "ALL" && sd?.lj_tactic !== simFilters.lj_tactic) return false;
               if (simFilters.lj_emotions !== undefined && simFilters.lj_emotions !== "ALL") {
-                const emo = sd?.lj_emotions_control !== false;
+                const emo = (sd?.lj_range_break || "NIE") === "NIE";
                 if (simFilters.lj_emotions === "YES" && !emo) return false;
                 if (simFilters.lj_emotions === "NO" && emo) return false;
               }
@@ -7361,13 +7366,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           {/* Live Journal: Emotions Control Performance */}
           {isLJ && (
             <Card style={{ marginBottom: 16 }}>
-              <Heading icon="🧠">Emocje pod kontrolą — Performance</Heading>
+              <Heading icon="📏">Range Break Performance</Heading>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
-                  { val: true,  label: "Emocje pod kontrolą", color: T.green, hint: "dyscyplina utrzymana" },
-                  { val: false, label: "Emocje POZA kontrolą", color: T.red,   hint: "tilt / FOMO / panic" },
+                  { val: true,  label: "Brak przebicia (NIE)", color: T.green, hint: "cena nie wyszła z range'a" },
+                  { val: false, label: "Przebicie range'a", color: T.amber, hint: "0.1 / 0.2 / 0.3 / 0.4+" },
                 ].map(em => {
-                  const eTrades = drFilteredTrades.filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return (sd?.lj_emotions_control !== false) === em.val; });
+                  const eTrades = drFilteredTrades.filter(t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return ((sd?.lj_range_break || "NIE") === "NIE") === em.val; });
                   const eW = eTrades.filter(t => t.result === "WIN").length;
                   const eL = eTrades.filter(t => t.result === "LOSS").length;
                   const eBE = eTrades.filter(t => t.result === "BE").length;
