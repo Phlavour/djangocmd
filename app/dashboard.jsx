@@ -8681,7 +8681,7 @@ function DailyCheckPanel({ supa, apiKey }) {
       if (Array.isArray(t)) setTasks(t);
       if (Array.isArray(rows)) {
         const cl = {}, nt = {};
-        rows.forEach(r => { cl[`${r.check_date}_${r.task_key}`] = !!r.completed; if (r.notes) nt[`${r.check_date}_${r.task_key}`] = r.notes; });
+        rows.forEach(r => { cl[`${r.check_date}_${r.task_key}`] = r.completed === true; if (r.notes) nt[`${r.check_date}_${r.task_key}`] = r.notes; });
         setChecklist(cl); setDayNotes(nt);
       }
       setLoading(false);
@@ -8820,6 +8820,58 @@ function DailyCheckPanel({ supa, apiKey }) {
     setNewTask(""); setAddingTask(false); reload();
   };
 
+  const deleteTask = async (task_key) => {
+    if (!confirm(`Usunąć "${task_key}" z rutyny?`)) return;
+    await fetch(`${supa.url}/rest/v1/checklist_tasks?task_key=eq.${task_key}`, {
+      method: "DELETE", headers: supa.headers,
+    }).catch(console.error);
+    reload();
+  };
+
+  // Daily one-off tasks (per day)
+  const [dayTasksList, setDayTasksList] = useState({}); // {date: [{id, text, completed, category}]}
+  const [newDayTask, setNewDayTask] = useState("");
+  const [newDayTaskCat, setNewDayTaskCat] = useState("inne");
+
+  useEffect(() => {
+    if (!supa?.url || !selectedDay) return;
+    fetch(`${supa.url}/rest/v1/daily_tasks?task_date=eq.${selectedDay}&order=sort_order.asc`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => {
+        if (Array.isArray(rows)) setDayTasksList(p => ({...p, [selectedDay]: rows}));
+      }).catch(console.error);
+  }, [selectedDay, supa?.url, tick]);
+
+  const addDayTask = async () => {
+    if (!newDayTask.trim()) return;
+    const order = (dayTasksList[selectedDay] || []).length;
+    const res = await fetch(`${supa.url}/rest/v1/daily_tasks`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "return=representation" },
+      body: JSON.stringify([{ task_date: selectedDay, text: newDayTask.trim(), completed: false, category: newDayTaskCat, sort_order: order }]),
+    }).then(r => r.json()).catch(() => null);
+    if (Array.isArray(res) && res[0]) {
+      setDayTasksList(p => ({...p, [selectedDay]: [...(p[selectedDay] || []), res[0]]}));
+      setNewDayTask("");
+    }
+  };
+
+  const toggleDayTask = async (id) => {
+    const list = dayTasksList[selectedDay] || [];
+    const item = list.find(x => x.id === id);
+    if (!item) return;
+    const val = !item.completed;
+    setDayTasksList(p => ({...p, [selectedDay]: p[selectedDay].map(x => x.id === id ? {...x, completed: val} : x)}));
+    await fetch(`${supa.url}/rest/v1/daily_tasks?id=eq.${id}`, {
+      method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
+      body: JSON.stringify({ completed: val }),
+    }).catch(console.error);
+  };
+
+  const deleteDayTask = async (id) => {
+    setDayTasksList(p => ({...p, [selectedDay]: (p[selectedDay] || []).filter(x => x.id !== id)}));
+    await fetch(`${supa.url}/rest/v1/daily_tasks?id=eq.${id}`, { method: "DELETE", headers: supa.headers }).catch(console.error);
+  };
+
   const [year, month] = monthStart.split("-").map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7;
@@ -8898,11 +8950,16 @@ function DailyCheckPanel({ supa, apiKey }) {
             </div>
           </DCCard>
 
-          {/* Manage tasks */}
+          {/* Dzienna Rutyna */}
           <DCCard>
-            <DCHead icon="⚙️">Zarządzaj zadaniami</DCHead>
+            <DCHead icon="🔄">Dzienna Rutyna</DCHead>
             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
-              {tasks.map(t => <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}><span style={{ flex: 1 }}>{t.label}</span><span style={{ fontSize: 9, color: DC.dim }}>{t.task_key}</span></div>)}
+              {tasks.map(t => (
+                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}>
+                  <span style={{ flex: 1 }}>{t.label}</span>
+                  <button onClick={() => deleteTask(t.task_key)} title="Usuń z rutyny" style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
             </div>
             {addingTask ? (
               <div style={{ display: "flex", gap: 6 }}>
@@ -8958,6 +9015,34 @@ function DailyCheckPanel({ supa, apiKey }) {
                   {daySumSaving[selectedDay] ? "Zapisuję..." : "💾 Zapisz"}
                 </DCBtn>
               </div>
+            </div>
+          </DCCard>
+
+          {/* Daily one-off tasks */}
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHead icon="📌">Taski na ten dzień</DCHead>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+              {(dayTasksList[selectedDay] || []).length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak dodatkowych tasków</div>}
+              {(dayTasksList[selectedDay] || []).map(item => {
+                const cat = PLAN_CATS.find(c => c.id === item.category);
+                return (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : DC.border}` }}>
+                    <button onClick={() => toggleDayTask(item.id)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                    </button>
+                    {cat && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
+                    <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.text}</span>
+                    <button onClick={() => deleteDayTask(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <select value={newDayTaskCat} onChange={e => setNewDayTaskCat(e.target.value)} style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 8px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
+                {PLAN_CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+              <input value={newDayTask} onChange={e => setNewDayTask(e.target.value)} onKeyDown={e => e.key === "Enter" && addDayTask()} placeholder="Dodaj task na ten dzień..." style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, outline: "none", fontFamily: "inherit", flex: 1 }} />
+              <DCBtn small bg={DC.cyan} onClick={addDayTask}>Dodaj</DCBtn>
             </div>
           </DCCard>
 
