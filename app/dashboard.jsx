@@ -8559,7 +8559,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 // ═══════════════════════════════════════════════════════════════
 
 function DailyCheckPanel({ supa, apiKey }) {
-  const T = useMemo(() => buildTheme("DARK"), []);
+  const T = DARK;
   const sel = { background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, padding: "6px 10px", fontFamily: "'Satoshi',sans-serif", fontSize: 11, cursor: "pointer", outline: "none" };
   const label = { fontSize: 10, fontWeight: 700, color: T.textSoft, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 };
 
