@@ -7673,9 +7673,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               ))}
             </div>
           </Card>
+          )}
 
           {/* Session Performance */}
-          {(() => {
+          {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (() => {
             const SESSIONS = ["Asia", "London", "NY AM", "NY Lunch", "NY PM", "Overnight"];
             const sessStats = SESSIONS.map(sess => {
               const st = filteredTrades.filter(t => {
@@ -7684,15 +7685,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               });
               const wins = st.filter(t => t.result === "WIN").length;
               const losses = st.filter(t => t.result === "LOSS").length;
-              const bes = st.filter(t => t.result === "BE").length;
               const profit = st.reduce((s, t) => s + (parseFloat(t.profit) || 0), 0);
               const wr = st.length > 0 ? ((wins / st.length) * 100).toFixed(0) : "—";
-              return { sess, total: st.length, wins, losses, bes, wr, profit: profit.toFixed(1) };
+              return { sess, total: st.length, wins, losses, wr, profit: profit.toFixed(1) };
             }).filter(s => s.total > 0);
             if (sessStats.length === 0) return null;
             return (
               <Card style={{ marginBottom: 16 }}>
-                <Heading icon="🕐">Session Performance (HTS)</Heading>
+                <Heading icon="🕐">Session Performance</Heading>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
                   {sessStats.map(s => (
                     <div key={s.sess} style={{ textAlign: "center", padding: 12, background: `${parseFloat(s.wr) >= 50 ? T.green : T.red}08`, borderRadius: 8, border: `1px solid ${T.border}` }}>
@@ -7706,8 +7706,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </Card>
             );
           })()}
-          </Card>
-          )}
         </div>
         );
       })()}
