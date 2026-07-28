@@ -5331,26 +5331,31 @@ Rules:
     };
     if (supa) {
       try {
-        console.log("📊 Saving trade:", JSON.stringify(row).slice(0, 200));
+        const reloadTrades = () => fetch(`${supa.url}/rest/v1/trading_journal?order=created_at.desc&limit=500`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } }).then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows)) setTrades(rows); }).catch(() => {});
+
         const res = await fetch(`${supa.url}/rest/v1/trading_journal`, {
           method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
           body: JSON.stringify([row]),
         });
         const body = await res.json();
-        console.log("📊 Trade save response:", res.status, body);
         if (res.ok && Array.isArray(body) && body[0]) {
           setTrades(prev => [body[0], ...prev]);
         } else {
           // Fallback: only send columns that exist for sure
-          console.log("📊 Retrying with minimal columns...");
+          console.warn("Primary save failed, trying minimal:", res.status, JSON.stringify(body).slice(0, 200));
           const minRow = { strategy_id: activeStrategy, description: tf.description, result: tf.result, meets_requirements: tf.meetsRequirements, profit: parseFloat(tf.profit) || 0, notes: tf.notes, strategy_data: JSON.stringify(stratData) };
           const res2 = await fetch(`${supa.url}/rest/v1/trading_journal`, {
             method: "POST", headers: { ...supa.headers, "Prefer": "return=representation" },
             body: JSON.stringify([minRow]),
           });
           const body2 = await res2.json();
-          console.log("📊 Trade save retry:", res2.status, body2);
-          if (res2.ok && Array.isArray(body2) && body2[0]) setTrades(prev => [body2[0], ...prev]);
+          if (res2.ok && Array.isArray(body2) && body2[0]) {
+            setTrades(prev => [body2[0], ...prev]);
+          } else {
+            console.error("Both saves failed:", res2.status, JSON.stringify(body2).slice(0, 200));
+          }
+          // Reload from DB to be sure
+          await reloadTrades();
         }
       } catch (e) { console.error("Save trade:", e); }
     }
