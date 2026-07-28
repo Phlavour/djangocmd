@@ -5235,10 +5235,12 @@ Rules:
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
       hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
       session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -5278,6 +5280,7 @@ Rules:
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
       strategy_data: JSON.stringify(stratData),
+      ...(tf.trade_date ? { trade_date: tf.trade_date } : {}),
     };
     if (supa) {
       try {
@@ -5365,7 +5368,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false, s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5378,10 +5381,12 @@ Rules:
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
       hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
       session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+      trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
@@ -5420,6 +5425,7 @@ Rules:
       pair: tf.pair, timeframe: tf.timeframe, notes: tf.notes,
       trends: JSON.stringify(tf.trends || {}), rsi: tf.rsi, pivots: JSON.stringify(tf.pivots || {}),
       strategy_data: JSON.stringify(stratData),
+      ...(tf.trade_date ? { trade_date: tf.trade_date } : {}),
     };
     if (supa) { try { await supa.patch("trading_journal", `id=eq.${editingTradeId}`, updates); } catch {} }
     setTrades(prev => prev.map(t => t.id === editingTradeId ? { ...t, ...updates } : t));
@@ -5436,8 +5442,10 @@ Rules:
   const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("live") ? "LIVE_JOURNAL" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
   // DR-family helper: DR and LUNCH_BOX share most fields
   const isDRLike = stratType === "DR" || stratType === "LUNCH_BOX";
-  // Calendar/Slider helper: DR, LUNCH_BOX, LIVE_JOURNAL all show calendar + slider
-  const isCalendarStrat = stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL";
+  const isHTS = stratType === "HTS";
+  const is8020 = stratType === "8020";
+  // Calendar/Slider helper: DR, LUNCH_BOX, LIVE_JOURNAL, HTS, 8020 all show calendar + slider
+  const isCalendarStrat = stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL" || isHTS || is8020;
   const isLJ = stratType === "LIVE_JOURNAL";
 
   // Open Daily Summary modal for a given date
@@ -5529,7 +5537,7 @@ Rules:
     // Collect real trades for this week
     const weekTrades = filteredTrades.filter(t => {
       let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-      return weekDates.includes(sd?.trade_date || "");
+      return weekDates.includes(sd?.trade_date || t.trade_date || "");
     });
 
     // Collect daily summaries for this week
@@ -5543,7 +5551,7 @@ Rules:
     const dayData = weekDates.map(date => {
       const dayTrades = weekTrades.filter(t => {
         let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-        return sd?.trade_date === date;
+        return (sd?.trade_date || t.trade_date) === date;
       });
       const summary = weekSummaries.find(t => {
         let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -5556,7 +5564,7 @@ Rules:
       const mL   = sumSd?.manual_losses != null ? Number(sumSd.manual_losses) : null;
       const mBE  = sumSd?.manual_be     != null ? Number(sumSd.manual_be)     : null;
       const mP   = sumSd?.manual_profit != null ? Number(sumSd.manual_profit) : null;
-      const sysP = dayTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || 0); }, 0);
+      const sysP = dayTrades.reduce((s, t) => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return s + (parseFloat(sd?.profit_usd) || parseFloat(t.profit) || 0); }, 0);
       const profit = mP !== null ? mP : sysP;
 
       // Trade details
