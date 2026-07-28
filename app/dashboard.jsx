@@ -4823,7 +4823,7 @@ function TradingPanel({ apiKey, supa }) {
     lj_correlation: "TAK", // TAK | NIE | SREDNIA
     // HTS table (Vision-read)
     hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", // "up" | "down" | "in" | "overlap"
-    hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
+    hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",, s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
     req_8020: false, req_fvg: false, req_instrument: false,
     pair: "NQ", timeframe: "1m", notes: "",
     // Auto-filled from Vision
@@ -4888,6 +4888,7 @@ function TradingPanel({ apiKey, supa }) {
   const [newStratType, setNewStratType] = useState("HTS");
   const STRATEGY_TYPES = [
     { id: "HTS", label: "HTS", desc: "SL wick/band, bounce, potentials" },
+    { id: "8020", label: "80/20", desc: "NQ, 80/20 level trade — Repair, Fork, H" },
     { id: "V_SHAPE", label: "V-Shape Recovery", desc: "Candle entry, engulfing, V quality" },
     { id: "MARKET_PA", label: "Market Feeling / PA", desc: "Direction, pair, timeframe — pure price action" },
     { id: "DR", label: "DR", desc: "NQ/ES, session, entry hour, USD profit" },
@@ -5234,7 +5235,11 @@ Rules:
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
       hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
-    } : stratType === "V_SHAPE" ? {
+    } : stratType === "8020" ? {
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
+      entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
+      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+    } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
@@ -5360,7 +5365,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",, s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false, s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5373,7 +5378,11 @@ Rules:
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
       hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
-    } : stratType === "V_SHAPE" ? {
+    } : stratType === "8020" ? {
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
+      entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
+      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+    } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
       has_engulfing: tf.has_engulfing || false,
       v_quality: tf.v_quality || "clear",
@@ -5726,6 +5735,9 @@ Konkretne, mierzalne kroki do wdrożenia.`;
           hts_extra_8020: sd?.hts_extra_8020 || false, hts_extra_fvg: sd?.hts_extra_fvg || false, hts_extra_vwap: sd?.hts_extra_vwap || false, hts_extra_poi: sd?.hts_extra_poi || false,
           hts_entry_model: sd?.hts_entry_model || "", hts_candle_5m: sd?.hts_candle_5m || "", hts_candle_15m: sd?.hts_candle_15m || "",
           hts_m1: sd?.hts_m1 || "", hts_m5: sd?.hts_m5 || "", hts_m15: sd?.hts_m15 || "", hts_h1: sd?.hts_h1 || "", hts_h4: sd?.hts_h4 || "", hts_d1: sd?.hts_d1 || "",
+          s8020_session: sd?.session || "", s8020_entry_time: sd?.entry_time || "",
+          s8020_entry_type: sd?.entry_type || [], s8020_level: sd?.level || "", s8020_price_read: sd?.price_read || "",
+          s8020_conf_bands: sd?.conf_bands || false, s8020_conf_vwap: sd?.conf_vwap || false, s8020_conf_poi: sd?.conf_poi || false, s8020_conf_fvg: sd?.conf_fvg || false,
           pair: t.pair, timeframe: t.timeframe, notes: t.notes,
         };
       });
@@ -6170,6 +6182,118 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       </div>
                     );
                   })}
+                </div>
+              </div>
+              </>}
+
+              {stratType === "8020" && <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>80/20 Strategy Fields</div>
+
+              {/* Session + Entry Time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Sesja (EST)</div>
+                  <select value={tf.s8020_session || ""} onChange={e => setTf(p => ({...p, s8020_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
+                    <option value="">— wybierz —</option>
+                    <option value="Asia">🌏 Asia (20:00–02:00)</option>
+                    <option value="London">🇬🇧 London (02:00–05:00)</option>
+                    <option value="NY AM">🗽 NY AM (09:30–11:00)</option>
+                    <option value="NY Lunch">☕ NY Lunch (11:00–13:00)</option>
+                    <option value="NY PM">🌆 NY PM (13:00–16:00)</option>
+                    <option value="Overnight">🌙 Overnight</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={label}>Godzina wejścia (EST)</div>
+                  <input type="time" value={tf.s8020_entry_time || ""} onChange={e => {
+                    const t = e.target.value;
+                    if (t) {
+                      const [h, m] = t.split(":").map(Number);
+                      const mins = h * 60 + m;
+                      let sess = "Overnight";
+                      if (mins >= 20*60 || mins < 2*60) sess = "Asia";
+                      else if (mins >= 2*60 && mins < 5*60) sess = "London";
+                      else if (mins >= 9*60+30 && mins < 11*60) sess = "NY AM";
+                      else if (mins >= 11*60 && mins < 13*60) sess = "NY Lunch";
+                      else if (mins >= 13*60 && mins < 16*60) sess = "NY PM";
+                      setTf(p => ({...p, s8020_entry_time: t, s8020_session: sess}));
+                    } else {
+                      setTf(p => ({...p, s8020_entry_time: ""}));
+                    }
+                  }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              {/* Level + Price Read */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div>
+                  <div style={label}>Poziom</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[["80", T.red, "80 (70–90)"], ["20", T.green, "20 (10–30)"]].map(([lvl, col, lbl]) => (
+                      <button key={lvl} onClick={() => setTf(p => ({...p, s8020_level: p.s8020_level === lvl ? "" : lvl}))} style={{ ...sel, flex: 1, background: tf.s8020_level === lvl ? `${col}20` : T.bg2, color: tf.s8020_level === lvl ? col : T.textSoft, fontWeight: tf.s8020_level === lvl ? 700 : 400, borderColor: tf.s8020_level === lvl ? col : T.border }}>{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={label}>Cena w momencie wejścia</div>
+                  <input type="text" value={tf.s8020_price_read || ""} onChange={e => {
+                    const raw = e.target.value;
+                    setTf(p => {
+                      // Auto-detect level from price
+                      const num = parseFloat(raw.replace(/[, ]/g, ""));
+                      const dec = (num % 100);
+                      let level = p.s8020_level;
+                      if (!isNaN(dec)) {
+                        if (dec >= 10 && dec <= 30) level = "20";
+                        else if (dec >= 70 && dec <= 90) level = "80";
+                      }
+                      return {...p, s8020_price_read: raw, s8020_level: level};
+                    });
+                  }} placeholder="np. 29 819 lub 26 781" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center" }} />
+                  {tf.s8020_price_read && (() => {
+                    const num = parseFloat((tf.s8020_price_read || "").replace(/[, ]/g, ""));
+                    const dec = Math.round(num % 100);
+                    return <div style={{ fontSize: 9, color: T.textDim, marginTop: 3 }}>Dziesiąta część: <strong style={{ color: T.amber }}>{dec}</strong>/100</div>;
+                  })()}
+                </div>
+              </div>
+
+              {/* Type of entry — multi-select */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Type of Entry <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", fontWeight: 400 }}>(można zaznaczyć kilka)</span></div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "Repair", label: "Repair", color: T.cyan },
+                    { id: "Fork",   label: "Fork",   color: T.purple },
+                    { id: "H",      label: "H",       color: T.amber },
+                  ].map(et => {
+                    const active = (tf.s8020_entry_type || []).includes(et.id);
+                    return (
+                      <button key={et.id} onClick={() => setTf(p => {
+                        const cur = p.s8020_entry_type || [];
+                        return {...p, s8020_entry_type: active ? cur.filter(x => x !== et.id) : [...cur, et.id]};
+                      })} style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${et.color}20` : T.bg2, color: active ? et.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? et.color : T.border }}>
+                        {active ? "✓ " : ""}{et.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Extra Confluences */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Extra Confluences</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+                  {[
+                    { id: "s8020_conf_bands", label: "Wstęgi" },
+                    { id: "s8020_conf_vwap",  label: "VWAP" },
+                    { id: "s8020_conf_poi",   label: "POI" },
+                    { id: "s8020_conf_fvg",   label: "FVG" },
+                  ].map(ec => (
+                    <button key={ec.id} onClick={() => setTf(p => ({...p, [ec.id]: !p[ec.id]}))} style={{ ...sel, padding: "6px 4px", background: tf[ec.id] ? `${T.green}20` : T.bg2, color: tf[ec.id] ? T.green : T.textSoft, fontWeight: tf[ec.id] ? 700 : 400, borderColor: tf[ec.id] ? T.green : T.border }}>
+                      {tf[ec.id] ? "✓ " : ""}{ec.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               </>}
