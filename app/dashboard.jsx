@@ -5265,7 +5265,15 @@ Rules:
   // Save trade
   const saveTrade = async () => {
     if (!activeStrategy) { alert("Select or create a strategy first"); return; }
-    const stratType = activeStratObj?.type || "HTS";
+    const stratType = activeStratObj?.type || (
+      activeStratObj?.name?.toLowerCase().includes("80") || activeStratObj?.name?.toLowerCase().includes("8020") ? "8020" :
+      activeStratObj?.name === "HTS" ? "HTS" :
+      activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" :
+      activeStratObj?.name?.toLowerCase().includes("live") || activeStratObj?.name === "IB" ? "LIVE_JOURNAL" :
+      activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" :
+      activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" :
+      "HTS"
+    );
     const stratData = stratType === "HTS" ? {
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
@@ -5411,7 +5419,15 @@ Rules:
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
-    const stratType = activeStratObj?.type || "HTS";
+    const stratType = activeStratObj?.type || (
+      activeStratObj?.name?.toLowerCase().includes("80") || activeStratObj?.name?.toLowerCase().includes("8020") ? "8020" :
+      activeStratObj?.name === "HTS" ? "HTS" :
+      activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" :
+      activeStratObj?.name?.toLowerCase().includes("live") || activeStratObj?.name === "IB" ? "LIVE_JOURNAL" :
+      activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" :
+      activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" :
+      "HTS"
+    );
     const stratData = stratType === "HTS" ? {
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
@@ -5478,7 +5494,16 @@ Rules:
     .filter(t => t.direction !== "DAILY_SUMMARY");
   const activeStratObj = activeStrategy === "ALL" ? { name: "All Strategies", type: "ALL" } : strategies.find(s => s.id === activeStrategy);
   // Resolve strategy type with fallback to name (handles legacy rows where type is null)
-  const stratType = activeStratObj?.type || (activeStratObj?.name === "DR" ? "DR" : activeStratObj?.name === "HTS" ? "HTS" : activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" : activeStratObj?.name?.toLowerCase().includes("live") ? "LIVE_JOURNAL" : activeStratObj?.name?.toLowerCase().includes("v-shape") ? "V_SHAPE" : activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" : null);
+  const stratType = activeStratObj?.type || (
+    activeStratObj?.name === "DR" ? "DR" :
+    activeStratObj?.name === "HTS" ? "HTS" :
+    activeStratObj?.name?.toLowerCase().includes("lunch") ? "LUNCH_BOX" :
+    activeStratObj?.name?.toLowerCase().includes("live") || activeStratObj?.name === "IB" ? "LIVE_JOURNAL" :
+    activeStratObj?.name?.toLowerCase().includes("v-shape") || activeStratObj?.name?.toLowerCase().includes("v_shape") ? "V_SHAPE" :
+    activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" :
+    activeStratObj?.name?.toLowerCase().includes("80") || activeStratObj?.name?.toLowerCase().includes("8020") ? "8020" :
+    null
+  );
   // DR-family helper: DR and LUNCH_BOX share most fields
   const isDRLike = stratType === "DR" || stratType === "LUNCH_BOX";
   const isHTS = stratType === "HTS";
@@ -5783,7 +5808,7 @@ Konkretne, mierzalne kroki do wdrożenia.`;
           hts_entry_model: sd?.hts_entry_model || "", hts_candle_5m: sd?.hts_candle_5m || "", hts_candle_15m: sd?.hts_candle_15m || "",
           hts_m1: sd?.hts_m1 || "", hts_m5: sd?.hts_m5 || "", hts_m15: sd?.hts_m15 || "", hts_h1: sd?.hts_h1 || "", hts_h4: sd?.hts_h4 || "", hts_d1: sd?.hts_d1 || "",
           s8020_session: sd?.session || "", s8020_entry_time: sd?.entry_time || "",
-          s8020_entry_type: sd?.entry_type || [], s8020_level: sd?.level || "", s8020_price_read: sd?.price_read || "",
+          s8020_entry_type: Array.isArray(sd?.entry_type) ? sd.entry_type : [], s8020_level: sd?.level || "", s8020_price_read: sd?.price_read || "",
           s8020_conf_bands: sd?.conf_bands || false, s8020_conf_vwap: sd?.conf_vwap || false, s8020_conf_poi: sd?.conf_poi || false, s8020_conf_fvg: sd?.conf_fvg || false,
           pair: t.pair, timeframe: t.timeframe, notes: t.notes,
         };
@@ -9321,11 +9346,17 @@ function DailyCheckPanel({ supa, apiKey }) {
         <div>
           <DCCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <button onClick={() => { const d = new Date(year, month - 2, 1); setMonthStart(d.toISOString().slice(0, 7)); }} style={{ ...sel, padding: "5px 12px" }}>‹</button>
+              <button onClick={() => {
+                const d = new Date(year, month - 2, 1);
+                setMonthStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }} style={{ ...sel, padding: "5px 12px" }}>‹</button>
               <div style={{ fontSize: 15, fontWeight: 700, color: DC.text, textTransform: "capitalize" }}>
                 {new Date(year, month - 1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}
               </div>
-              <button onClick={() => { const d = new Date(year, month, 1); setMonthStart(d.toISOString().slice(0, 7)); }} style={{ ...sel, padding: "5px 12px" }}>›</button>
+              <button onClick={() => {
+                const d = new Date(year, month, 1);
+                setMonthStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              }} style={{ ...sel, padding: "5px 12px" }}>›</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 4 }}>
               {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d => <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: DC.dim, padding: "3px 0" }}>{d}</div>)}
