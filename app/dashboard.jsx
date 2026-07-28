@@ -5025,6 +5025,7 @@ function TradingPanel({ apiKey, supa }) {
       // For DR strategy use DR-specific prompts (different for before/after)
       const isDR = stratType === "DR" || stratType === "LUNCH_BOX";
       const isLJ = stratType === "LIVE_JOURNAL";
+      const is8020 = stratType === "8020";
 
       // Count trades in current strategy on a given date+instrument to suggest trade_number
       const countTradesOnDate = (date, instrument) => {
@@ -5101,6 +5102,18 @@ For each timeframe row, the first symbol means:
 - If row not visible or unclear → ""
 
 Today is ${new Date().toISOString().slice(0, 10)}. Respond ONLY with JSON.`;
+      } else if (is8020 && phase === "before") {
+        promptText = `Look at this trading chart screenshot from a futures platform (NQ).
+
+Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "entry_time": "HH:MM in 24h" (from the dark status bar at very bottom of chart showing cursor/last candle time, e.g. "Mon 27 Jul '26 21:12" → "21:12". Return "" if not visible),
+  "trade_date": "YYYY-MM-DD" (from same bottom status bar. Day first: "27 Jul '26" → "2026-07-27". Return "" if not visible)
+}
+
+Rules:
+- entry_time: ONLY from the dark status bar at the very bottom of the chart
+- Respond ONLY with JSON, nothing else`;
       } else {
         // HTS — enhanced prompt: entry time, HTS table (first column only), instrument, date
         promptText = `Look at this trading chart screenshot from a futures platform.
@@ -5194,6 +5207,23 @@ Rules:
               hts_h1: validVal(hts.h1 || ""), hts_h4: validVal(hts.h4 || ""), hts_d1: validVal(hts.d1 || ""),
             };
           });
+        } else if (is8020 && phase === "before") {
+          const entryTime = (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : "";
+          const newDate = (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date)) ? parsed.trade_date : "";
+          const detect8020Session = (t) => {
+            const [h, m] = t.split(":").map(Number); const mins = h*60+m;
+            if (mins >= 20*60 || mins < 2*60) return "Asia";
+            if (mins >= 2*60 && mins < 5*60) return "London";
+            if (mins >= 9*60+30 && mins < 11*60) return "NY AM";
+            if (mins >= 11*60 && mins < 13*60) return "NY Lunch";
+            if (mins >= 13*60 && mins < 16*60) return "NY PM";
+            return "Overnight";
+          };
+          setTf(prev => ({
+            ...prev,
+            ...(entryTime ? { s8020_entry_time: entryTime, s8020_session: detect8020Session(entryTime) } : {}),
+            ...(newDate ? { trade_date: newDate } : {}),
+          }));
         } else {
           // HTS + others
           const validVal = v => ["up","down","in","overlap",""].includes(v) ? v : "";
@@ -5962,7 +5992,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <button onClick={() => setTf(p => ({...p, instrument: "ES"}))} style={{ ...sel, flex: 1, background: tf.instrument === "ES" ? `${T.purple}20` : T.bg2, color: tf.instrument === "ES" ? T.purple : T.textSoft, fontWeight: tf.instrument === "ES" ? 700 : 400, borderColor: tf.instrument === "ES" ? T.purple : T.border }}>ES</button>
                   </div>
                 </div>}
-                {stratType !== "HTS" && stratType !== "DR" && !isDRLike && !isLJ && (
+                {stratType !== "HTS" && stratType !== "DR" && stratType !== "8020" && !isDRLike && !isLJ && (
                 <div>
                   <div style={label}>Meets Requirements</div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -6256,37 +6286,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
-              {/* Level + Price Read */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Poziom</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {[["80", T.red, "80 (70–90)"], ["20", T.green, "20 (10–30)"]].map(([lvl, col, lbl]) => (
-                      <button key={lvl} onClick={() => setTf(p => ({...p, s8020_level: p.s8020_level === lvl ? "" : lvl}))} style={{ ...sel, flex: 1, background: tf.s8020_level === lvl ? `${col}20` : T.bg2, color: tf.s8020_level === lvl ? col : T.textSoft, fontWeight: tf.s8020_level === lvl ? 700 : 400, borderColor: tf.s8020_level === lvl ? col : T.border }}>{lbl}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div style={label}>Cena w momencie wejścia</div>
-                  <input type="text" value={tf.s8020_price_read || ""} onChange={e => {
-                    const raw = e.target.value;
-                    setTf(p => {
-                      // Auto-detect level from price
-                      const num = parseFloat(raw.replace(/[, ]/g, ""));
-                      const dec = (num % 100);
-                      let level = p.s8020_level;
-                      if (!isNaN(dec)) {
-                        if (dec >= 10 && dec <= 30) level = "20";
-                        else if (dec >= 70 && dec <= 90) level = "80";
-                      }
-                      return {...p, s8020_price_read: raw, s8020_level: level};
-                    });
-                  }} placeholder="np. 29 819 lub 26 781" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center" }} />
-                  {tf.s8020_price_read && (() => {
-                    const num = parseFloat((tf.s8020_price_read || "").replace(/[, ]/g, ""));
-                    const dec = Math.round(num % 100);
-                    return <div style={{ fontSize: 9, color: T.textDim, marginTop: 3 }}>Dziesiąta część: <strong style={{ color: T.amber }}>{dec}</strong>/100</div>;
-                  })()}
+              {/* Level */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={label}>Poziom</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[["80", T.red, "80 (70–90)"], ["20", T.green, "20 (10–30)"]].map(([lvl, col, lbl]) => (
+                    <button key={lvl} onClick={() => setTf(p => ({...p, s8020_level: p.s8020_level === lvl ? "" : lvl}))} style={{ ...sel, flex: 1, background: tf.s8020_level === lvl ? `${col}20` : T.bg2, color: tf.s8020_level === lvl ? col : T.textSoft, fontWeight: tf.s8020_level === lvl ? 700 : 400, borderColor: tf.s8020_level === lvl ? col : T.border }}>{lbl}</button>
+                  ))}
                 </div>
               </div>
 
