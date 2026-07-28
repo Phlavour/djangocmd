@@ -9164,6 +9164,7 @@ function DailyCheckPanel({ supa, apiKey }) {
   };
 
   const saveDaySum = async (date, content) => {
+    if (!supa?.url || content === undefined) return;
     setDaySumSaving(p => ({...p, [date]: true}));
     await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
@@ -9173,24 +9174,60 @@ function DailyCheckPanel({ supa, apiKey }) {
     setDaySumSaving(p => ({...p, [date]: false}));
   };
 
-  const saveWeekNote = async () => {
+  // Debounced autosave for day summary
+  const daySumTimerRef = React.useRef({});
+  const handleDaySumChange = (date, value) => {
+    setDaySum(p => ({...p, [date]: value}));
+    if (daySumTimerRef.current[date]) clearTimeout(daySumTimerRef.current[date]);
+    daySumTimerRef.current[date] = setTimeout(() => { saveDaySum(date, value); }, 1500);
+  };
+
+  // Save on unmount
+  React.useEffect(() => {
+    return () => {
+      Object.entries(daySumTimerRef.current).forEach(([date, timer]) => {
+        if (timer) { clearTimeout(timer); }
+      });
+      // Save current value immediately on unmount
+      if (supa?.url && selectedDay && daySum[selectedDay] !== undefined) {
+        saveDaySum(selectedDay, daySum[selectedDay]);
+      }
+    };
+  }, [selectedDay, daySum, supa?.url]);
+
+  const saveWeekNote = async (content) => {
+    if (!supa?.url) return;
     setNotesSaving(true);
     await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify([{ note_type: "week", note_date: weekStart, content: weekNote }]),
+      body: JSON.stringify([{ note_type: "week", note_date: weekStart, content: content ?? weekNote }]),
     }).catch(console.error);
     setNotesSaving(false);
   };
 
-  const saveMonthNote = async () => {
+  const saveMonthNote = async (content) => {
+    if (!supa?.url) return;
     setNotesSaving(true);
     await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify([{ note_type: "month", note_date: monthStart, content: monthNote }]),
+      body: JSON.stringify([{ note_type: "month", note_date: monthStart, content: content ?? monthNote }]),
     }).catch(console.error);
     setNotesSaving(false);
+  };
+
+  const weekNoteTimerRef = React.useRef(null);
+  const monthNoteTimerRef = React.useRef(null);
+  const handleWeekNoteChange = (val) => {
+    setWeekNote(val);
+    if (weekNoteTimerRef.current) clearTimeout(weekNoteTimerRef.current);
+    weekNoteTimerRef.current = setTimeout(() => saveWeekNote(val), 1500);
+  };
+  const handleMonthNoteChange = (val) => {
+    setMonthNote(val);
+    if (monthNoteTimerRef.current) clearTimeout(monthNoteTimerRef.current);
+    monthNoteTimerRef.current = setTimeout(() => saveMonthNote(val), 1500);
   };
 
   const addPlanItem = async (type) => {
@@ -9425,13 +9462,13 @@ function DailyCheckPanel({ supa, apiKey }) {
 
             {/* Daily summary textarea */}
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${DC.border}` }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: DC.soft, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Podsumowanie dnia</div>
-              {textarea(daySum[selectedDay] || "", e => setDaySum(p => ({...p, [selectedDay]: e.target.value})), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                <DCBtn small bg={DC.green} disabled={daySumSaving[selectedDay]} onClick={() => saveDaySum(selectedDay, daySum[selectedDay] || "")}>
-                  {daySumSaving[selectedDay] ? "Zapisuję..." : "💾 Zapisz"}
-                </DCBtn>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: DC.soft, textTransform: "uppercase", letterSpacing: ".06em" }}>Podsumowanie dnia</div>
+                <div style={{ fontSize: 9, color: daySumSaving[selectedDay] ? DC.amber : DC.dim }}>
+                  {daySumSaving[selectedDay] ? "💾 Zapisuję..." : "auto-save"}
+                </div>
               </div>
+              {textarea(daySum[selectedDay] || "", e => handleDaySumChange(selectedDay, e.target.value), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
             </div>
           </DCCard>
 
@@ -9555,18 +9592,16 @@ function DailyCheckPanel({ supa, apiKey }) {
 
             {weekTab === "notes" && (
               <div>
-                <div style={{ fontSize: 11, color: DC.soft, marginBottom: 6, fontWeight: 600 }}>Notatki tygodniowe</div>
-                {textarea(weekNote, e => setWeekNote(e.target.value), "Podsumowanie tygodnia, refleksje, co warto zapamiętać...", 5)}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-                  <span style={{ fontSize: 10, color: DC.dim }}>Autosave przy kliknięciu Zapisz</span>
-                  <DCBtn small bg={DC.green} disabled={notesSaving} onClick={saveWeekNote}>{notesSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, color: DC.soft, fontWeight: 600 }}>Notatki tygodniowe</div>
+                  <div style={{ fontSize: 9, color: notesSaving ? DC.amber : DC.dim }}>{notesSaving ? "💾 Zapisuję..." : "auto-save"}</div>
                 </div>
+                {textarea(weekNote, e => handleWeekNoteChange(e.target.value), "Podsumowanie tygodnia, refleksje, co warto zapamiętać...", 5)}
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${DC.border}` }}>
-                  <div style={{ fontSize: 11, color: DC.soft, marginBottom: 6, fontWeight: 600 }}>Notatki miesięczne — {new Date(year, month - 1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</div>
-                  {textarea(monthNote, e => setMonthNote(e.target.value), "Podsumowanie miesiąca, cele, priorytety...", 4)}
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <DCBtn small bg={DC.green} disabled={notesSaving} onClick={saveMonthNote}>{notesSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: DC.soft, fontWeight: 600 }}>Notatki miesięczne — {new Date(year, month - 1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</div>
                   </div>
+                  {textarea(monthNote, e => handleMonthNoteChange(e.target.value), "Podsumowanie miesiąca, cele, priorytety...", 4)}
                 </div>
               </div>
             )}
