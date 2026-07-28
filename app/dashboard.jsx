@@ -9155,7 +9155,7 @@ function DailyCheckPanel({ supa, apiKey }) {
     if (!noteModal) return;
     const k = `${noteModal.date}_${noteModal.key}`;
     setDayNotes(p => ({...p, [k]: noteText}));
-    await fetch(`${supa.url}/rest/v1/daily_checklist`, {
+    await fetch(`${supa.url}/rest/v1/daily_checklist?on_conflict=check_date,task_key`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify([{ check_date: noteModal.date, task_key: noteModal.key, completed: checklist[k] || false, notes: noteText }]),
@@ -9165,7 +9165,7 @@ function DailyCheckPanel({ supa, apiKey }) {
 
   const saveDaySum = async (date, content) => {
     setDaySumSaving(p => ({...p, [date]: true}));
-    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+    await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify([{ note_type: "day", note_date: date, content }]),
@@ -9175,7 +9175,7 @@ function DailyCheckPanel({ supa, apiKey }) {
 
   const saveWeekNote = async () => {
     setNotesSaving(true);
-    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+    await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify([{ note_type: "week", note_date: weekStart, content: weekNote }]),
@@ -9185,7 +9185,7 @@ function DailyCheckPanel({ supa, apiKey }) {
 
   const saveMonthNote = async () => {
     setNotesSaving(true);
-    await fetch(`${supa.url}/rest/v1/daily_notes`, {
+    await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
       method: "POST",
       headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify([{ note_type: "month", note_date: monthStart, content: monthNote }]),
