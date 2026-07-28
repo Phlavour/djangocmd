@@ -4780,6 +4780,8 @@ function TradingPanel({ apiKey, supa }) {
   const [sortMode, setSortMode] = useState("date_desc"); // date_desc | date_asc | result_win | result_loss | trade_1 | trade_2 | inst_NQ | inst_ES
   const [editingTradeId, setEditingTradeId] = useState(null);
   const [showAddStrategy, setShowAddStrategy] = useState(false);
+  const [editingStratId, setEditingStratId] = useState(null);
+  const [editingStratName, setEditingStratName] = useState("");
   const [newStratName, setNewStratName] = useState("");
   const [newStratDesc, setNewStratDesc] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -4810,7 +4812,7 @@ function TradingPanel({ apiKey, supa }) {
     lj_duration_min: "",
     lj_screenshot_second: "",
     // PA in Range multi-select
-    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false,
+    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, lj_pa_custom: "",
     // Entry moment multi-select
     em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false,
     em_pullback_random: false, em_pa_fomo: false, em_8020: false,
@@ -4937,6 +4939,13 @@ function TradingPanel({ apiKey, supa }) {
     setStrategies(prev => prev.filter(s => s.id !== id));
     setTrades(prev => prev.filter(t => t.strategy_id !== id));
     if (activeStrategy === id) setActiveStrategy(strategies.find(s => s.id !== id)?.id || null);
+  };
+
+  const renameStrategy = async (id, name) => {
+    if (!name.trim()) return;
+    setStrategies(prev => prev.map(s => s.id === id ? {...s, name: name.trim()} : s));
+    if (supa) { try { await supa.patch("trading_strategies", `id=eq.${id}`, { name: name.trim() }); } catch {} }
+    setEditingStratId(null);
   };
 
   // Upload image helper
@@ -5265,7 +5274,7 @@ Rules:
       lj_range_break: tf.lj_range_break || "NIE", lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
-      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false, pa_amd: tf.pa_amd || false, lj_pa_custom: tf.lj_pa_custom || "",
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
       sl_type: tf.sl_type || "", lj_formation: tf.lj_formation || "",
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
@@ -5353,7 +5362,7 @@ Rules:
       lj_range_break: sd.lj_range_break || "NIE", lj_tactic: sd.lj_tactic || "IB",
       lj_tactic_other: sd.lj_tactic_other || "", lj_rr: sd.lj_rr || "",
       lj_range_size: sd.lj_range_size || "", lj_duration_min: sd.lj_duration_min || "", lj_screenshot_second: sd.lj_screenshot_second || "",
-      pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false, pa_trend: sd.pa_trend || false,
+      pa_double_top: sd.pa_double_top || false, pa_boundary: sd.pa_boundary || false, pa_reverse_poi: sd.pa_reverse_poi || false, pa_choppy: sd.pa_choppy || false, pa_below_band: sd.pa_below_band || false, pa_trend: sd.pa_trend || false, pa_amd: sd.pa_amd || false, lj_pa_custom: sd.lj_pa_custom || "",
       em_vwap_retest: sd.em_vwap_retest || false, em_band_retest: sd.em_band_retest || false, em_5min_gap: sd.em_5min_gap || false, em_3565_retest: sd.em_3565_retest || false, em_pullback_random: sd.em_pullback_random || false, em_pa_fomo: sd.em_pa_fomo || false, em_8020: sd.em_8020 || false,
       sl_type: sd.sl_type || "", lj_formation: sd.lj_formation || "",
       req_vwap: sd.req_vwap !== false, req_bands: sd.req_bands !== false, req_rr: sd.req_rr !== false, req_range: sd.req_range !== false,
@@ -5368,7 +5377,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, lj_pa_custom: "", em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5411,7 +5420,7 @@ Rules:
       lj_range_break: tf.lj_range_break || "NIE", lj_tactic: tf.lj_tactic || "IB",
       lj_tactic_other: tf.lj_tactic_other || "", lj_rr: tf.lj_rr || "",
       lj_range_size: tf.lj_range_size || "", lj_duration_min: tf.lj_duration_min || "", lj_screenshot_second: tf.lj_screenshot_second || "",
-      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false,
+      pa_double_top: tf.pa_double_top || false, pa_boundary: tf.pa_boundary || false, pa_reverse_poi: tf.pa_reverse_poi || false, pa_choppy: tf.pa_choppy || false, pa_below_band: tf.pa_below_band || false, pa_trend: tf.pa_trend || false, pa_amd: tf.pa_amd || false, lj_pa_custom: tf.lj_pa_custom || "",
       em_vwap_retest: tf.em_vwap_retest || false, em_band_retest: tf.em_band_retest || false, em_5min_gap: tf.em_5min_gap || false, em_3565_retest: tf.em_3565_retest || false, em_pullback_random: tf.em_pullback_random || false, em_pa_fomo: tf.em_pa_fomo || false, em_8020: tf.em_8020 || false,
       sl_type: tf.sl_type || "", lj_formation: tf.lj_formation || "",
       req_vwap: tf.req_vwap !== false, req_bands: tf.req_bands !== false, req_rr: tf.req_rr !== false, req_range: tf.req_range !== false,
@@ -5832,13 +5841,28 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             }}>📊 All</button>
             {strategies.map(s => (
               <div key={s.id} style={{ display: "flex", gap: 0 }}>
-                <button onClick={() => setActiveStrategy(s.id)} style={{
-                  background: activeStrategy === s.id ? `${T.cyan}15` : T.bg2,
-                  border: `1px solid ${activeStrategy === s.id ? T.cyan : T.border}`,
-                  borderRadius: "8px 0 0 8px", padding: "8px 14px", cursor: "pointer",
-                  fontSize: 12, fontWeight: activeStrategy === s.id ? 700 : 500,
-                  color: activeStrategy === s.id ? T.cyan : T.textSoft, fontFamily: "'Satoshi', sans-serif",
-                }}>{s.name}</button>
+                {editingStratId === s.id ? (
+                  <input
+                    autoFocus
+                    value={editingStratName}
+                    onChange={e => setEditingStratName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") renameStrategy(s.id, editingStratName); if (e.key === "Escape") setEditingStratId(null); }}
+                    onBlur={() => renameStrategy(s.id, editingStratName)}
+                    style={{ ...sel, borderRadius: "8px 0 0 8px", padding: "8px 14px", fontSize: 12, fontWeight: 700, minWidth: 80, background: `${T.cyan}10`, borderColor: T.cyan }}
+                  />
+                ) : (
+                  <button onClick={() => setActiveStrategy(s.id)} onDoubleClick={() => { setEditingStratId(s.id); setEditingStratName(s.name); }} style={{
+                    background: activeStrategy === s.id ? `${T.cyan}15` : T.bg2,
+                    border: `1px solid ${activeStrategy === s.id ? T.cyan : T.border}`,
+                    borderRadius: "8px 0 0 8px", padding: "8px 14px", cursor: "pointer",
+                    fontSize: 12, fontWeight: activeStrategy === s.id ? 700 : 500,
+                    color: activeStrategy === s.id ? T.cyan : T.textSoft, fontFamily: "'Satoshi', sans-serif",
+                  }} title="Kliknij dwukrotnie aby edytować nazwę">{s.name}</button>
+                )}
+                <button onClick={() => { setEditingStratId(s.id); setEditingStratName(s.name); }} style={{
+                  background: T.bg2, border: `1px solid ${T.border}`, borderLeft: "none",
+                  padding: "8px 6px", cursor: "pointer", fontSize: 10, color: T.textDim,
+                }} title="Edytuj nazwę">✎</button>
                 <button onClick={() => deleteStrategy(s.id)} style={{
                   background: T.bg2, border: `1px solid ${T.border}`, borderLeft: "none",
                   borderRadius: "0 8px 8px 0", padding: "8px 6px", cursor: "pointer",
@@ -6380,15 +6404,19 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "pa_choppy",       label: "Choppy" },
                     { id: "pa_below_band",   label: "Zejście pod wstęgę i reversal" },
                     { id: "pa_trend",        label: "Trend" },
+                    { id: "pa_amd",          label: "AMD" },
                   ].map(opt => (
                     <button key={opt.id} onClick={() => setTf(p => ({...p, [opt.id]: !p[opt.id]}))} style={{ ...sel, flex: 1, padding: "6px 6px", fontSize: 10, background: tf[opt.id] ? `${T.cyan}20` : T.bg2, color: tf[opt.id] ? T.cyan : T.textSoft, fontWeight: tf[opt.id] ? 700 : 400, borderColor: tf[opt.id] ? T.cyan : T.border }}>
                       {tf[opt.id] ? "✓ " : ""}{opt.label}
                     </button>
                   ))}
                 </div>
+                {/* Custom PA input */}
+                <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: T.textDim, whiteSpace: "nowrap" }}>Inny typ:</span>
+                  <input type="text" value={tf.lj_pa_custom || ""} onChange={e => setTf(p => ({...p, lj_pa_custom: e.target.value}))} placeholder="np. Consolidation, Wyb. z range..." style={{ ...sel, flex: 1, fontSize: 10, padding: "4px 8px" }} />
+                </div>
               </div>
-
-              {/* MOMENT WEJSCIA */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8 }}>Moment wejścia <span style={{ fontSize: 9, color: T.textDim, textTransform: "none", fontWeight: 400, marginLeft: 6 }}>(można zaznaczyć kilka)</span></div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
