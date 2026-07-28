@@ -5983,18 +5983,30 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
 
               {/* Vision results: Trends + RSI + Pivots */}
-              {Object.keys(tf.trends).length > 0 && (
+              {(stratType === "HTS" ? (tf.hts_m1 || tf.hts_m5 || tf.hts_m15 || tf.hts_h1 || tf.hts_h4 || tf.hts_d1) : Object.keys(tf.trends).length > 0) && (
                 <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T.cyan, marginBottom: 6, textTransform: "uppercase" }}>📊 Dane z HTS (auto-detected)</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-                    {TREND_TFS.map(k => {
-                      const v = tf.trends[k];
-                      if (!v) return null;
-                      const isUp = v === "up";
-                      return <span key={k} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: isUp ? `${T.green}15` : `${T.red}15`, color: isUp ? T.green : T.red, fontFamily: "'IBM Plex Mono', monospace" }}>
-                        {k} {isUp ? "▲" : "▼"}
-                      </span>;
-                    })}
+                    {stratType === "HTS" ? (
+                      [["hts_m1","m1"],["hts_m5","m5"],["hts_m15","m15"],["hts_h1","H1"],["hts_h4","H4"],["hts_d1","D1"]].map(([key, lbl]) => {
+                        const v = tf[key];
+                        if (!v) return null;
+                        const col = v === "up" ? T.green : v === "down" ? T.red : T.amber;
+                        const icon = v === "up" ? "▲" : v === "down" ? "▼" : "■";
+                        return <span key={key} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: `${col}15`, color: col, fontFamily: "'IBM Plex Mono', monospace" }}>
+                          {lbl} {icon}
+                        </span>;
+                      })
+                    ) : (
+                      TREND_TFS.map(k => {
+                        const v = tf.trends[k];
+                        if (!v) return null;
+                        const isUp = v === "up";
+                        return <span key={k} style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: isUp ? `${T.green}15` : `${T.red}15`, color: isUp ? T.green : T.red, fontFamily: "'IBM Plex Mono', monospace" }}>
+                          {k} {isUp ? "▲" : "▼"}
+                        </span>;
+                      })
+                    )}
                   </div>
                   <div style={{ display: "flex", gap: 16, fontSize: 10, color: T.textSoft }}>
                     {tf.rsi && <span>RSI ({tf.timeframe}): <strong style={{ color: parseFloat(tf.rsi) > 70 ? T.red : parseFloat(tf.rsi) < 30 ? T.green : T.text }}>{tf.rsi}</strong></span>}
