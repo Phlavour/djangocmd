@@ -4825,7 +4825,7 @@ function TradingPanel({ apiKey, supa }) {
     hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", // "up" | "down" | "in" | "overlap"
     hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
     req_8020: false, req_fvg: false, req_instrument: false,
-    pair: "BTC", timeframe: "15m", notes: "",
+    pair: "NQ", timeframe: "1m", notes: "",
     // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
   });
@@ -5093,38 +5093,36 @@ For each timeframe row, the first symbol means:
 Today is ${new Date().toISOString().slice(0, 10)}. Respond ONLY with JSON.`;
       } else {
         // HTS — enhanced prompt: entry time, HTS table (first column only), instrument, date
-        promptText = `Look at this trading chart screenshot from a futures platform (NQ/ES/NAS100/SP500).
+        promptText = `Look at this trading chart screenshot from a futures platform.
 
 Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 {
-  "instrument": "NQ" or "ES" (from title bar: "Micro E-mini Nasdaq"/"MNQ"/"NQ" → "NQ"; "Micro E-mini S&P"/"MES"/"ES" → "ES"; if unclear return ""),
-  "entry_time": "HH:MM in 24h EST" (from the bottom dark status bar of the chart, e.g. "Mon 08 Jul '26 10:43" → "10:43". If not visible return ""),
-  "trade_date": "YYYY-MM-DD" (from same bottom status bar. Day first: "08 Jul '26" → "2026-07-08". If not visible return ""),
+  "pair": "NQ" or "ES" (from title bar: "Nasdaq"/"MNQ"/"NQ" → "NQ"; "S&P"/"MES"/"ES" → "ES"; if unclear return ""),
+  "entry_time": "HH:MM in 24h" (from the dark status bar at the very bottom of the chart showing cursor/last candle time, e.g. "Mon 27 Jul '26 21:12" → "21:12". Return "" if not visible),
+  "trade_date": "YYYY-MM-DD" (from same bottom status bar. Day first: "27 Jul '26" → "2026-07-27". Return "" if not visible),
   "hts": {
     "m1": "", "m5": "", "m15": "", "h1": "", "h4": "", "d1": ""
   },
-  "trends": {
-    "m1": "up" or "down", "m5": "up" or "down", "m15": "up" or "down",
-    "H1": "up" or "down", "H4": "up" or "down", "D1": "up" or "down"
-  },
-  "rsi": "",
-  "pivots": { "PP": "", "R1": "", "R2": "", "R3": "", "S1": "", "S2": "", "S3": "" },
-  "trade_date": ""
+  "trends": { "m1": "", "m5": "", "m15": "", "H1": "", "H4": "", "D1": "" },
+  "rsi": "", "pivots": {}
 }
 
-HTS TABLE (bottom-right corner, labeled "HTS  33  144"):
-- Read ONLY the FIRST symbol column (directly after the timeframe label, BEFORE the "33" column)
-- For each row (m1, m5, m15, H1, H4, D1):
-  - Green triangle (▲) → "up"
-  - Red triangle (▼) → "down"
-  - Gray/white square (■) → "overlap"
-  - Not visible → ""
+HTS TABLE (small table in bottom-right corner labeled "HTS  33  144"):
+The table has rows: m1, m5, m15, H1, H4, D1
+Each row has THREE symbol columns. Read ONLY the FIRST symbol (leftmost, directly after the row label).
 
-Also read the full HTS table for "trends" field (same first column logic).
+Symbol meanings for FIRST column:
+- Green/filled upward triangle (▲) = "up"
+- Red/filled downward triangle (▼) = "down"  
+- Gray square / white square / small rectangle (■ or □) = "overlap" (this means bands overlap on this timeframe)
+- Empty or not visible = ""
+
+IMPORTANT: The gray square/rectangle is NOT a triangle. It is a flat square shape indicating band overlap. Do NOT read it as up or down.
+
+Also populate "trends" with the same first-column values.
 
 Rules:
-- RSI: look for RSI column value if visible
-- Pivots: PP/R1/R2/R3/S1/S2/S3 if visible
+- entry_time: read from bottom status bar only (the dark bar with date+time of cursor position)
 - Respond ONLY with JSON, nothing else`;
       }
 
@@ -5205,7 +5203,7 @@ Rules:
           };
           const entryTime = (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : "";
           const session = entryTime ? detectSession(entryTime) : "";
-          const newInstrument = (parsed.instrument === "NQ" || parsed.instrument === "ES") ? parsed.instrument : "";
+          const newPair = (parsed.pair === "NQ" || parsed.pair === "ES") ? parsed.pair : "";
           setTf(prev => ({
             ...prev,
             trends: parsed.trends || {},
@@ -5214,7 +5212,7 @@ Rules:
             trade_date: (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date) && prev.trade_date === new Date().toISOString().slice(0, 10)) ? parsed.trade_date : prev.trade_date,
             ...(entryTime ? { hts_entry_time: entryTime } : {}),
             ...(session ? { hts_session: session } : {}),
-            ...(newInstrument ? { hts_pair: newInstrument } : {}),
+            ...(newPair ? { pair: newPair, hts_pair: newPair } : {}),
             hts_m1: validVal(hts.m1 || ""), hts_m5: validVal(hts.m5 || ""), hts_m15: validVal(hts.m15 || ""),
             hts_h1: validVal(hts.h1 || ""), hts_h4: validVal(hts.h4 || ""), hts_d1: validVal(hts.d1 || ""),
           }));
@@ -5362,7 +5360,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "BTC", timeframe: "15m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "" };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "" };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -6011,15 +6009,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {stratType === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
 
-              {/* Instrument + Session + Entry Time */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <div style={label}>Instrument</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setTf(p => ({...p, hts_pair: "NQ"}))} style={{ ...sel, flex: 1, background: (tf.hts_pair || "NQ") === "NQ" ? `${T.cyan}20` : T.bg2, color: (tf.hts_pair || "NQ") === "NQ" ? T.cyan : T.textSoft, fontWeight: (tf.hts_pair || "NQ") === "NQ" ? 700 : 400, borderColor: (tf.hts_pair || "NQ") === "NQ" ? T.cyan : T.border }}>NQ</button>
-                    <button onClick={() => setTf(p => ({...p, hts_pair: "ES"}))} style={{ ...sel, flex: 1, background: tf.hts_pair === "ES" ? `${T.purple}20` : T.bg2, color: tf.hts_pair === "ES" ? T.purple : T.textSoft, fontWeight: tf.hts_pair === "ES" ? 700 : 400, borderColor: tf.hts_pair === "ES" ? T.purple : T.border }}>ES</button>
-                  </div>
-                </div>
+              {/* Session + Entry Time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.hts_session || ""} onChange={e => setTf(p => ({...p, hts_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
@@ -6036,8 +6027,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={label}>Godzina wejścia (EST)</div>
                   <input type="time" value={tf.hts_entry_time || ""} onChange={e => {
                     const t = e.target.value;
-                    setTf(p => ({...p, hts_entry_time: t}));
-                    // Auto-detect session
                     if (t) {
                       const [h, m] = t.split(":").map(Number);
                       const mins = h * 60 + m;
@@ -6048,6 +6037,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       else if (mins >= 11*60 && mins < 13*60) sess = "NY Lunch";
                       else if (mins >= 13*60 && mins < 16*60) sess = "NY PM";
                       setTf(p => ({...p, hts_entry_time: t, hts_session: sess}));
+                    } else {
+                      setTf(p => ({...p, hts_entry_time: ""}));
                     }
                   }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
                 </div>
