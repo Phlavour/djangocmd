@@ -4851,6 +4851,14 @@ function TradingPanel({ apiKey, supa }) {
     return d.toISOString().slice(0, 10);
   });
 
+  // Daily Log (standalone, above Trading Journal)
+  const [dlOpen, setDlOpen] = useState(false);
+  const [dlDate, setDlDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dlNotes, setDlNotes] = useState({}); // {date: {text, photos: []}}
+  const [dlSaving, setDlSaving] = useState({});
+  const [dlLoaded, setDlLoaded] = useState(false);
+  const dlTimerRef = React.useRef({});
+
   // Daily Journal state
   const [djNotes, setDjNotes] = useState({}); // {date: content}
   const [djSaving, setDjSaving] = useState({});
@@ -4907,6 +4915,7 @@ function TradingPanel({ apiKey, supa }) {
       .then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows) && rows.length) { setStrategies(rows); setActiveStrategy(rows[0].id); } }).catch(() => {});
     fetch(`${supa.url}/rest/v1/trading_journal?order=created_at.desc&limit=500`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } })
       .then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows)) setTrades(rows); }).catch(() => {});
+    loadDlNotes();
   }, [supa?.url, supa?.key]);
 
   useEffect(() => {
@@ -5628,6 +5637,63 @@ Rules:
     setDailySummaryLoading(false);
   };
 
+  // Daily Log load/save
+  const loadDlNotes = async () => {
+    if (!supa?.url || dlLoaded) return;
+    try {
+      const rows = await fetch(`${supa.url}/rest/v1/trading_journal_notes?strategy_id=eq.00000000-0000-0000-0000-000000000001&order=note_date.desc&limit=365`, { headers: supa.headers }).then(r => r.json());
+      if (Array.isArray(rows)) {
+        const map = {};
+        rows.forEach(r => {
+          let photos = [];
+          try { photos = JSON.parse(r.content || "{}").photos || []; } catch {}
+          const text = (() => { try { return JSON.parse(r.content || "{}").text || r.content || ""; } catch { return r.content || ""; } })();
+          map[r.note_date] = { text, photos };
+        });
+        setDlNotes(map);
+        setDlLoaded(true);
+      }
+    } catch(e) { console.error("DL load:", e); }
+  };
+
+  const saveDlNote = async (date, data) => {
+    if (!supa?.url) return;
+    setDlSaving(p => ({...p, [date]: true}));
+    await fetch(`${supa.url}/rest/v1/trading_journal_notes?on_conflict=strategy_id,note_date`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ strategy_id: "00000000-0000-0000-0000-000000000001", note_date: date, content: JSON.stringify(data) }]),
+    }).catch(console.error);
+    setDlSaving(p => ({...p, [date]: false}));
+  };
+
+  const handleDlTextChange = (date, text) => {
+    const current = dlNotes[date] || { text: "", photos: [] };
+    const next = { ...current, text };
+    setDlNotes(p => ({...p, [date]: next}));
+    if (dlTimerRef.current[date]) clearTimeout(dlTimerRef.current[date]);
+    dlTimerRef.current[date] = setTimeout(() => saveDlNote(date, next), 1500);
+  };
+
+  const addDlPhoto = async (date, file) => {
+    if (!file || !supa?.url) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const current = dlNotes[date] || { text: "", photos: [] };
+      const next = { ...current, photos: [...(current.photos || []), reader.result] };
+      setDlNotes(p => ({...p, [date]: next}));
+      saveDlNote(date, next);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeDlPhoto = (date, idx) => {
+    const current = dlNotes[date] || { text: "", photos: [] };
+    const next = { ...current, photos: current.photos.filter((_, i) => i !== idx) };
+    setDlNotes(p => ({...p, [date]: next}));
+    saveDlNote(date, next);
+  };
+
   // Daily Journal — load notes for current strategy
   const loadDjNotes = async () => {
     if (!supa?.url || !activeStrategy || activeStrategy === "ALL") return;
@@ -5965,6 +6031,96 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
   return (
     <div>
+      {/* ═══ DAILY LOG ═══ */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => { setDlOpen(o => !o); if (!dlLoaded) loadDlNotes(); }}>
+          <Heading icon="📓">Daily LOG</Heading>
+          <span style={{ fontSize: 12, color: T.textDim }}>{dlOpen ? "▲ zwiń" : "▼ rozwiń"}</span>
+        </div>
+
+        {dlOpen && (
+          <div style={{ marginTop: 12 }}>
+            {/* Date picker */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+              <input type="date" value={dlDate} onChange={e => setDlDate(e.target.value)} style={{ ...sel }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+                {new Date(dlDate + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </div>
+              <div style={{ marginLeft: "auto", fontSize: 10, color: dlSaving[dlDate] ? T.amber : T.textDim }}>
+                {dlSaving[dlDate] ? "💾 Zapisuję..." : "auto-save"}
+              </div>
+            </div>
+
+            {/* Text area */}
+            <textarea
+              value={(dlNotes[dlDate] || {}).text || ""}
+              onChange={e => handleDlTextChange(dlDate, e.target.value)}
+              placeholder="Notatki dnia — obserwacje rynku, emocje, plany, co widziałem, co czułem..."
+              rows={6}
+              style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 12, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit", lineHeight: 1.7, marginBottom: 12 }}
+            />
+
+            {/* Photos */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>
+                Zdjęcia ({((dlNotes[dlDate] || {}).photos || []).length})
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
+                {((dlNotes[dlDate] || {}).photos || []).map((photo, idx) => (
+                  <div key={idx} style={{ position: "relative" }}>
+                    <img src={photo} alt={`foto ${idx+1}`} style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, cursor: "pointer" }}
+                      onClick={() => window.open(photo, "_blank")} />
+                    <button onClick={() => removeDlPhoto(dlDate, idx)} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: T.red, color: "#fff", border: "none", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, lineHeight: 1 }}>✕</button>
+                  </div>
+                ))}
+                {/* Add photo button */}
+                <div style={{ position: "relative" }}>
+                  <div tabIndex={0}
+                    onPaste={e => {
+                      const item = [...e.clipboardData.items].find(i => i.type.startsWith("image/"));
+                      if (item) addDlPhoto(dlDate, item.getAsFile());
+                    }}
+                    style={{ width: 120, height: 90, borderRadius: 6, border: `2px dashed ${T.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", fontSize: 10, color: T.textDim, outline: "none" }}
+                    onFocus={e => e.currentTarget.style.borderColor = T.cyan}
+                    onBlur={e => e.currentTarget.style.borderColor = T.border}
+                  >
+                    <span style={{ fontSize: 20 }}>📸</span>
+                    <span>Ctrl+V</span>
+                    <span>lub</span>
+                    <label style={{ cursor: "pointer", color: T.cyan, fontSize: 10 }}>
+                      wybierz
+                      <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { [...e.target.files].forEach(f => addDlPhoto(dlDate, f)); e.target.value = ""; }} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Previous days with notes */}
+            {Object.entries(dlNotes).filter(([d, v]) => d !== dlDate && (v.text || (v.photos||[]).length > 0)).sort(([a],[b]) => b.localeCompare(a)).slice(0, 5).length > 0 && (
+              <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.textSoft, textTransform: "uppercase", marginBottom: 8 }}>Ostatnie wpisy</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {Object.entries(dlNotes).filter(([d, v]) => d !== dlDate && (v.text || (v.photos||[]).length > 0)).sort(([a],[b]) => b.localeCompare(a)).slice(0, 5).map(([date, val]) => (
+                    <div key={date} onClick={() => setDlDate(date)} style={{ padding: "8px 12px", background: T.bg2, borderRadius: 6, border: `1px solid ${T.border}`, cursor: "pointer", display: "flex", gap: 12, alignItems: "center" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = T.cyan}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, whiteSpace: "nowrap" }}>
+                        {new Date(date+"T12:00:00").toLocaleDateString("pl-PL", {weekday:"short", day:"numeric", month:"short"})}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                        {val.text?.slice(0, 80) || ""}
+                      </div>
+                      {(val.photos||[]).length > 0 && <span style={{ fontSize: 10, color: T.textDim, whiteSpace: "nowrap" }}>📸 {val.photos.length}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* Strategy selector */}
       <Card style={{ marginBottom: 16 }}>
         <Heading icon="📊" right={
@@ -6052,7 +6208,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
             ...(isCalendarStrat ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
-            ...(isLJ ? [{id:"daily_log",l:"📋 Daily Log"}] : []),
             ...(activeStrategy !== "ALL" ? [{id:"daily_journal",l:"📓 Daily Journal"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
