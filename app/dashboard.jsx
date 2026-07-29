@@ -5412,7 +5412,15 @@ Rules:
       lj_correlation: sd.lj_correlation || "TAK",
       hts_m1: sd.hts_m1 || "", hts_m5: sd.hts_m5 || "", hts_m15: sd.hts_m15 || "", hts_h1: sd.hts_h1 || "", hts_h4: sd.hts_h4 || "", hts_d1: sd.hts_d1 || "",
       req_8020: false, req_fvg: false, req_instrument: false,
-      pair: t.pair || "BTC", timeframe: t.timeframe || "15m", notes: t.notes || "",
+      hts_pair: sd.hts_pair || "NQ", hts_session: sd.hts_session || "", hts_entry_time: sd.hts_entry_time || "",
+      hts_extra_8020: sd.hts_extra_8020 || false, hts_extra_fvg: sd.hts_extra_fvg || false, hts_extra_vwap: sd.hts_extra_vwap || false, hts_extra_poi: sd.hts_extra_poi || false,
+      hts_entry_model: sd.hts_entry_model || "", hts_candle_5m: sd.hts_candle_5m || "", hts_candle_15m: sd.hts_candle_15m || "",
+      s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "",
+      s8020_entry_type: Array.isArray(sd.entry_type) ? sd.entry_type : [],
+      s8020_level: sd.level || "", s8020_price_read: sd.price_read || "",
+      s8020_conf_bands: sd.conf_bands || false, s8020_conf_vwap: sd.conf_vwap || false,
+      s8020_conf_poi: sd.conf_poi || false, s8020_conf_fvg: sd.conf_fvg || false,
+      pair: t.pair || "NQ", timeframe: t.timeframe || "1m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
     });
@@ -6886,7 +6894,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             </Card>
             </>
           ) : (
-            subTab === "journal" && <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => setShowAddTrade(true)}>+ New Trade</Btn></div>
+            subTab === "journal" && <div style={{ textAlign: "center", marginBottom: 16 }}><Btn color={T.green} onClick={() => { setTf({...EMPTY_TF, trade_date: new Date().toISOString().slice(0,10)}); setEditingTradeId(null); setShowAddTrade(true); }}>+ New Trade</Btn></div>
           );
           })()}
 
