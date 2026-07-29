@@ -4856,14 +4856,17 @@ function TradingPanel({ apiKey, supa }) {
   const [sliderViewMode, setSliderViewMode] = useState("single"); // "single" | "grid"
   const [sliderIndex, setSliderIndex] = useState(0);
   const [sliderFilters, setSliderFilters] = useState({
-    direction: "ALL", instrument: "ALL", result: "ALL",
-    entry_type: "ALL", bands_overlap: "ALL", weekday: "ALL",
+    direction: "ALL", instrument: "ALL", result: "ALL", weekday: "ALL",
+    // DR/Lunch Box
+    entry_type: "ALL", bands_overlap: "ALL", dr_session_f: "ALL", dr_trade_num: "ALL", dr_smt: "ALL",
     // 8020
-    s8020_level: "ALL", s8020_entry: "ALL",
+    s8020_level: "ALL", s8020_entry: "ALL", s8020_session_f: "ALL", s8020_conf: "ALL",
     // HTS
-    hts_setup: "ALL", hts_session_f: "ALL",
+    hts_setup: "ALL", hts_session_f: "ALL", hts_trade_type: "ALL", hts_band_type: "ALL",
+    hts_entry_model_f: "ALL", hts_conf: "ALL",
     // IB
-    ib_formation: "ALL", ib_range_break: "ALL",
+    ib_formation: "ALL", ib_sl: "ALL", ib_range_break: "ALL",
+    ib_em: "ALL", ib_pa: "ALL", ib_correlation: "ALL", ib_session_f: "ALL",
   });
   const [simFilters, setSimFilters] = useState({
     direction: "ALL",
@@ -8361,32 +8364,43 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           if (sliderFilters.direction !== "ALL" && t.direction !== sliderFilters.direction) return false;
           if (sliderFilters.instrument !== "ALL" && sd?.instrument !== sliderFilters.instrument) return false;
           if (sliderFilters.result !== "ALL" && t.result !== sliderFilters.result) return false;
-          // DR/IB filters
-          if (sliderFilters.entry_type !== "ALL") { const key = `entry_${sliderFilters.entry_type}`; if (!sd?.[key]) return false; }
+          if (sliderFilters.weekday !== "ALL") {
+            const date = sd?.trade_date || t.trade_date;
+            if (!date) return false;
+            if (String(new Date(date + "T12:00:00").getDay()) !== sliderFilters.weekday) return false;
+          }
+          // DR/Lunch Box
+          if (sliderFilters.entry_type !== "ALL" && !sd?.[`entry_${sliderFilters.entry_type}`]) return false;
           if (sliderFilters.bands_overlap !== "ALL") { const has = sd?.bands_overlap === true; if (sliderFilters.bands_overlap === "YES" && !has) return false; if (sliderFilters.bands_overlap === "NO" && has) return false; }
-          // 8020 filters
+          if (sliderFilters.dr_session_f !== "ALL" && sd?.session !== sliderFilters.dr_session_f) return false;
+          if (sliderFilters.dr_trade_num !== "ALL" && String(sd?.trade_number) !== sliderFilters.dr_trade_num) return false;
+          if (sliderFilters.dr_smt !== "ALL") { const has = sd?.smt === true; if (sliderFilters.dr_smt === "yes" && !has) return false; if (sliderFilters.dr_smt === "no" && has) return false; }
+          // 8020
           if (sliderFilters.s8020_level !== "ALL" && sd?.level !== sliderFilters.s8020_level) return false;
           if (sliderFilters.s8020_entry !== "ALL" && !(Array.isArray(sd?.entry_type) && sd.entry_type.includes(sliderFilters.s8020_entry))) return false;
-          // HTS filters
+          if (sliderFilters.s8020_session_f !== "ALL" && sd?.session !== sliderFilters.s8020_session_f) return false;
+          if (sliderFilters.s8020_conf !== "ALL" && !sd?.[sliderFilters.s8020_conf]) return false;
+          // HTS
           if (sliderFilters.hts_setup !== "ALL" && sd?.setup_type !== sliderFilters.hts_setup) return false;
           if (sliderFilters.hts_session_f !== "ALL" && sd?.hts_session !== sliderFilters.hts_session_f) return false;
-          // IB filters
+          if (sliderFilters.hts_trade_type !== "ALL" && sd?.trade_type !== sliderFilters.hts_trade_type) return false;
+          if (sliderFilters.hts_band_type !== "ALL" && sd?.band_type !== sliderFilters.hts_band_type) return false;
+          if (sliderFilters.hts_entry_model_f !== "ALL" && sd?.hts_entry_model !== sliderFilters.hts_entry_model_f) return false;
+          if (sliderFilters.hts_conf !== "ALL" && !sd?.[sliderFilters.hts_conf]) return false;
+          // IB
           if (sliderFilters.ib_formation !== "ALL" && sd?.lj_formation !== sliderFilters.ib_formation) return false;
-          if (sliderFilters.ib_range_break !== "ALL") {
-            if (sliderFilters.ib_range_break === "NIE" && sd?.lj_range_break !== "NIE") return false;
-            if (sliderFilters.ib_range_break === "any" && (!sd?.lj_range_break || sd?.lj_range_break === "NIE")) return false;
-          }
-          // Weekday
-          if (sliderFilters.weekday !== "ALL" && (sd?.trade_date || t.trade_date)) {
-            const dayIdx = new Date((sd?.trade_date || t.trade_date) + "T12:00:00").getDay();
-            if (String(dayIdx) !== sliderFilters.weekday) return false;
-          }
+          if (sliderFilters.ib_sl !== "ALL" && sd?.sl_type !== sliderFilters.ib_sl) return false;
+          if (sliderFilters.ib_range_break !== "ALL") { if (sliderFilters.ib_range_break === "NIE" && sd?.lj_range_break !== "NIE") return false; if (sliderFilters.ib_range_break === "any" && (!sd?.lj_range_break || sd?.lj_range_break === "NIE")) return false; }
+          if (sliderFilters.ib_em !== "ALL" && !sd?.[sliderFilters.ib_em]) return false;
+          if (sliderFilters.ib_pa !== "ALL" && !sd?.[sliderFilters.ib_pa]) return false;
+          if (sliderFilters.ib_correlation !== "ALL" && sd?.lj_correlation !== sliderFilters.ib_correlation) return false;
+          if (sliderFilters.ib_session_f !== "ALL" && sd?.session !== sliderFilters.ib_session_f) return false;
           return true;
         }).sort((a, b) => {
           let sda = a.strategy_data; try { if (typeof sda === "string") sda = JSON.parse(sda); } catch { sda = {}; }
           let sdb = b.strategy_data; try { if (typeof sdb === "string") sdb = JSON.parse(sdb); } catch { sdb = {}; }
-          const ka = `${sda?.trade_date || sda?.hts_entry_time || ""} ${sda?.entry_time || ""}`;
-          const kb = `${sdb?.trade_date || sdb?.hts_entry_time || ""} ${sdb?.entry_time || ""}`;
+          const ka = `${sda?.trade_date || ""} ${sda?.entry_time || sda?.hts_entry_time || ""}`;
+          const kb = `${sdb?.trade_date || ""} ${sdb?.entry_time || sdb?.hts_entry_time || ""}`;
           return kb.localeCompare(ka);
         });
 
@@ -8445,8 +8459,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Poziom</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="s8020_level" value="ALL" label="ALL" />
-                      <FilterBtn groupKey="s8020_level" value="80" label="80" activeColor={T.red} />
-                      <FilterBtn groupKey="s8020_level" value="20" label="20" activeColor={T.green} />
+                      <FilterBtn groupKey="s8020_level" value="80" label="80 (70–90)" activeColor={T.red} />
+                      <FilterBtn groupKey="s8020_level" value="20" label="20 (10–30)" activeColor={T.green} />
                     </div>
                   </div>
                   <div>
@@ -8458,18 +8472,30 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="s8020_entry" value="H" label="H" activeColor={T.amber} />
                     </div>
                   </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_session_f" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="s8020_session_f" value="London" label="London" activeColor={T.purple} />
+                      <FilterBtn groupKey="s8020_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
+                      <FilterBtn groupKey="s8020_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
+                      <FilterBtn groupKey="s8020_session_f" value="NY PM" label="NY PM" activeColor={T.cyan} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Confluences</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_conf" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_conf" value="conf_bands" label="Wstęgi" activeColor={T.green} />
+                      <FilterBtn groupKey="s8020_conf" value="conf_vwap" label="VWAP" activeColor={T.cyan} />
+                      <FilterBtn groupKey="s8020_conf" value="conf_poi" label="POI" activeColor={T.amber} />
+                      <FilterBtn groupKey="s8020_conf" value="conf_fvg" label="FVG" activeColor={T.purple} />
+                    </div>
+                  </div>
                 </>}
 
                 {stratType === "HTS" && <>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Setup</div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <FilterBtn groupKey="hts_setup" value="ALL" label="ALL" />
-                      <FilterBtn groupKey="hts_setup" value="3A" label="3A" activeColor={T.green} />
-                      <FilterBtn groupKey="hts_setup" value="2A" label="2A" activeColor={T.amber} />
-                      <FilterBtn groupKey="hts_setup" value="A" label="A" activeColor={T.cyan} />
-                    </div>
-                  </div>
                   <div>
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -8481,15 +8507,80 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="hts_session_f" value="NY PM" label="NY PM" activeColor={T.cyan} />
                     </div>
                   </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Setup</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_setup" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_setup" value="3A" label="3A" activeColor={T.green} />
+                      <FilterBtn groupKey="hts_setup" value="2A" label="2A" activeColor={T.amber} />
+                      <FilterBtn groupKey="hts_setup" value="A" label="A" activeColor={T.cyan} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Trade Type</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_trade_type" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_trade_type" value="standard" label="Standard" activeColor={T.cyan} />
+                      <FilterBtn groupKey="hts_trade_type" value="between_bands" label="Between Bands" activeColor={T.purple} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Wstęga</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_band_type" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_band_type" value="fast" label="Szybka" activeColor="#3B82F6" />
+                      <FilterBtn groupKey="hts_band_type" value="slow" label="Wolna" activeColor="#EC4899" />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Entry Model</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_entry_model_f" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_entry_model_f" value="engulfing" label="Engulfing" activeColor={T.amber} />
+                      <FilterBtn groupKey="hts_entry_model_f" value="doji" label="Doji" activeColor={T.amber} />
+                      <FilterBtn groupKey="hts_entry_model_f" value="doji_hammer" label="Doji Hammer" activeColor={T.amber} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Confluences</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_conf" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_conf" value="hts_extra_8020" label="80/20" activeColor={T.green} />
+                      <FilterBtn groupKey="hts_conf" value="hts_extra_fvg" label="FVG" activeColor={T.purple} />
+                      <FilterBtn groupKey="hts_conf" value="hts_extra_vwap" label="VWAP" activeColor={T.cyan} />
+                      <FilterBtn groupKey="hts_conf" value="hts_extra_poi" label="POI" activeColor={T.amber} />
+                    </div>
+                  </div>
                 </>}
 
                 {stratType === "LIVE_JOURNAL" && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="ib_session_f" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="ib_session_f" value="London" label="London" activeColor={T.purple} />
+                      <FilterBtn groupKey="ib_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
+                      <FilterBtn groupKey="ib_session_f" value="NY PM" label="NY PM" activeColor={T.cyan} />
+                    </div>
+                  </div>
                   <div>
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Formacja</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="ib_formation" value="ALL" label="ALL" />
                       <FilterBtn groupKey="ib_formation" value="LOW_HIGH" label="LOW>HIGH" activeColor={T.green} />
                       <FilterBtn groupKey="ib_formation" value="HIGH_LOW" label="HIGH>LOW" activeColor={T.red} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Stop Loss</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="ib_sl" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_sl" value="LH" label="L/H" activeColor={T.cyan} />
+                      <FilterBtn groupKey="ib_sl" value="BAND" label="Wstęga" activeColor={T.purple} />
+                      <FilterBtn groupKey="ib_sl" value="VWAP" label="VWAP" activeColor={T.amber} />
+                      <FilterBtn groupKey="ib_sl" value="RANDOM" label="Random" activeColor={T.red} />
                     </div>
                   </div>
                   <div>
@@ -8500,9 +8591,61 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="ib_range_break" value="any" label="Tak" activeColor={T.red} />
                     </div>
                   </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Moment wejścia</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <FilterBtn groupKey="ib_em" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_em" value="em_vwap_retest" label="VWAP Retest" activeColor={T.cyan} />
+                      <FilterBtn groupKey="ib_em" value="em_band_retest" label="Wstęga Retest" activeColor={T.purple} />
+                      <FilterBtn groupKey="ib_em" value="em_5min_gap" label="5min GAP" activeColor={T.amber} />
+                      <FilterBtn groupKey="ib_em" value="em_3565_retest" label="35/65" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_em" value="em_pullback_random" label="Pullback" />
+                      <FilterBtn groupKey="ib_em" value="em_pa_fomo" label="PA FOMO" activeColor={T.red} />
+                      <FilterBtn groupKey="ib_em" value="em_8020" label="80/20" activeColor={T.green} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>PA w Range</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <FilterBtn groupKey="ib_pa" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_pa" value="pa_double_top" label="Double Top" activeColor={T.cyan} />
+                      <FilterBtn groupKey="ib_pa" value="pa_amd" label="AMD" activeColor={T.amber} />
+                      <FilterBtn groupKey="ib_pa" value="pa_trend" label="Trend" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_pa" value="pa_choppy" label="Choppy" activeColor={T.red} />
+                      <FilterBtn groupKey="ib_pa" value="pa_below_band" label="Pod wstęgą" activeColor={T.purple} />
+                      <FilterBtn groupKey="ib_pa" value="pa_reverse_poi" label="Reverse POI" />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Korelacja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="ib_correlation" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_correlation" value="TAK" label="TAK" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_correlation" value="NIE" label="NIE" activeColor={T.red} />
+                      <FilterBtn groupKey="ib_correlation" value="SREDNIA" label="Średnia" activeColor={T.amber} />
+                    </div>
+                  </div>
                 </>}
 
                 {(stratType === "DR" || stratType === "LUNCH_BOX") && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="dr_session_f" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="dr_session_f" value="NY" label="NY" activeColor={T.green} />
+                      <FilterBtn groupKey="dr_session_f" value="London" label="London" activeColor={T.purple} />
+                      <FilterBtn groupKey="dr_session_f" value="Asia" label="Asia" activeColor={T.cyan} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Trade #</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="dr_trade_num" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="dr_trade_num" value="1" label="#1" activeColor={T.cyan} />
+                      <FilterBtn groupKey="dr_trade_num" value="2" label="#2" activeColor={T.amber} />
+                      <FilterBtn groupKey="dr_trade_num" value="3" label="#3" activeColor={T.purple} />
+                    </div>
+                  </div>
                   <div>
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Typ wejścia</div>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -8520,6 +8663,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="bands_overlap" value="ALL" label="ALL" />
                       <FilterBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
                       <FilterBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>SMT</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="dr_smt" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="dr_smt" value="yes" label="TAK" activeColor={T.green} />
+                      <FilterBtn groupKey="dr_smt" value="no" label="NIE" activeColor={T.red} />
                     </div>
                   </div>
                 </>}
