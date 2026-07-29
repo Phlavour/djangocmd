@@ -4855,6 +4855,7 @@ function TradingPanel({ apiKey, supa }) {
   const [dlOpen, setDlOpen] = useState(false);
   const [dlDate, setDlDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dlNotes, setDlNotes] = useState({}); // {date: {text, photos: []}}
+  const [dlMonth, setDlMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [dlSaving, setDlSaving] = useState({});
   const [dlLoaded, setDlLoaded] = useState(false);
   const dlTimerRef = React.useRef({});
@@ -6055,6 +6056,84 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         {dlOpen && (
           <div style={{ marginTop: 12 }}>
+
+            {/* ── Calendar ── */}
+            {(() => {
+              const { year, month } = dlMonth;
+              const today = new Date().toISOString().slice(0, 10);
+              const firstDay = new Date(year, month, 1);
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+              const monthName = new Date(year, month, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" });
+
+              const cells = [];
+              for (let i = 0; i < startDow; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) {
+                cells.push(`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+              }
+              while (cells.length % 7 !== 0) cells.push(null);
+
+              const goPrev = () => { const nm = month===0?11:month-1; const ny = month===0?year-1:year; setDlMonth({year:ny,month:nm}); };
+              const goNext = () => { const nm = month===11?0:month+1; const ny = month===11?year+1:year; setDlMonth({year:ny,month:nm}); };
+
+              return (
+                <div style={{ marginBottom: 16, padding: 12, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                  {/* Nav */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <Btn small outline onClick={goPrev}>‹</Btn>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, textTransform: "capitalize" }}>{monthName}</div>
+                    <Btn small outline onClick={goNext}>›</Btn>
+                  </div>
+
+                  {/* Day headers */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
+                    {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d => (
+                      <div key={d} style={{ textAlign:"center", fontSize:9, fontWeight:700, color:T.textDim, padding:"2px 0" }}>{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Day cells */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+                    {cells.map((date, i) => {
+                      if (!date) return <div key={`e${i}`} />;
+                      const note = dlNotes[date] || {};
+                      const hasText = !!note.text;
+                      const hasPhotos = (note.photos||[]).length > 0;
+                      const hasStats = !!(note.wins || note.losses || note.be || note.pnl);
+                      const isToday = date === today;
+                      const isSel = date === dlDate;
+                      const pnl = parseFloat(note.pnl);
+                      const pnlColor = !isNaN(pnl) && pnl !== 0 ? (pnl > 0 ? T.green : T.red) : null;
+                      const wins = parseInt(note.wins)||0, losses = parseInt(note.losses)||0, be = parseInt(note.be)||0;
+                      const total = wins+be+losses;
+                      const wr = total>0 ? Math.round(wins/total*100) : null;
+
+                      return (
+                        <div key={date} onClick={() => setDlDate(date)} style={{
+                          minHeight: 52, border: `2px solid ${isSel?T.cyan:isToday?"#3b82f6":T.border}`,
+                          borderRadius: 6, padding: "4px 5px", cursor: "pointer",
+                          background: isSel ? `${T.cyan}12` : isToday ? `#3b82f620` : T.bg2,
+                          transition: "border-color .1s",
+                        }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = T.cyan}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = isSel?T.cyan:isToday?"#3b82f6":T.border}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                            <span style={{ fontSize:11, fontWeight:isSel||isToday?800:500, color:isSel?T.cyan:isToday?"#60a5fa":T.textSoft }}>{parseInt(date.slice(8))}</span>
+                            <div style={{ display:"flex", gap:2 }}>
+                              {hasText && <span style={{ fontSize:7, color:T.amber }}>✏</span>}
+                              {hasPhotos && <span style={{ fontSize:7, color:T.cyan }}>📸</span>}
+                            </div>
+                          </div>
+                          {pnlColor && <div style={{ fontSize:10, fontWeight:800, color:pnlColor, lineHeight:1.1 }}>{pnl>0?"+":""}{pnl.toFixed(1)}R</div>}
+                          {wr !== null && <div style={{ fontSize:9, color:wr>=50?T.green:T.red }}>{wr}%</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Date picker */}
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
               <input type="date" value={dlDate} onChange={e => setDlDate(e.target.value)} style={{ ...sel }} />
