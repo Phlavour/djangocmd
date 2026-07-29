@@ -5645,10 +5645,17 @@ Rules:
       if (Array.isArray(rows)) {
         const map = {};
         rows.forEach(r => {
-          let photos = [];
-          try { photos = JSON.parse(r.content || "{}").photos || []; } catch {}
-          const text = (() => { try { return JSON.parse(r.content || "{}").text || r.content || ""; } catch { return r.content || ""; } })();
-          map[r.note_date] = { text, photos };
+          let parsed = {};
+          try { parsed = JSON.parse(r.content || "{}"); } catch {}
+          map[r.note_date] = {
+            text: parsed.text || (typeof parsed === "string" ? parsed : "") || "",
+            photos: parsed.photos || [],
+            pnl: parsed.pnl || "",
+            trades: parsed.trades || "",
+            wins: parsed.wins || "",
+            be: parsed.be || "",
+            losses: parsed.losses || "",
+          };
         });
         setDlNotes(map);
         setDlLoaded(true);
@@ -5668,18 +5675,26 @@ Rules:
   };
 
   const handleDlTextChange = (date, text) => {
-    const current = dlNotes[date] || { text: "", photos: [] };
+    const current = dlNotes[date] || { text: "", photos: [], pnl: "", trades: "", wins: "", be: "", losses: "" };
     const next = { ...current, text };
     setDlNotes(p => ({...p, [date]: next}));
     if (dlTimerRef.current[date]) clearTimeout(dlTimerRef.current[date]);
     dlTimerRef.current[date] = setTimeout(() => saveDlNote(date, next), 1500);
   };
 
+  const handleDlFieldChange = (date, field, value) => {
+    const current = dlNotes[date] || { text: "", photos: [], pnl: "", trades: "", wins: "", be: "", losses: "" };
+    const next = { ...current, [field]: value };
+    setDlNotes(p => ({...p, [date]: next}));
+    if (dlTimerRef.current[`${date}_${field}`]) clearTimeout(dlTimerRef.current[`${date}_${field}`]);
+    dlTimerRef.current[`${date}_${field}`] = setTimeout(() => saveDlNote(date, next), 1500);
+  };
+
   const addDlPhoto = async (date, file) => {
     if (!file || !supa?.url) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const current = dlNotes[date] || { text: "", photos: [] };
+      const current = dlNotes[date] || { text: "", photos: [], pnl: "", trades: "", wins: "", be: "", losses: "" };
       const next = { ...current, photos: [...(current.photos || []), reader.result] };
       setDlNotes(p => ({...p, [date]: next}));
       saveDlNote(date, next);
@@ -5688,7 +5703,7 @@ Rules:
   };
 
   const removeDlPhoto = (date, idx) => {
-    const current = dlNotes[date] || { text: "", photos: [] };
+    const current = dlNotes[date] || { text: "", photos: [], pnl: "", trades: "", wins: "", be: "", losses: "" };
     const next = { ...current, photos: current.photos.filter((_, i) => i !== idx) };
     setDlNotes(p => ({...p, [date]: next}));
     saveDlNote(date, next);
@@ -6050,6 +6065,42 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 {dlSaving[dlDate] ? "💾 Zapisuję..." : "auto-save"}
               </div>
             </div>
+
+            {/* Stats row */}
+            {(() => {
+              const d = dlNotes[dlDate] || {};
+              const wins = parseInt(d.wins) || 0;
+              const be = parseInt(d.be) || 0;
+              const losses = parseInt(d.losses) || 0;
+              const total = wins + be + losses;
+              const wr = total > 0 ? ((wins / total) * 100).toFixed(0) : null;
+              const numInput = (field, placeholder, col) => (
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: T.textDim, textTransform: "uppercase", marginBottom: 3 }}>{placeholder}</div>
+                  <input type="text" value={d[field] || ""} onChange={e => handleDlFieldChange(dlDate, field, e.target.value)}
+                    placeholder="—" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700, color: col || T.text, fontSize: 13 }} />
+                </div>
+              );
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    {numInput("pnl", "Final PnL (R)", parseFloat(d.pnl) >= 0 ? T.green : T.red)}
+                    {numInput("trades", "Trades", T.text)}
+                    {numInput("wins", "Wins", T.green)}
+                    {numInput("be", "BE", T.amber)}
+                    {numInput("losses", "Losses", T.red)}
+                  </div>
+                  {wr !== null && (
+                    <div style={{ padding: "6px 12px", background: T.bg2, borderRadius: 6, border: `1px solid ${T.border}`, display: "flex", gap: 16, alignItems: "center", fontSize: 11 }}>
+                      <span style={{ color: T.textSoft }}>WR:</span>
+                      <span style={{ fontWeight: 800, fontSize: 16, color: parseInt(wr) >= 50 ? T.green : T.red }}>{wr}%</span>
+                      <span style={{ color: T.textDim }}>({wins}W / {be}BE / {losses}L z {total} trade{total !== 1 ? "ów" : "a"})</span>
+                      {d.pnl && <span style={{ marginLeft: "auto", fontWeight: 700, color: parseFloat(d.pnl) >= 0 ? T.green : T.red }}>{parseFloat(d.pnl) > 0 ? "+" : ""}{parseFloat(d.pnl).toFixed(1)}R</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Text area */}
             <textarea
