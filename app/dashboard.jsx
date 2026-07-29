@@ -5274,6 +5274,8 @@ Rules:
       activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" :
       "HTS"
     );
+    console.log("💾 saveTrade stratType:", stratType, "activeStratObj:", activeStratObj?.name, activeStratObj?.type);
+    console.log("💾 8020 fields:", { s8020_session: tf.s8020_session, s8020_entry_time: tf.s8020_entry_time, s8020_entry_type: tf.s8020_entry_type, s8020_level: tf.s8020_level, s8020_conf_bands: tf.s8020_conf_bands, s8020_conf_vwap: tf.s8020_conf_vwap, s8020_conf_poi: tf.s8020_conf_poi, s8020_conf_fvg: tf.s8020_conf_fvg });
     const stratData = stratType === "HTS" ? {
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
