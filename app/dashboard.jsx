@@ -4846,6 +4846,18 @@ function TradingPanel({ apiKey, supa }) {
   const [weeklySummaryOutput, setWeeklySummaryOutput] = useState(""); // AI generated text
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
   const [weeklySummaryWeek, setWeeklySummaryWeek] = useState(() => {
+
+  // Daily Journal state
+  const [djNotes, setDjNotes] = useState({}); // {date: content}
+  const [djSaving, setDjSaving] = useState({});
+  const [djSelectedDate, setDjSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [djLoaded, setDjLoaded] = useState(false);
+  const [djAiOut, setDjAiOut] = useState("");
+  const [djAiLoading, setDjAiLoading] = useState(false);
+  const [djWeekStart, setDjWeekStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  });
     // Default to current week Monday
     const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
     return d.toISOString().slice(0, 10);
@@ -4896,6 +4908,12 @@ function TradingPanel({ apiKey, supa }) {
     fetch(`${supa.url}/rest/v1/trading_journal?order=created_at.desc&limit=500`, { headers: { apikey: supa.key, Authorization: `Bearer ${supa.key}` } })
       .then(r => r.ok ? r.json() : []).then(rows => { if (Array.isArray(rows)) setTrades(rows); }).catch(() => {});
   }, [supa?.url, supa?.key]);
+
+  useEffect(() => {
+    setDjLoaded(false);
+    setDjNotes({});
+    loadDjNotes();
+  }, [activeStrategy, supa?.url]);
 
   // Save strategy
   const [newStratType, setNewStratType] = useState("HTS");
@@ -5610,6 +5628,73 @@ Rules:
     setDailySummaryLoading(false);
   };
 
+  // Daily Journal — load notes for current strategy
+  const loadDjNotes = async () => {
+    if (!supa?.url || !activeStrategy || activeStrategy === "ALL") return;
+    try {
+      const rows = await fetch(`${supa.url}/rest/v1/trading_journal_notes?strategy_id=eq.${activeStrategy}&order=note_date.desc&limit=365`, { headers: supa.headers }).then(r => r.json());
+      if (Array.isArray(rows)) {
+        const map = {};
+        rows.forEach(r => { map[r.note_date] = r.content || ""; });
+        setDjNotes(map);
+        setDjLoaded(true);
+      }
+    } catch(e) { console.error("DJ load:", e); }
+  };
+
+  const saveDjNote = async (date, content) => {
+    if (!supa?.url || !activeStrategy) return;
+    setDjSaving(p => ({...p, [date]: true}));
+    await fetch(`${supa.url}/rest/v1/trading_journal_notes?on_conflict=strategy_id,note_date`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ strategy_id: activeStrategy, note_date: date, content }]),
+    }).catch(console.error);
+    setDjSaving(p => ({...p, [date]: false}));
+  };
+
+  // Debounced autosave
+  const djTimerRef = React.useRef({});
+  const handleDjChange = (date, val) => {
+    setDjNotes(p => ({...p, [date]: val}));
+    if (djTimerRef.current[date]) clearTimeout(djTimerRef.current[date]);
+    djTimerRef.current[date] = setTimeout(() => saveDjNote(date, val), 1500);
+  };
+
+  const generateDjWeeklySummary = async () => {
+    if (!apiKey) return;
+    setDjAiLoading(true); setDjAiOut("");
+    const wkDates = Array.from({length:7}, (_,i) => {
+      const d = new Date(djWeekStart + "T12:00:00"); d.setDate(d.getDate()+i);
+      return d.toISOString().slice(0,10);
+    });
+    const wkTrades = trades.filter(t => {
+      if (activeStrategy !== "ALL" && t.strategy_id !== activeStrategy) return false;
+      let sd = t.strategy_data; try { if (typeof sd==="string") sd=JSON.parse(sd); } catch { sd={}; }
+      return wkDates.includes(sd?.trade_date || t.trade_date || "");
+    });
+    const winsN = wkTrades.filter(t=>t.result==="WIN").length;
+    const lossN = wkTrades.filter(t=>t.result==="LOSS").length;
+    const profitTotal = wkTrades.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+    const notesText = wkDates.map(d => {
+      const note = djNotes[d] || "";
+      const dayTrades = wkTrades.filter(t => {
+        let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};}
+        return (sd?.trade_date||t.trade_date||"")===d;
+      });
+      const dl = new Date(d+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long"});
+      const tradesLine = dayTrades.length > 0 ? ` (${dayTrades.length} trade${dayTrades.length>1?"y":""}: ${dayTrades.map(t=>t.result).join(", ")})` : "";
+      return `${dl}${tradesLine}:\n${note || "(brak notatki)"}`;
+    }).join("\n\n");
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:
+        `Jesteś coachem tradingowym. Piszesz po polsku. Analizujesz tydzień tradera na podstawie jego dziennika i wyników.\n\nWYNIKI TYGODNIA ${djWeekStart}:\n${winsN}W / ${lossN}L / ${profitTotal.toFixed(1)}R łącznie\n\nDZIENNIK:\n${notesText}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA** — ocena ogólna\n**✅ CO POSZŁO DOBRZE** — konkretne obserwacje\n**⚠️ CO WYMAGA PRACY** — wzorce do poprawy\n**🎯 3 CELE NA PRZYSZŁY TYDZIEŃ** — mierzalne\n**💪 MOTYWACJA** — jedno zdanie`
+      }]})
+    }).then(r=>r.json()).then(d=>{setDjAiOut(d.content?.map(b=>b.text||"").join("")||"Błąd.");}).catch(()=>setDjAiOut("Błąd API.")).finally(()=>setDjAiLoading(false));
+  };
+
   const generateWeeklySummary = async () => {
     if (!apiKey || !activeStrategy) return;
     setWeeklySummaryLoading(true);
@@ -5968,6 +6053,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             {id:"ai",l:"🤖 AI Analysis"},
             ...(isCalendarStrat ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
             ...(isLJ ? [{id:"daily_log",l:"📋 Daily Log"}] : []),
+            ...(activeStrategy !== "ALL" ? [{id:"daily_journal",l:"📓 Daily Journal"}] : []),
           ].map(t => (
             <TabBtn key={t.id} label={t.l} active={subTab === t.id} onClick={() => setSubTab(t.id)} color={T.cyan} />
           ))}
@@ -10229,6 +10315,181 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* DAILY JOURNAL */}
+      {subTab === "daily_journal" && activeStrategy && activeStrategy !== "ALL" && (() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const wkDates = Array.from({length:7}, (_,i) => {
+          const d = new Date(djWeekStart + "T12:00:00"); d.setDate(d.getDate()+i);
+          return d.toISOString().slice(0,10);
+        });
+
+        // Get unique dates from trades for this strategy
+        const tradeDates = [...new Set(trades.filter(t => t.strategy_id === activeStrategy).map(t => {
+          let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};}
+          return sd?.trade_date || t.trade_date || "";
+        }).filter(Boolean))].sort((a,b) => b.localeCompare(a));
+
+        // All dates to show: today + trade dates + any note dates
+        const allDates = [...new Set([today, ...tradeDates, ...Object.keys(djNotes)])].sort((a,b) => b.localeCompare(a));
+
+        const dayTrades = (date) => trades.filter(t => {
+          if (t.strategy_id !== activeStrategy) return false;
+          let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};}
+          return (sd?.trade_date || t.trade_date || "") === date;
+        });
+
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20, alignItems: "flex-start" }}>
+
+            {/* LEFT: Daily notes list */}
+            <div>
+              {/* Date picker + new entry */}
+              <Card style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: T.textDim, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Wybierz dzień</div>
+                    <input type="date" value={djSelectedDate} onChange={e => setDjSelectedDate(e.target.value)} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <Btn small color={T.green} onClick={() => { if (!allDates.includes(djSelectedDate)) { setDjNotes(p => ({...p, [djSelectedDate]: p[djSelectedDate] || ""})); } }}>+ Dodaj wpis</Btn>
+                </div>
+
+                {/* Selected day editor */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+                      {new Date(djSelectedDate+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                    </div>
+                    <div style={{ fontSize: 10, color: djSaving[djSelectedDate] ? T.amber : T.textDim }}>
+                      {djSaving[djSelectedDate] ? "💾 Zapisuję..." : djNotes[djSelectedDate] !== undefined ? "auto-save" : ""}
+                    </div>
+                  </div>
+
+                  {/* Trade summary for this day */}
+                  {dayTrades(djSelectedDate).length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                      {dayTrades(djSelectedDate).map(t => (
+                        <span key={t.id} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, fontWeight: 700,
+                          background: t.result === "WIN" ? `${T.green}20` : t.result === "LOSS" ? `${T.red}20` : `${T.amber}20`,
+                          color: t.result === "WIN" ? T.green : t.result === "LOSS" ? T.red : T.amber }}>
+                          {t.direction} · {t.result} · {parseFloat(t.profit||0).toFixed(1)}R
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <textarea
+                    value={djNotes[djSelectedDate] || ""}
+                    onChange={e => handleDjChange(djSelectedDate, e.target.value)}
+                    placeholder="Wpisz notatki z tego dnia — obserwacje rynku, emocje, co poszło dobrze/źle, plany..."
+                    rows={10}
+                    style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 12, resize: "vertical", boxSizing: "border-box", outline: "none", fontFamily: "inherit", lineHeight: 1.7 }}
+                  />
+                </div>
+              </Card>
+
+              {/* Previous entries list */}
+              <Card>
+                <Heading icon="📅">Poprzednie wpisy</Heading>
+                {allDates.filter(d => d !== djSelectedDate && djNotes[d]).map(date => {
+                  const dTrades = dayTrades(date);
+                  const preview = (djNotes[date] || "").slice(0, 120);
+                  return (
+                    <div key={date} onClick={() => setDjSelectedDate(date)} style={{ padding: "10px 12px", marginBottom: 8, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", transition: "border-color .15s" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = T.cyan}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+                          {new Date(date+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"short",day:"numeric",month:"short"})}
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {dTrades.map(t => (
+                            <span key={t.id} style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, fontWeight: 700,
+                              color: t.result==="WIN"?T.green:t.result==="LOSS"?T.red:T.amber,
+                              background: t.result==="WIN"?`${T.green}15`:t.result==="LOSS"?`${T.red}15`:`${T.amber}15` }}>
+                              {t.result}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5 }}>{preview}{preview.length < (djNotes[date]||"").length ? "..." : ""}</div>
+                    </div>
+                  );
+                })}
+                {allDates.filter(d => d !== djSelectedDate && djNotes[d]).length === 0 && (
+                  <div style={{ color: T.textDim, fontSize: 12, fontStyle: "italic" }}>Brak poprzednich wpisów</div>
+                )}
+              </Card>
+            </div>
+
+            {/* RIGHT: Weekly summary + AI */}
+            <div>
+              <Card style={{ marginBottom: 16 }}>
+                <Heading icon="📊">Tydzień</Heading>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 12 }}>
+                  <button onClick={() => { const d=new Date(djWeekStart+"T12:00:00"); d.setDate(d.getDate()-7); setDjWeekStart(d.toISOString().slice(0,10)); }} style={{ ...sel, padding:"4px 10px" }}>‹</button>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1, textAlign:"center" }}>
+                    {new Date(djWeekStart+"T12:00:00").toLocaleDateString("pl-PL",{day:"numeric",month:"short"})} – {new Date(new Date(djWeekStart+"T12:00:00").setDate(new Date(djWeekStart+"T12:00:00").getDate()+6)).toLocaleDateString("pl-PL",{day:"numeric",month:"short"})}
+                  </span>
+                  <button onClick={() => { const d=new Date(djWeekStart+"T12:00:00"); d.setDate(d.getDate()+7); setDjWeekStart(d.toISOString().slice(0,10)); }} style={{ ...sel, padding:"4px 10px" }}>›</button>
+                </div>
+
+                {/* Week overview: 7 day dots */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 12 }}>
+                  {wkDates.map(d => {
+                    const dt = dayTrades(d);
+                    const hasNote = !!djNotes[d];
+                    const wins = dt.filter(t=>t.result==="WIN").length;
+                    const losses = dt.filter(t=>t.result==="LOSS").length;
+                    const isT = d === today;
+                    const isSel = d === djSelectedDate;
+                    return (
+                      <div key={d} onClick={() => setDjSelectedDate(d)} style={{ textAlign:"center", cursor:"pointer" }}>
+                        <div style={{ fontSize:9, color: isT?T.cyan:T.textDim, marginBottom:3, fontWeight:isT?700:400 }}>
+                          {new Date(d+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"short"})}
+                        </div>
+                        <div style={{ width:36, height:36, borderRadius:8, margin:"0 auto", border:`2px solid ${isSel?T.cyan:isT?"#93c5fd":T.border}`, background: wins>0?`${T.green}20`:losses>0?`${T.red}20`:T.bg2, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:wins>0?T.green:losses>0?T.red:T.textDim }}>{dt.length>0?dt.length:"—"}</div>
+                          {hasNote && <div style={{ fontSize:6, color:T.amber }}>✏</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Week stats */}
+                {(() => {
+                  const wt = wkDates.flatMap(d => dayTrades(d));
+                  const w = wt.filter(t=>t.result==="WIN").length;
+                  const l = wt.filter(t=>t.result==="LOSS").length;
+                  const p = wt.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+                  return wt.length > 0 ? (
+                    <div style={{ display:"flex", gap:8, justifyContent:"center", fontSize:12 }}>
+                      <span style={{ color:T.green, fontWeight:700 }}>{w}W</span>
+                      <span style={{ color:T.red, fontWeight:700 }}>{l}L</span>
+                      <span style={{ color:p>=0?T.green:T.red, fontWeight:700 }}>{p>0?"+":""}{p.toFixed(1)}R</span>
+                    </div>
+                  ) : <div style={{ fontSize:11, color:T.textDim, textAlign:"center" }}>Brak trade'ów w tym tygodniu</div>;
+                })()}
+              </Card>
+
+              {/* AI Analysis */}
+              <Card>
+                <Heading icon="🤖">AI Weekly Analysis</Heading>
+                <Btn color={T.cyan} onClick={generateDjWeeklySummary} disabled={djAiLoading||!apiKey} style={{ width:"100%", marginBottom:10 }}>
+                  {djAiLoading ? "⏳ Analizuję..." : "🤖 Generuj analizę tygodnia"}
+                </Btn>
+                {!apiKey && <div style={{ fontSize:10, color:T.red, marginBottom:8 }}>Brak Claude API Key w Settings</div>}
+                {djAiOut && (
+                  <div style={{ fontSize:11, lineHeight:1.8, color:T.text, whiteSpace:"pre-wrap", maxHeight:400, overflowY:"auto", padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                    {djAiOut}
+                  </div>
+                )}
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* FOOTER */}
       <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 28px", display: "flex", justifyContent: "space-between", marginTop: 40 }}>
