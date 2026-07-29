@@ -4846,6 +4846,10 @@ function TradingPanel({ apiKey, supa }) {
   const [weeklySummaryOutput, setWeeklySummaryOutput] = useState(""); // AI generated text
   const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
   const [weeklySummaryWeek, setWeeklySummaryWeek] = useState(() => {
+    // Default to current week Monday
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  });
 
   // Daily Journal state
   const [djNotes, setDjNotes] = useState({}); // {date: content}
@@ -4855,10 +4859,6 @@ function TradingPanel({ apiKey, supa }) {
   const [djAiOut, setDjAiOut] = useState("");
   const [djAiLoading, setDjAiLoading] = useState(false);
   const [djWeekStart, setDjWeekStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    return d.toISOString().slice(0, 10);
-  });
-    // Default to current week Monday
     const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
     return d.toISOString().slice(0, 10);
   });
