@@ -4825,10 +4825,16 @@ function TradingPanel({ apiKey, supa }) {
     lj_correlation: "TAK", // TAK | NIE | SREDNIA
     // HTS table (Vision-read)
     hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", // "up" | "down" | "in" | "overlap"
-    hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
+    hts_pair: "NQ", hts_session: "", hts_entry_time: "",
+    hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false,
+    hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
+    // 8020 strategy fields
+    s8020_session: "", s8020_entry_time: "",
+    s8020_entry_type: [],
+    s8020_level: "",
+    s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
     req_8020: false, req_fvg: false, req_instrument: false,
     pair: "NQ", timeframe: "1m", notes: "",
-    // Auto-filled from Vision
     trends: {}, rsi: "", pivots: {},
   });
   const [visionLoading, setVisionLoading] = useState(false);
@@ -4850,12 +4856,14 @@ function TradingPanel({ apiKey, supa }) {
   const [sliderViewMode, setSliderViewMode] = useState("single"); // "single" | "grid"
   const [sliderIndex, setSliderIndex] = useState(0);
   const [sliderFilters, setSliderFilters] = useState({
-    direction: "ALL",      // ALL | LONG | SHORT | NO_TRADE
-    instrument: "ALL",     // ALL | NQ | ES
-    entry_type: "ALL",     // ALL | pullback | boundary | pa | bands
-    result: "ALL",         // ALL | WIN | LOSS | BE
-    bands_overlap: "ALL",  // ALL | YES | NO
-    weekday: "ALL",        // ALL | 1 | 2 | 3 | 4 | 5 (Mon-Fri)
+    direction: "ALL", instrument: "ALL", result: "ALL",
+    entry_type: "ALL", bands_overlap: "ALL", weekday: "ALL",
+    // 8020
+    s8020_level: "ALL", s8020_entry: "ALL",
+    // HTS
+    hts_setup: "ALL", hts_session_f: "ALL",
+    // IB
+    ib_formation: "ALL", ib_range_break: "ALL",
   });
   const [simFilters, setSimFilters] = useState({
     direction: "ALL",
@@ -8353,26 +8361,32 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           if (sliderFilters.direction !== "ALL" && t.direction !== sliderFilters.direction) return false;
           if (sliderFilters.instrument !== "ALL" && sd?.instrument !== sliderFilters.instrument) return false;
           if (sliderFilters.result !== "ALL" && t.result !== sliderFilters.result) return false;
-          if (sliderFilters.entry_type !== "ALL") {
-            const key = `entry_${sliderFilters.entry_type}`;
-            if (!sd?.[key]) return false;
+          // DR/IB filters
+          if (sliderFilters.entry_type !== "ALL") { const key = `entry_${sliderFilters.entry_type}`; if (!sd?.[key]) return false; }
+          if (sliderFilters.bands_overlap !== "ALL") { const has = sd?.bands_overlap === true; if (sliderFilters.bands_overlap === "YES" && !has) return false; if (sliderFilters.bands_overlap === "NO" && has) return false; }
+          // 8020 filters
+          if (sliderFilters.s8020_level !== "ALL" && sd?.level !== sliderFilters.s8020_level) return false;
+          if (sliderFilters.s8020_entry !== "ALL" && !(Array.isArray(sd?.entry_type) && sd.entry_type.includes(sliderFilters.s8020_entry))) return false;
+          // HTS filters
+          if (sliderFilters.hts_setup !== "ALL" && sd?.setup_type !== sliderFilters.hts_setup) return false;
+          if (sliderFilters.hts_session_f !== "ALL" && sd?.hts_session !== sliderFilters.hts_session_f) return false;
+          // IB filters
+          if (sliderFilters.ib_formation !== "ALL" && sd?.lj_formation !== sliderFilters.ib_formation) return false;
+          if (sliderFilters.ib_range_break !== "ALL") {
+            if (sliderFilters.ib_range_break === "NIE" && sd?.lj_range_break !== "NIE") return false;
+            if (sliderFilters.ib_range_break === "any" && (!sd?.lj_range_break || sd?.lj_range_break === "NIE")) return false;
           }
-          if (sliderFilters.bands_overlap !== "ALL") {
-            const hasOverlap = sd?.bands_overlap === true;
-            if (sliderFilters.bands_overlap === "YES" && !hasOverlap) return false;
-            if (sliderFilters.bands_overlap === "NO" && hasOverlap) return false;
-          }
-          if (sliderFilters.weekday !== "ALL" && sd?.trade_date) {
-            const dayIdx = new Date(sd.trade_date + "T12:00:00").getDay();
+          // Weekday
+          if (sliderFilters.weekday !== "ALL" && (sd?.trade_date || t.trade_date)) {
+            const dayIdx = new Date((sd?.trade_date || t.trade_date) + "T12:00:00").getDay();
             if (String(dayIdx) !== sliderFilters.weekday) return false;
           }
           return true;
         }).sort((a, b) => {
-          // Sort chronologically (newest first)
           let sda = a.strategy_data; try { if (typeof sda === "string") sda = JSON.parse(sda); } catch { sda = {}; }
           let sdb = b.strategy_data; try { if (typeof sdb === "string") sdb = JSON.parse(sdb); } catch { sdb = {}; }
-          const ka = `${sda?.trade_date || ""} ${sda?.entry_time || ""}`;
-          const kb = `${sdb?.trade_date || ""} ${sdb?.entry_time || ""}`;
+          const ka = `${sda?.trade_date || sda?.hts_entry_time || ""} ${sda?.entry_time || ""}`;
+          const kb = `${sdb?.trade_date || sdb?.hts_entry_time || ""} ${sdb?.entry_time || ""}`;
           return kb.localeCompare(ka);
         });
 
@@ -8416,17 +8430,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Typ wejścia</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <FilterBtn groupKey="entry_type" value="ALL" label="ALL" />
-                    <FilterBtn groupKey="entry_type" value="pullback" label="Pullback" />
-                    <FilterBtn groupKey="entry_type" value="boundary" label="Granica" />
-                    <FilterBtn groupKey="entry_type" value="pa" label="PA" />
-                    <FilterBtn groupKey="entry_type" value="bands" label="Wstęgi" />
-                    <FilterBtn groupKey="entry_type" value="vwap" label="VWAP" />
-                  </div>
-                </div>
-                <div>
                   <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Result</div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <FilterBtn groupKey="result" value="ALL" label="ALL" />
@@ -8435,14 +8438,91 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <FilterBtn groupKey="result" value="BE" label="BE" activeColor={T.amber} />
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Wstęgi nachodzą?</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <FilterBtn groupKey="bands_overlap" value="ALL" label="ALL" />
-                    <FilterBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
-                    <FilterBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
+
+                {/* Strategy-specific filters */}
+                {stratType === "8020" && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Poziom</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_level" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_level" value="80" label="80" activeColor={T.red} />
+                      <FilterBtn groupKey="s8020_level" value="20" label="20" activeColor={T.green} />
+                    </div>
                   </div>
-                </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Entry</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_entry" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_entry" value="Repair" label="Repair" activeColor={T.cyan} />
+                      <FilterBtn groupKey="s8020_entry" value="Fork" label="Fork" activeColor={T.purple} />
+                      <FilterBtn groupKey="s8020_entry" value="H" label="H" activeColor={T.amber} />
+                    </div>
+                  </div>
+                </>}
+
+                {stratType === "HTS" && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Setup</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_setup" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_setup" value="3A" label="3A" activeColor={T.green} />
+                      <FilterBtn groupKey="hts_setup" value="2A" label="2A" activeColor={T.amber} />
+                      <FilterBtn groupKey="hts_setup" value="A" label="A" activeColor={T.cyan} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="hts_session_f" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="hts_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="hts_session_f" value="London" label="London" activeColor={T.purple} />
+                      <FilterBtn groupKey="hts_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
+                      <FilterBtn groupKey="hts_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
+                      <FilterBtn groupKey="hts_session_f" value="NY PM" label="NY PM" activeColor={T.cyan} />
+                    </div>
+                  </div>
+                </>}
+
+                {stratType === "LIVE_JOURNAL" && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Formacja</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="ib_formation" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_formation" value="LOW_HIGH" label="LOW>HIGH" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_formation" value="HIGH_LOW" label="HIGH>LOW" activeColor={T.red} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Range Break</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="ib_range_break" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="ib_range_break" value="NIE" label="NIE" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_range_break" value="any" label="Tak" activeColor={T.red} />
+                    </div>
+                  </div>
+                </>}
+
+                {(stratType === "DR" || stratType === "LUNCH_BOX") && <>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Typ wejścia</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="entry_type" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="entry_type" value="pullback" label="Pullback" />
+                      <FilterBtn groupKey="entry_type" value="boundary" label="Granica" />
+                      <FilterBtn groupKey="entry_type" value="pa" label="PA" />
+                      <FilterBtn groupKey="entry_type" value="bands" label="Wstęgi" />
+                      <FilterBtn groupKey="entry_type" value="vwap" label="VWAP" />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Wstęgi nachodzą?</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="bands_overlap" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="bands_overlap" value="YES" label="TAK" activeColor={T.amber} />
+                      <FilterBtn groupKey="bands_overlap" value="NO" label="NIE" activeColor={T.green} />
+                    </div>
+                  </div>
+                </>}
                 <div>
                   <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Dzień tygodnia</div>
                   <div style={{ display: "flex", gap: 4 }}>
@@ -8515,15 +8595,50 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                         )}
                       </div>
 
-                      {/* Meta info below */}
-                      <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap", fontSize: 11, color: T.textSoft }}>
-                        <span>Trade #{sd.trade_number || 1}</span>
-                        <span>{sd.session || "NY"}</span>
-                        {sd.profit_usd && <span style={{ color: parseFloat(sd.profit_usd) > 0 ? T.green : parseFloat(sd.profit_usd) < 0 ? T.red : T.textDim, fontWeight: 700 }}>${parseFloat(sd.profit_usd).toFixed(2)}</span>}
-                        {sd.account_type && <span>{sd.account_type}{sd.account_passed ? " ✓" : sd.account_burned ? " ✗" : ""}</span>}
-                        {[sd.entry_pullback && "Pullback", sd.entry_boundary && "Granica", sd.entry_pa && "PA", sd.entry_bands && "Wstęgi"].filter(Boolean).length > 0 && (
-                          <span>Entry: {[sd.entry_pullback && "Pullback", sd.entry_boundary && "Granica", sd.entry_pa && "PA", sd.entry_bands && "Wstęgi"].filter(Boolean).join(", ")}</span>
-                        )}
+                      {/* Meta info below — strategy-aware */}
+                      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", fontSize: 11, color: T.textSoft }}>
+                        {/* Universal */}
+                        {sd.trade_date && <span style={{ color: T.textDim }}>{sd.trade_date}</span>}
+                        {(sd.entry_time || sd.hts_entry_time || sd.entry_time) && <span>{sd.entry_time || sd.hts_entry_time}</span>}
+                        {t.profit !== undefined && t.profit !== 0 && <span style={{ color: parseFloat(t.profit) > 0 ? T.green : T.red, fontWeight: 700 }}>{parseFloat(t.profit) > 0 ? "+" : ""}{parseFloat(t.profit).toFixed(1)}R</span>}
+
+                        {/* DR / IB */}
+                        {(stratType === "DR" || stratType === "LUNCH_BOX" || stratType === "LIVE_JOURNAL") && <>
+                          {sd.profit_usd !== undefined && <span style={{ color: parseFloat(sd.profit_usd) > 0 ? T.green : parseFloat(sd.profit_usd) < 0 ? T.red : T.textDim, fontWeight: 700 }}>${parseFloat(sd.profit_usd || 0).toFixed(0)}</span>}
+                          {sd.session && <span>{sd.session}</span>}
+                          {sd.trade_number && <span>Trade #{sd.trade_number}</span>}
+                        </>}
+
+                        {/* 8020 */}
+                        {stratType === "8020" && <>
+                          {sd.session && <span style={{ color: T.cyan }}>{sd.session}</span>}
+                          {sd.level && <span style={{ color: sd.level === "80" ? T.red : T.green, fontWeight: 700 }}>Poziom {sd.level}</span>}
+                          {Array.isArray(sd.entry_type) && sd.entry_type.length > 0 && <span style={{ color: T.amber }}>Entry: {sd.entry_type.join(", ")}</span>}
+                          {[sd.conf_bands && "Wstęgi", sd.conf_vwap && "VWAP", sd.conf_poi && "POI", sd.conf_fvg && "FVG"].filter(Boolean).length > 0 && (
+                            <span style={{ color: T.green }}>+ {[sd.conf_bands && "Wstęgi", sd.conf_vwap && "VWAP", sd.conf_poi && "POI", sd.conf_fvg && "FVG"].filter(Boolean).join(", ")}</span>
+                          )}
+                        </>}
+
+                        {/* HTS */}
+                        {stratType === "HTS" && <>
+                          {sd.hts_session && <span style={{ color: T.cyan }}>{sd.hts_session}</span>}
+                          {sd.setup_type && <span style={{ color: T.amber }}>Setup {sd.setup_type}</span>}
+                          {sd.trade_type === "between_bands" && <span style={{ color: T.purple }}>Between Bands</span>}
+                          {sd.hts_entry_model && <span style={{ color: T.green }}>{sd.hts_entry_model}</span>}
+                          {[sd.hts_extra_8020 && "80/20", sd.hts_extra_fvg && "FVG", sd.hts_extra_vwap && "VWAP", sd.hts_extra_poi && "POI"].filter(Boolean).length > 0 && (
+                            <span>+ {[sd.hts_extra_8020 && "80/20", sd.hts_extra_fvg && "FVG", sd.hts_extra_vwap && "VWAP", sd.hts_extra_poi && "POI"].filter(Boolean).join(", ")}</span>
+                          )}
+                        </>}
+
+                        {/* IB (LIVE_JOURNAL) specific */}
+                        {stratType === "LIVE_JOURNAL" && <>
+                          {sd.lj_formation && <span style={{ color: sd.lj_formation === "LOW_HIGH" ? T.green : T.red }}>{sd.lj_formation === "LOW_HIGH" ? "LOW>HIGH" : "HIGH>LOW"}</span>}
+                          {sd.sl_type && <span>SL: {sd.sl_type}</span>}
+                          {sd.lj_range_break && sd.lj_range_break !== "NIE" && <span style={{ color: T.amber }}>Przebicie: {sd.lj_range_break}</span>}
+                          {[sd.pa_double_top && "DT", sd.pa_amd && "AMD", sd.pa_trend && "Trend", sd.pa_choppy && "Choppy"].filter(Boolean).length > 0 && (
+                            <span>PA: {[sd.pa_double_top && "DT", sd.pa_amd && "AMD", sd.pa_trend && "Trend", sd.pa_choppy && "Choppy"].filter(Boolean).join(", ")}</span>
+                          )}
+                        </>}
                       </div>
                       {t.description && (
                         <div style={{ marginTop: 8, fontSize: 11, color: T.textSoft, fontStyle: "italic", padding: 8, background: T.bg2, borderRadius: 6 }}>{t.description}</div>
@@ -8568,8 +8683,22 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                             )}
                           </div>
                           <div style={{ fontSize: 9, color: T.textDim, marginBottom: 6 }}>
-                            {sd.trade_date} · {sd.entry_time} · #{sd.trade_number || 1}
+                            {sd.trade_date}
+                            {stratType === "HTS" && sd.hts_session ? ` · ${sd.hts_session}` : ""}
+                            {stratType === "8020" && sd.session ? ` · ${sd.session}` : ""}
+                            {(stratType === "DR" || stratType === "LUNCH_BOX") ? ` · #${sd.trade_number || 1}` : ""}
                           </div>
+                          {stratType === "8020" && sd.level && (
+                            <div style={{ fontSize: 9, color: sd.level === "80" ? T.red : T.green, fontWeight: 700, marginBottom: 4 }}>
+                              Poziom {sd.level} {Array.isArray(sd.entry_type) ? `· ${sd.entry_type.join("/")}` : ""}
+                            </div>
+                          )}
+                          {stratType === "HTS" && sd.setup_type && (
+                            <div style={{ fontSize: 9, color: T.amber, marginBottom: 4 }}>{sd.setup_type} {sd.trade_type === "between_bands" ? "· BB" : ""}</div>
+                          )}
+                          {stratType === "LIVE_JOURNAL" && sd.lj_formation && (
+                            <div style={{ fontSize: 9, color: sd.lj_formation === "LOW_HIGH" ? T.green : T.red, marginBottom: 4 }}>{sd.lj_formation === "LOW_HIGH" ? "LOW>HIGH" : "HIGH>LOW"}</div>
+                          )}
                           <Btn small outline onClick={() => startEdit(t)} style={{ width: "100%", fontSize: 10, padding: "4px 6px" }}>✎ Edit</Btn>
                         </div>
                       </div>
