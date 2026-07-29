@@ -5274,8 +5274,6 @@ Rules:
       activeStratObj?.name?.toLowerCase().includes("market") ? "MARKET_PA" :
       "HTS"
     );
-    console.log("💾 saveTrade stratType:", stratType, "activeStratObj:", activeStratObj?.name, activeStratObj?.type);
-    console.log("💾 8020 fields:", { s8020_session: tf.s8020_session, s8020_entry_time: tf.s8020_entry_time, s8020_entry_type: tf.s8020_entry_type, s8020_level: tf.s8020_level, s8020_conf_bands: tf.s8020_conf_bands, s8020_conf_vwap: tf.s8020_conf_vwap, s8020_conf_poi: tf.s8020_conf_poi, s8020_conf_fvg: tf.s8020_conf_fvg });
     const stratData = stratType === "HTS" ? {
       bounce: parseInt(tf.bounce) || 1,
       band_type: tf.band_type || "fast", setup_type: tf.setup_type || "A",
@@ -6340,8 +6338,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     const active = (tf.s8020_entry_type || []).includes(et.id);
                     return (
                       <button key={et.id} onClick={() => setTf(p => {
-                        const cur = p.s8020_entry_type || [];
-                        return {...p, s8020_entry_type: active ? cur.filter(x => x !== et.id) : [...cur, et.id]};
+                        const cur = Array.isArray(p.s8020_entry_type) ? p.s8020_entry_type : [];
+                        const isActive = cur.includes(et.id);
+                        return {...p, s8020_entry_type: isActive ? cur.filter(x => x !== et.id) : [...cur, et.id]};
                       })} style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${et.color}20` : T.bg2, color: active ? et.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? et.color : T.border }}>
                         {active ? "✓ " : ""}{et.label}
                       </button>
