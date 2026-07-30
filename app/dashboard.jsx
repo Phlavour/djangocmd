@@ -4829,7 +4829,7 @@ function TradingPanel({ apiKey, supa }) {
     hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false,
     hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
     // 8020 strategy fields
-    s8020_session: "", s8020_entry_time: "", s8020_rr: "",
+    s8020_session: "", s8020_entry_time: "", s8020_rr: "", s8020_knot: "",
     s8020_entry_type: [],
     s8020_level: "",
     s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
@@ -4881,7 +4881,7 @@ function TradingPanel({ apiKey, supa }) {
     // DR/Lunch Box
     entry_type: "ALL", bands_overlap: "ALL", dr_session_f: "ALL", dr_trade_num: "ALL", dr_smt: "ALL",
     // 8020
-    s8020_level: "ALL", s8020_entry: "ALL", s8020_session_f: "ALL", s8020_conf: "ALL",
+    s8020_level: "ALL", s8020_entry: "ALL", s8020_session_f: "ALL", s8020_conf: "ALL", s8020_knot: "ALL",
     // HTS
     hts_setup: "ALL", hts_session_f: "ALL", hts_trade_type: "ALL", hts_band_type: "ALL",
     hts_entry_model_f: "ALL", hts_conf: "ALL",
@@ -5330,7 +5330,7 @@ Respond ONLY with JSON.`;
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -5461,7 +5461,7 @@ Respond ONLY with JSON.`;
       hts_pair: sd.hts_pair || "NQ", hts_session: sd.hts_session || "", hts_entry_time: sd.hts_entry_time || "",
       hts_extra_8020: sd.hts_extra_8020 || false, hts_extra_fvg: sd.hts_extra_fvg || false, hts_extra_vwap: sd.hts_extra_vwap || false, hts_extra_poi: sd.hts_extra_poi || false,
       hts_rr: sd.hts_rr || "", hts_entry_model: sd.hts_entry_model || "", hts_candle_5m: sd.hts_candle_5m || "", hts_candle_15m: sd.hts_candle_15m || "",
-      s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "", s8020_rr: sd.rr || "",
+      s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "", s8020_rr: sd.rr || "", s8020_knot: sd.knot || "",
       s8020_entry_type: Array.isArray(sd.entry_type) ? sd.entry_type : [],
       s8020_level: sd.level || "", s8020_price_read: sd.price_read || "",
       s8020_conf_bands: sd.conf_bands || false, s8020_conf_vwap: sd.conf_vwap || false,
@@ -5497,7 +5497,7 @@ Respond ONLY with JSON.`;
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -6777,6 +6777,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       {tf[ec.id] ? "✓ " : ""}{ec.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Knot */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ ...label, marginBottom: 8 }}>Knot</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "w_range", label: "W Range'u", color: T.green },
+                    { id: "poza_rangem", label: "Poza Rangem", color: T.red },
+                  ].map(opt => {
+                    const active = tf.s8020_knot === opt.id;
+                    return (
+                      <button key={opt.id} onClick={() => setTf(p => ({...p, s8020_knot: p.s8020_knot === opt.id ? "" : opt.id}))}
+                        style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${opt.color}20` : T.bg2, color: active ? opt.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? opt.color : T.border }}>
+                        {active ? "✓ " : ""}{opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               </>}
@@ -9007,6 +9026,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           if (sliderFilters.s8020_entry !== "ALL" && !(Array.isArray(sd?.entry_type) && sd.entry_type.includes(sliderFilters.s8020_entry))) return false;
           if (sliderFilters.s8020_session_f !== "ALL" && sd?.session !== sliderFilters.s8020_session_f) return false;
           if (sliderFilters.s8020_conf !== "ALL" && !sd?.[sliderFilters.s8020_conf]) return false;
+          if (sliderFilters.s8020_knot !== "ALL" && sd?.knot !== sliderFilters.s8020_knot) return false;
           // HTS
           if (sliderFilters.hts_setup !== "ALL" && sd?.setup_type !== sliderFilters.hts_setup) return false;
           if (sliderFilters.hts_session_f !== "ALL" && sd?.hts_session !== sliderFilters.hts_session_f) return false;
@@ -9119,6 +9139,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="s8020_conf" value="conf_vwap" label="VWAP" activeColor={T.cyan} />
                       <FilterBtn groupKey="s8020_conf" value="conf_poi" label="POI" activeColor={T.amber} />
                       <FilterBtn groupKey="s8020_conf" value="conf_fvg" label="FVG" activeColor={T.purple} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Knot</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_knot" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_knot" value="w_range" label="W Range'u" activeColor={T.green} />
+                      <FilterBtn groupKey="s8020_knot" value="poza_rangem" label="Poza Rangem" activeColor={T.red} />
                     </div>
                   </div>
                 </>}
