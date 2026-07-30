@@ -5934,8 +5934,22 @@ Konkretne, mierzalne kroki do wdrożenia.`;
   const breakEvens = filteredTrades.filter(t => t.result === "BE").length;
   const total = filteredTrades.length;
   const decisive = wins + losses; // for WR calculation - excludes BE
-  const totalProfit = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
   const winRate = decisive > 0 ? ((wins / decisive) * 100).toFixed(1) : "0";
+
+  // Helper: get R value — for 8020 use sd.rr, others use t.profit
+  const getTradeR = (t) => {
+    if (is8020) {
+      let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
+      const rr = parseFloat(sd?.rr);
+      if (isNaN(rr) || rr <= 0) return 0;
+      if (t.result === "WIN") return rr;
+      if (t.result === "LOSS") return -rr;
+      return 0;
+    }
+    return parseFloat(t.profit) || 0;
+  };
+
+  const totalProfit = filteredTrades.reduce((s, t) => s + getTradeR(t), 0);
 
   // LONG vs SHORT stats
   const longTrades = filteredTrades.filter(t => t.direction === "LONG");
@@ -5944,12 +5958,12 @@ Konkretne, mierzalne kroki do wdrożenia.`;
   const longLosses = longTrades.filter(t => t.result === "LOSS").length;
   const longDecisive = longWins + longLosses;
   const longWR = longDecisive > 0 ? ((longWins / longDecisive) * 100).toFixed(0) : "-";
-  const longProfit = longTrades.reduce((s, t) => s + (t.profit || 0), 0);
+  const longProfit = longTrades.reduce((s, t) => s + getTradeR(t), 0);
   const shortWins = shortTrades.filter(t => t.result === "WIN").length;
   const shortLosses = shortTrades.filter(t => t.result === "LOSS").length;
   const shortDecisive = shortWins + shortLosses;
   const shortWR = shortDecisive > 0 ? ((shortWins / shortDecisive) * 100).toFixed(0) : "-";
-  const shortProfit = shortTrades.reduce((s, t) => s + (t.profit || 0), 0);
+  const shortProfit = shortTrades.reduce((s, t) => s + getTradeR(t), 0);
 
   // Setup type stats (HTS)
   const setupStats = ["3A", "2A", "A"].map(setup => {
