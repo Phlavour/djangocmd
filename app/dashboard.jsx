@@ -10334,7 +10334,31 @@ function DailyCheckPanel({ supa, apiKey }) {
         <div>
           {/* Daily one-off tasks */}
           <DCCard style={{ marginBottom: 16 }}>
-            <DCHead icon="📌">Taski na ten dzień</DCHead>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <DCHead icon="📌">Taski na ten dzień</DCHead>
+              {(dayTasksList[selectedDay] || []).length > 0 && (() => {
+                const items = dayTasksList[selectedDay] || [];
+                const done = items.filter(i => i.completed).length;
+                const total = items.length;
+                const pct = Math.round(done/total*100);
+                const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
+                return (
+                  <span style={{ fontSize:13, fontWeight:800, color:col }}>{done}/{total} · {pct}%</span>
+                );
+              })()}
+            </div>
+            {(dayTasksList[selectedDay] || []).length > 0 && (() => {
+              const items = dayTasksList[selectedDay] || [];
+              const done = items.filter(i => i.completed).length;
+              const total = items.length;
+              const pct = Math.round(done/total*100);
+              const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
+              return (
+                <div style={{ height:5, background:DC.border, borderRadius:3, overflow:"hidden", marginBottom:10 }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} />
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
               {(dayTasksList[selectedDay] || []).length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak dodatkowych tasków</div>}
               {(dayTasksList[selectedDay] || []).map(item => {
