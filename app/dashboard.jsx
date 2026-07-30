@@ -10371,17 +10371,73 @@ function DailyCheckPanel({ supa, apiKey }) {
 
           {/* Week tasks */}
           <DCCard style={{ marginBottom: 16 }}>
-            <DCHead icon="📅">Taski na ten tydzień
-              <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(weekStart + "T12:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} – {new Date(new Date(weekStart + "T12:00:00").setDate(new Date(weekStart + "T12:00:00").getDate() + 6)).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}</span>
-            </DCHead>
+            {/* Header with nav */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <DCHead icon="📅">Taski na ten tydzień</DCHead>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button onClick={() => { const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()-7); setWeekStart(d.toISOString().slice(0,10)); }} style={{ background: DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>‹</button>
+                <span style={{ fontSize:11, fontWeight:600, color:DC.soft, minWidth:130, textAlign:"center" }}>
+                  {new Date(weekStart+"T12:00:00").toLocaleDateString("pl-PL",{day:"numeric",month:"short"})} – {new Date(new Date(weekStart+"T12:00:00").setDate(new Date(weekStart+"T12:00:00").getDate()+6)).toLocaleDateString("pl-PL",{day:"numeric",month:"short"})}
+                </span>
+                <button onClick={() => { const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+7); setWeekStart(d.toISOString().slice(0,10)); }} style={{ background: DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>›</button>
+                <button onClick={() => { const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7)); setWeekStart(d.toISOString().slice(0,10)); }} style={{ background: DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.cyan, padding:"4px 8px", fontSize:10, cursor:"pointer", fontWeight:600 }}>Dziś</button>
+              </div>
+            </div>
+
+            {/* Progress */}
+            {weekPlan.length > 0 && (() => {
+              const done = weekPlan.filter(i => i.completed).length;
+              const total = weekPlan.length;
+              const pct = Math.round(done/total*100);
+              const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontSize:11, color:DC.soft }}>{done}/{total} ukończonych</span>
+                    <span style={{ fontSize:13, fontWeight:800, color:col }}>{pct}%</span>
+                  </div>
+                  <div style={{ height:6, background:DC.border, borderRadius:3, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} />
+                  </div>
+                </div>
+              );
+            })()}
+
             <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} />
           </DCCard>
 
           {/* Month tasks */}
           <DCCard style={{ marginBottom: 16 }}>
-            <DCHead icon="📆">Taski na ten miesiąc
-              <span style={{ fontSize: 10, fontWeight: 400, color: DC.dim, marginLeft: 8, textTransform: "none" }}>{new Date(parseInt(monthStart.slice(0,4)), parseInt(monthStart.slice(5,7))-1, 1).toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}</span>
-            </DCHead>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <DCHead icon="📆">Taski na ten miesiąc</DCHead>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button onClick={() => { const [y,m] = monthStart.split("-").map(Number); const d=new Date(y,m-2,1); setMonthStart(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }} style={{ background:DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>‹</button>
+                <span style={{ fontSize:11, fontWeight:600, color:DC.soft, minWidth:100, textAlign:"center", textTransform:"capitalize" }}>
+                  {new Date(parseInt(monthStart.slice(0,4)),parseInt(monthStart.slice(5,7))-1,1).toLocaleDateString("pl-PL",{month:"long",year:"numeric"})}
+                </span>
+                <button onClick={() => { const [y,m] = monthStart.split("-").map(Number); const d=new Date(y,m,1); setMonthStart(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }} style={{ background:DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>›</button>
+                <button onClick={() => setMonthStart(new Date().toISOString().slice(0,7))} style={{ background:DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.cyan, padding:"4px 8px", fontSize:10, cursor:"pointer", fontWeight:600 }}>Dziś</button>
+              </div>
+            </div>
+
+            {monthPlan.length > 0 && (() => {
+              const done = monthPlan.filter(i => i.completed).length;
+              const total = monthPlan.length;
+              const pct = Math.round(done/total*100);
+              const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontSize:11, color:DC.soft }}>{done}/{total} ukończonych</span>
+                    <span style={{ fontSize:13, fontWeight:800, color:col }}>{pct}%</span>
+                  </div>
+                  <div style={{ height:6, background:DC.border, borderRadius:3, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} />
+                  </div>
+                </div>
+              );
+            })()}
+
             <PlanList items={monthPlan} newItem={newMonthItem} onNewItemChange={setNewMonthItem} onAdd={() => addPlanItem("month")} onToggle={item => togglePlanItem("month", item)} onDelete={id => deletePlanItem("month", id)} onEdit={(id, text) => editPlanItem("month", id, text)} newCat={newMonthCat} onNewCatChange={setNewMonthCat} />
           </DCCard>
 
