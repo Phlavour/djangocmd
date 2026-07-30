@@ -4829,7 +4829,7 @@ function TradingPanel({ apiKey, supa }) {
     hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false,
     hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
     // 8020 strategy fields
-    s8020_session: "", s8020_entry_time: "",
+    s8020_session: "", s8020_entry_time: "", s8020_rr: "",
     s8020_entry_type: [],
     s8020_level: "",
     s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
@@ -5328,7 +5328,7 @@ Respond ONLY with JSON.`;
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -5459,7 +5459,7 @@ Respond ONLY with JSON.`;
       hts_pair: sd.hts_pair || "NQ", hts_session: sd.hts_session || "", hts_entry_time: sd.hts_entry_time || "",
       hts_extra_8020: sd.hts_extra_8020 || false, hts_extra_fvg: sd.hts_extra_fvg || false, hts_extra_vwap: sd.hts_extra_vwap || false, hts_extra_poi: sd.hts_extra_poi || false,
       hts_rr: sd.hts_rr || "", hts_entry_model: sd.hts_entry_model || "", hts_candle_5m: sd.hts_candle_5m || "", hts_candle_15m: sd.hts_candle_15m || "",
-      s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "",
+      s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "", s8020_rr: sd.rr || "",
       s8020_entry_type: Array.isArray(sd.entry_type) ? sd.entry_type : [],
       s8020_level: sd.level || "", s8020_price_read: sd.price_read || "",
       s8020_conf_bands: sd.conf_bands || false, s8020_conf_vwap: sd.conf_vwap || false,
@@ -5495,7 +5495,7 @@ Respond ONLY with JSON.`;
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -6680,8 +6680,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {stratType === "8020" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>80/20 Strategy Fields</div>
 
-              {/* Session + Entry Time */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {/* Session + Entry Time + R/R */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.s8020_session || ""} onChange={e => setTf(p => ({...p, s8020_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
@@ -6712,6 +6712,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       setTf(p => ({...p, s8020_entry_time: ""}));
                     }
                   }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>Risk / Reward</div>
+                  <input type="text" value={tf.s8020_rr || ""} onChange={e => setTf(p => ({...p, s8020_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
 
