@@ -6737,6 +6737,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "Repair", label: "Repair", color: T.cyan },
                     { id: "Fork",   label: "Fork",   color: T.purple },
                     { id: "H",      label: "H",       color: T.amber },
+                    { id: "Y",      label: "Y (H Inv)", color: T.green },
                   ].map(et => {
                     const active = (tf.s8020_entry_type || []).includes(et.id);
                     return (
@@ -8854,6 +8855,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="s8020_entry" value="Repair" label="Repair" activeColor={T.cyan} />
                       <FilterBtn groupKey="s8020_entry" value="Fork" label="Fork" activeColor={T.purple} />
                       <FilterBtn groupKey="s8020_entry" value="H" label="H" activeColor={T.amber} />
+                      <FilterBtn groupKey="s8020_entry" value="Y" label="Y (H Inv)" activeColor={T.green} />
                     </div>
                   </div>
                   <div>
