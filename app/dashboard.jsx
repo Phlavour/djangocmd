@@ -4827,7 +4827,7 @@ function TradingPanel({ apiKey, supa }) {
     hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", // "up" | "down" | "in" | "overlap"
     hts_pair: "NQ", hts_session: "", hts_entry_time: "",
     hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false,
-    hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
+    hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "",
     // 8020 strategy fields
     s8020_session: "", s8020_entry_time: "",
     s8020_entry_type: [],
@@ -5155,37 +5155,42 @@ Rules:
 - Respond ONLY with JSON, nothing else`;
       } else {
         // HTS — enhanced prompt: entry time, HTS table (first column only), instrument, date
-        promptText = `Look at this trading chart screenshot from a futures platform.
+        promptText = `Look at this trading chart screenshot from a futures platform (NQ or ES).
 
-Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
+Respond ONLY with valid JSON, no markdown, no backticks:
 {
-  "pair": "NQ" or "ES" (from title bar: "Nasdaq"/"MNQ"/"NQ" → "NQ"; "S&P"/"MES"/"ES" → "ES"; if unclear return ""),
-  "entry_time": "HH:MM in 24h" (from the dark status bar at the very bottom of the chart showing cursor/last candle time, e.g. "Mon 27 Jul '26 21:12" → "21:12". Return "" if not visible),
-  "trade_date": "YYYY-MM-DD" (from same bottom status bar. Day first: "27 Jul '26" → "2026-07-27". Return "" if not visible),
-  "hts": {
-    "m1": "", "m5": "", "m15": "", "h1": "", "h4": "", "d1": ""
-  },
+  "pair": "NQ" or "ES",
+  "entry_time": "HH:MM",
+  "trade_date": "YYYY-MM-DD",
+  "hts": { "m1": "", "m5": "", "m15": "", "h1": "", "h4": "", "d1": "" },
   "trends": { "m1": "", "m5": "", "m15": "", "H1": "", "H4": "", "D1": "" },
   "rsi": "", "pivots": {}
 }
 
-HTS TABLE (small table in bottom-right corner labeled "HTS  33  144"):
-The table has rows: m1, m5, m15, H1, H4, D1
-Each row has THREE symbol columns. Read ONLY the FIRST symbol (leftmost, directly after the row label).
+INSTRUMENT (from title bar top-left):
+"Nasdaq" / "NQ" / "MNQ" → "NQ"
+"S&P" / "ES" / "MES" → "ES"
 
-Symbol meanings for FIRST column:
-- Green/filled upward triangle (▲) = "up"
-- Red/filled downward triangle (▼) = "down"  
-- Gray square / white square / small rectangle (■ or □) = "overlap" (this means bands overlap on this timeframe)
-- Empty or not visible = ""
+DATE + TIME (from the dark status bar at the very bottom of the chart):
+Format: "Mon 28 Jul '26 21:12"
+→ trade_date: "2026-07-28", entry_time: "21:12"
+Day comes FIRST. Return "" if not readable.
 
-IMPORTANT: The gray square/rectangle is NOT a triangle. It is a flat square shape indicating band overlap. Do NOT read it as up or down.
+HTS TABLE (small table bottom-right, header row says "HTS  33  144"):
+The table has 6 rows: m1, m5, m15, H1, H4, D1
+Each row has THREE symbol columns.
 
-Also populate "trends" with the same first-column values.
+⚠️ READ ONLY THE FIRST SYMBOL in each row (the one directly to the right of the row label, BEFORE the "33" column).
 
-Rules:
-- entry_time: read from bottom status bar only (the dark bar with date+time of cursor position)
-- Respond ONLY with JSON, nothing else`;
+Symbol key (first column only):
+▲ filled green upward triangle = "up"
+▼ filled red downward triangle = "down"
+■ or □ gray/white square/rectangle = "overlap" (NOT up or down — this is a flat square shape meaning bands overlap)
+
+If a row is not visible = ""
+Set both "hts" and "trends" to the same values.
+
+Respond ONLY with JSON.`;
       }
 
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -5319,7 +5324,7 @@ Rules:
       trade_type: tf.trade_type || "standard",
       hts_pair: tf.hts_pair || "NQ", hts_session: tf.hts_session || "", hts_entry_time: tf.hts_entry_time || "",
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
-      hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
+      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
@@ -5453,7 +5458,7 @@ Rules:
       req_8020: false, req_fvg: false, req_instrument: false,
       hts_pair: sd.hts_pair || "NQ", hts_session: sd.hts_session || "", hts_entry_time: sd.hts_entry_time || "",
       hts_extra_8020: sd.hts_extra_8020 || false, hts_extra_fvg: sd.hts_extra_fvg || false, hts_extra_vwap: sd.hts_extra_vwap || false, hts_extra_poi: sd.hts_extra_poi || false,
-      hts_entry_model: sd.hts_entry_model || "", hts_candle_5m: sd.hts_candle_5m || "", hts_candle_15m: sd.hts_candle_15m || "",
+      hts_rr: sd.hts_rr || "", hts_entry_model: sd.hts_entry_model || "", hts_candle_5m: sd.hts_candle_5m || "", hts_candle_15m: sd.hts_candle_15m || "",
       s8020_session: sd.session || "", s8020_entry_time: sd.entry_time || "",
       s8020_entry_type: Array.isArray(sd.entry_type) ? sd.entry_type : [],
       s8020_level: sd.level || "", s8020_price_read: sd.price_read || "",
@@ -5467,7 +5472,7 @@ Rules:
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, lj_pa_custom: "", em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, lj_pa_custom: "", em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -5486,7 +5491,7 @@ Rules:
       trade_type: tf.trade_type || "standard",
       hts_pair: tf.hts_pair || "NQ", hts_session: tf.hts_session || "", hts_entry_time: tf.hts_entry_time || "",
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
-      hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
+      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
@@ -5996,7 +6001,7 @@ Konkretne, mierzalne kroki do wdrożenia.`;
           bounce: sd?.bounce || t.bounce, band_type: sd?.band_type, setup_type: sd?.setup_type, trade_type: sd?.trade_type,
           hts_pair: sd?.hts_pair || "NQ", hts_session: sd?.hts_session || "", hts_entry_time: sd?.hts_entry_time || "",
           hts_extra_8020: sd?.hts_extra_8020 || false, hts_extra_fvg: sd?.hts_extra_fvg || false, hts_extra_vwap: sd?.hts_extra_vwap || false, hts_extra_poi: sd?.hts_extra_poi || false,
-          hts_entry_model: sd?.hts_entry_model || "", hts_candle_5m: sd?.hts_candle_5m || "", hts_candle_15m: sd?.hts_candle_15m || "",
+          hts_rr: sd?.hts_rr || "", hts_entry_model: sd?.hts_entry_model || "", hts_candle_5m: sd?.hts_candle_5m || "", hts_candle_15m: sd?.hts_candle_15m || "",
           hts_m1: sd?.hts_m1 || "", hts_m5: sd?.hts_m5 || "", hts_m15: sd?.hts_m15 || "", hts_h1: sd?.hts_h1 || "", hts_h4: sd?.hts_h4 || "", hts_d1: sd?.hts_d1 || "",
           s8020_session: sd?.session || "", s8020_entry_time: sd?.entry_time || "",
           s8020_entry_type: Array.isArray(sd?.entry_type) ? sd.entry_type : [], s8020_level: sd?.level || "", s8020_price_read: sd?.price_read || "",
@@ -6515,8 +6520,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {stratType === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
 
-              {/* Session + Entry Time */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {/* Session + Entry Time + R/R */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.hts_session || ""} onChange={e => setTf(p => ({...p, hts_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
@@ -6547,6 +6552,10 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       setTf(p => ({...p, hts_entry_time: ""}));
                     }
                   }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={label}>Risk / Reward</div>
+                  <input type="text" value={tf.hts_rr || ""} onChange={e => setTf(p => ({...p, hts_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
 
