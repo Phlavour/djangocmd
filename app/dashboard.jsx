@@ -5258,9 +5258,11 @@ Respond ONLY with JSON.`;
             const [h, m] = t.split(":").map(Number); const mins = h*60+m;
             if (mins >= 20*60 || mins < 2*60) return "Asia";
             if (mins >= 2*60 && mins < 5*60) return "London";
+            if (mins >= 5*60 && mins < 9*60+30) return "Pre-Market";
             if (mins >= 9*60+30 && mins < 11*60) return "NY AM";
             if (mins >= 11*60 && mins < 13*60) return "NY Lunch";
             if (mins >= 13*60 && mins < 16*60) return "NY PM";
+            if (mins >= 16*60 && mins < 20*60) return "After Hours";
             return "Overnight";
           };
           setTf(prev => ({
@@ -6528,9 +6530,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <option value="">— wybierz —</option>
                     <option value="Asia">🌏 Asia (20:00–02:00)</option>
                     <option value="London">🇬🇧 London (02:00–05:00)</option>
+                    <option value="Pre-Market">🌅 Pre-Market (05:00–09:30)</option>
                     <option value="NY AM">🗽 NY AM (09:30–11:00)</option>
                     <option value="NY Lunch">☕ NY Lunch (11:00–13:00)</option>
                     <option value="NY PM">🌆 NY PM (13:00–16:00)</option>
+                    <option value="After Hours">🌇 After Hours (16:00–20:00)</option>
                     <option value="Overnight">🌙 Overnight</option>
                   </select>
                 </div>
@@ -6544,9 +6548,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       let sess = "Overnight";
                       if (mins >= 20*60 || mins < 2*60) sess = "Asia";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
+                      else if (mins >= 5*60 && mins < 9*60+30) sess = "Pre-Market";
                       else if (mins >= 9*60+30 && mins < 11*60) sess = "NY AM";
                       else if (mins >= 11*60 && mins < 13*60) sess = "NY Lunch";
                       else if (mins >= 13*60 && mins < 16*60) sess = "NY PM";
+                      else if (mins >= 16*60 && mins < 20*60) sess = "After Hours";
                       setTf(p => ({...p, hts_entry_time: t, hts_session: sess}));
                     } else {
                       setTf(p => ({...p, hts_entry_time: ""}));
@@ -6688,9 +6694,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <option value="">— wybierz —</option>
                     <option value="Asia">🌏 Asia (20:00–02:00)</option>
                     <option value="London">🇬🇧 London (02:00–05:00)</option>
+                    <option value="Pre-Market">🌅 Pre-Market (05:00–09:30)</option>
                     <option value="NY AM">🗽 NY AM (09:30–11:00)</option>
                     <option value="NY Lunch">☕ NY Lunch (11:00–13:00)</option>
                     <option value="NY PM">🌆 NY PM (13:00–16:00)</option>
+                    <option value="After Hours">🌇 After Hours (16:00–20:00)</option>
                     <option value="Overnight">🌙 Overnight</option>
                   </select>
                 </div>
@@ -6704,9 +6712,11 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       let sess = "Overnight";
                       if (mins >= 20*60 || mins < 2*60) sess = "Asia";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
+                      else if (mins >= 5*60 && mins < 9*60+30) sess = "Pre-Market";
                       else if (mins >= 9*60+30 && mins < 11*60) sess = "NY AM";
                       else if (mins >= 11*60 && mins < 13*60) sess = "NY Lunch";
                       else if (mins >= 13*60 && mins < 16*60) sess = "NY PM";
+                      else if (mins >= 16*60 && mins < 20*60) sess = "After Hours";
                       setTf(p => ({...p, s8020_entry_time: t, s8020_session: sess}));
                     } else {
                       setTf(p => ({...p, s8020_entry_time: ""}));
@@ -8281,7 +8291,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
           {/* Session Performance */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (() => {
-            const SESSIONS = ["Asia", "London", "NY AM", "NY Lunch", "NY PM", "Overnight"];
+            const SESSIONS = ["Asia", "London", "Pre-Market", "NY AM", "NY Lunch", "NY PM", "After Hours", "Overnight"];
             const sessStats = SESSIONS.map(sess => {
               const st = filteredTrades.filter(t => {
                 let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -8309,6 +8319,238 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </Card>
             );
+          })()}
+
+          {/* ─── 8020 STATS ─── */}
+          {is8020 && (() => {
+            const getSd = t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd; };
+            const ft = filteredTrades;
+
+            // Helper: stat block
+            const statBlock = (key, label, color) => {
+              const trades = ft.filter(t => getSd(t)[key]);
+              const w = trades.filter(t => t.result === "WIN").length;
+              const l = trades.filter(t => t.result === "LOSS").length;
+              const b = trades.filter(t => t.result === "BE").length;
+              const p = trades.reduce((s,t) => s+(parseFloat(t.profit)||0), 0);
+              const wr = trades.length > 0 ? ((w/trades.length)*100).toFixed(0) : "—";
+              return (
+                <div key={key} style={{ textAlign:"center", padding:10, background:`${parseFloat(wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color: color || T.cyan, marginBottom:3 }}>{label}</div>
+                  <div style={{ fontSize:22, fontWeight:800, color:parseFloat(wr)>=50?T.green:T.red }}>{wr}{trades.length>0?"%":""}</div>
+                  <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{w}W/{b}BE/{l}L · {trades.length}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(1)}R</div>
+                </div>
+              );
+            };
+
+            // Streaks
+            const sorted = [...ft].sort((a,b) => {
+              const da = getSd(a).trade_date||a.trade_date||""; const db = getSd(b).trade_date||b.trade_date||"";
+              return da.localeCompare(db);
+            });
+            let curWin=0, maxWin=0, curLoss=0, maxLoss=0;
+            sorted.forEach(t => {
+              if (t.result==="WIN") { curWin++; maxWin=Math.max(maxWin,curWin); curLoss=0; }
+              else if (t.result==="LOSS") { curLoss++; maxLoss=Math.max(maxLoss,curLoss); curWin=0; }
+              else { curWin=0; curLoss=0; }
+            });
+
+            // Average RR
+            const rrTrades = ft.filter(t => getSd(t).rr && parseFloat(getSd(t).rr) > 0);
+            const avgRR = rrTrades.length > 0 ? (rrTrades.reduce((s,t)=>s+parseFloat(getSd(t).rr),0)/rrTrades.length).toFixed(2) : null;
+            const rrWins = rrTrades.filter(t=>t.result==="WIN");
+            const rrLoss = rrTrades.filter(t=>t.result==="LOSS");
+            const avgRRWin = rrWins.length>0?(rrWins.reduce((s,t)=>s+parseFloat(getSd(t).rr),0)/rrWins.length).toFixed(2):null;
+            const avgRRLoss = rrLoss.length>0?(rrLoss.reduce((s,t)=>s+parseFloat(getSd(t).rr),0)/rrLoss.length).toFixed(2):null;
+
+            // Long vs Short
+            const longs = ft.filter(t=>t.direction==="LONG");
+            const shorts = ft.filter(t=>t.direction==="SHORT");
+            const dirStat = (trades, label, col) => {
+              const w=trades.filter(t=>t.result==="WIN").length, l=trades.filter(t=>t.result==="LOSS").length, b=trades.filter(t=>t.result==="BE").length;
+              const p=trades.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const wr=trades.length>0?((w/trades.length)*100).toFixed(0):"—";
+              return {label,col,w,l,b,p:p.toFixed(1),wr,total:trades.length};
+            };
+            const dirs = [dirStat(longs,"LONG ▲",T.green), dirStat(shorts,"SHORT ▼",T.red)].filter(d=>d.total>0);
+
+            // By session
+            const SESS_8020 = ["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+            const sessSt = SESS_8020.map(sess => {
+              const st = ft.filter(t=>getSd(t).session===sess);
+              const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
+              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
+              return {sess,total:st.length,w,l,wr,p:p.toFixed(1)};
+            }).filter(s=>s.total>0);
+
+            // By entry type
+            const ENTRIES = ["Repair","Fork","H","Y"];
+            const entrySt = ENTRIES.map(et => {
+              const st = ft.filter(t=>Array.isArray(getSd(t).entry_type)&&getSd(t).entry_type.includes(et));
+              const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
+              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
+              return {et,total:st.length,w,l,b,wr,p:p.toFixed(1)};
+            }).filter(s=>s.total>0);
+
+            // By level
+            const LEVELS = [["80","▲ 80 (70–90)",T.red],["20","▲ 20 (10–30)",T.green]];
+            const levelSt = LEVELS.map(([lv,label,col]) => {
+              const st = ft.filter(t=>getSd(t).level===lv);
+              const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
+              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
+              return {lv,label,col,total:st.length,w,l,b,wr,p:p.toFixed(1)};
+            }).filter(s=>s.total>0);
+
+            return (<>
+              {/* Performance by entry type */}
+              {entrySt.length > 0 && (
+                <Card style={{ marginBottom:16 }}>
+                  <Heading icon="📐">Performance by Entry Type</Heading>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+                    {entrySt.map(s => (
+                      <div key={s.et} style={{ textAlign:"center", padding:10, background:`${parseFloat(s.wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:13, fontWeight:800, color:T.cyan, marginBottom:3 }}>{s.et}</div>
+                        <div style={{ fontSize:22, fontWeight:800, color:parseFloat(s.wr)>=50?T.green:T.red }}>{s.wr}{s.total>0?"%":""}</div>
+                        <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{s.w}W/{s.b}BE/{s.l}L · {s.total}</div>
+                        <div style={{ fontSize:10, fontWeight:700, color:parseFloat(s.p)>=0?T.green:T.red }}>{parseFloat(s.p)>0?"+":""}{s.p}R</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Performance by session */}
+              {sessSt.length > 0 && (
+                <Card style={{ marginBottom:16 }}>
+                  <Heading icon="🕐">Performance by Session</Heading>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+                    {sessSt.map(s => (
+                      <div key={s.sess} style={{ textAlign:"center", padding:10, background:`${parseFloat(s.wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.cyan, marginBottom:3 }}>{s.sess}</div>
+                        <div style={{ fontSize:22, fontWeight:800, color:parseFloat(s.wr)>=50?T.green:T.red }}>{s.wr}{s.total>0?"%":""}</div>
+                        <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{s.w}W/{s.l}L · {s.total}</div>
+                        <div style={{ fontSize:10, fontWeight:700, color:parseFloat(s.p)>=0?T.green:T.red }}>{parseFloat(s.p)>0?"+":""}{s.p}R</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Performance by level */}
+              {levelSt.length > 0 && (
+                <Card style={{ marginBottom:16 }}>
+                  <Heading icon="📊">Performance by Poziom</Heading>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    {levelSt.map(s => (
+                      <div key={s.lv} style={{ textAlign:"center", padding:14, background:`${parseFloat(s.wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:14, fontWeight:800, color:s.col, marginBottom:4 }}>{s.label}</div>
+                        <div style={{ fontSize:28, fontWeight:800, color:parseFloat(s.wr)>=50?T.green:T.red }}>{s.wr}{s.total>0?"%":""}</div>
+                        <div style={{ fontSize:10, color:T.textDim, marginTop:2 }}>{s.w}W/{s.b}BE/{s.l}L · {s.total} trades</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:parseFloat(s.p)>=0?T.green:T.red, marginTop:6 }}>{parseFloat(s.p)>0?"+":""}{s.p}R</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Extra Confluences */}
+              <Card style={{ marginBottom:16 }}>
+                <Heading icon="⚡">Performance by Extra Confluences</Heading>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+                  {[["conf_bands","Wstęgi",T.green],["conf_vwap","VWAP",T.cyan],["conf_poi","POI",T.amber],["conf_fvg","FVG",T.purple]].map(([key,lbl,col]) => {
+                    const st = ft.filter(t=>getSd(t)[key]===true);
+                    const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
+                    const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+                    const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
+                    return (
+                      <div key={key} style={{ textAlign:"center", padding:10, background:`${parseFloat(wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:col, marginBottom:3 }}>{lbl}</div>
+                        <div style={{ fontSize:22, fontWeight:800, color:parseFloat(wr)>=50?T.green:T.red }}>{wr}{st.length>0?"%":""}</div>
+                        <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{w}W/{b}BE/{l}L · {st.length}</div>
+                        <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(1)}R</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              {/* Long vs Short + Average RR + Streaks */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom:16 }}>
+                {/* Long vs Short */}
+                <Card>
+                  <Heading icon="↕️">Long vs Short</Heading>
+                  {dirs.map(d => (
+                    <div key={d.label} style={{ marginBottom:10, padding:10, background:`${parseFloat(d.wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:d.col, marginBottom:3 }}>{d.label}</div>
+                      <div style={{ fontSize:24, fontWeight:800, color:parseFloat(d.wr)>=50?T.green:T.red }}>{d.wr}{d.total>0?"%":""}</div>
+                      <div style={{ fontSize:9, color:T.textDim }}>{d.w}W/{d.b}BE/{d.l}L · {d.total}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:parseFloat(d.p)>=0?T.green:T.red }}>{parseFloat(d.p)>0?"+":""}{d.p}R</div>
+                    </div>
+                  ))}
+                  {dirs.length === 0 && <div style={{ fontSize:11, color:T.textDim }}>Brak danych</div>}
+                </Card>
+
+                {/* Average RR */}
+                <Card>
+                  <Heading icon="⚖️">Average R/R</Heading>
+                  {avgRR ? (<>
+                    <div style={{ textAlign:"center", padding:14, background:`${T.cyan}08`, borderRadius:8, border:`1px solid ${T.border}`, marginBottom:10 }}>
+                      <div style={{ fontSize:11, color:T.textDim, marginBottom:4 }}>Średnie R/R</div>
+                      <div style={{ fontSize:32, fontWeight:800, color:T.cyan }}>{avgRR}</div>
+                      <div style={{ fontSize:10, color:T.textDim }}>z {rrTrades.length} trade{rrTrades.length!==1?"ów":"a"}</div>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      {avgRRWin && <div style={{ textAlign:"center", padding:8, background:`${T.green}08`, borderRadius:6, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:9, color:T.textDim }}>Winy avg R/R</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:T.green }}>{avgRRWin}</div>
+                      </div>}
+                      {avgRRLoss && <div style={{ textAlign:"center", padding:8, background:`${T.red}08`, borderRadius:6, border:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:9, color:T.textDim }}>Lossy avg R/R</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:T.red }}>{avgRRLoss}</div>
+                      </div>}
+                    </div>
+                  </>) : <div style={{ fontSize:11, color:T.textDim }}>Brak danych R/R</div>}
+                </Card>
+
+                {/* Streaks */}
+                <Card>
+                  <Heading icon="🔥">Streaks</Heading>
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    <div style={{ padding:12, background:`${T.green}08`, borderRadius:8, border:`1px solid ${T.border}`, textAlign:"center" }}>
+                      <div style={{ fontSize:10, color:T.textDim, marginBottom:4 }}>🏆 Najdłuższa seria WINów</div>
+                      <div style={{ fontSize:36, fontWeight:800, color:T.green }}>{maxWin}</div>
+                      <div style={{ fontSize:10, color:T.textDim }}>z rzędu</div>
+                    </div>
+                    <div style={{ padding:12, background:`${T.red}08`, borderRadius:8, border:`1px solid ${T.border}`, textAlign:"center" }}>
+                      <div style={{ fontSize:10, color:T.textDim, marginBottom:4 }}>💔 Najdłuższa seria LOSSów</div>
+                      <div style={{ fontSize:36, fontWeight:800, color:T.red }}>{maxLoss}</div>
+                      <div style={{ fontSize:10, color:T.textDim }}>z rzędu</div>
+                    </div>
+                    {/* Current streak */}
+                    {(() => {
+                      let cur = 0, type = "";
+                      for (let i = sorted.length-1; i >= 0; i--) {
+                        const r = sorted[i].result;
+                        if (i === sorted.length-1) { type = r; cur = 1; }
+                        else if (r === type && r !== "BE") cur++;
+                        else break;
+                      }
+                      if (cur > 1 && type !== "BE") return (
+                        <div style={{ padding:8, background:`${type==="WIN"?T.green:T.red}08`, borderRadius:6, border:`1px solid ${T.border}`, textAlign:"center" }}>
+                          <div style={{ fontSize:10, color:T.textDim }}>Aktualnie</div>
+                          <div style={{ fontSize:14, fontWeight:700, color:type==="WIN"?T.green:T.red }}>{cur}× {type}</div>
+                        </div>
+                      );
+                      return null;
+                    })()}
+                  </div>
+                </Card>
+              </div>
+            </>);
           })()}
         </div>
         );
