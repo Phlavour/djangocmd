@@ -9813,16 +9813,16 @@ function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, 
                 {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
               </button>
               {cat && !isEditing && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
-              {!isEditing && (() => {
-                const dayInfo = WEEK_DAYS.find(d => d.id === item.assigned_day);
-                return (
-                  <span onClick={e => { e.stopPropagation(); onSetDay && onSetDay(item.id, item.assigned_day); }}
-                    title="Kliknij aby zmienić dzień"
-                    style={{ fontSize: 9, fontWeight: 700, color: dayInfo ? DC.cyan : DC.dim, background: dayInfo ? `${DC.cyan}18` : DC.bg2, borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap", cursor: "pointer", border: `1px solid ${dayInfo ? DC.cyan : DC.border}` }}>
-                    {dayInfo ? dayInfo.label : "—"}
-                  </span>
-                );
-              })()}
+              {!isEditing && (
+                <select
+                  value={item.assigned_day || ""}
+                  onChange={e => onSetDay && onSetDay(item.id, item.assigned_day, e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ fontSize: 9, fontWeight: 700, color: item.assigned_day ? DC.cyan : DC.dim, background: item.assigned_day ? `${DC.cyan}18` : DC.bg2, borderRadius: 4, padding: "2px 4px", border: `1px solid ${item.assigned_day ? DC.cyan : DC.border}`, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
+                  <option value="">—</option>
+                  {WEEK_DAYS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+              )}
               {isEditing ? (
                 <input
                   autoFocus
@@ -10161,22 +10161,19 @@ function DailyCheckPanel({ supa, apiKey }) {
     }).catch(console.error);
   };
 
-  const setDayPlanItem = async (type, id, currentDay) => {
-    // Cycle through days: none → Pn → Wt → ... → Nd → none
-    const days = ["", "1", "2", "3", "4", "5", "6", "0"];
-    const idx = days.indexOf(currentDay || "");
-    const nextDay = days[(idx + 1) % days.length];
+  const setDayPlanItem = async (type, id, oldDay, newDay) => {
     const setter = type === "week" ? setWeekPlan : setMonthPlan;
-    setter(p => p.map(i => i.id === id ? {...i, assigned_day: nextDay || null} : i));
+    setter(p => p.map(i => i.id === id ? {...i, assigned_day: newDay || null} : i));
     await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${id}`, {
       method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
-      body: JSON.stringify({ assigned_day: nextDay || null }),
+      body: JSON.stringify({ assigned_day: newDay || null }),
     }).catch(console.error);
-    // Auto-create daily task if day assigned
-    if (nextDay) {
-      const item = (type === "week" ? weekPlan : monthPlan).find(i => i.id === id);
+    // Auto-create daily task ONLY when a new day is set (not when clearing)
+    if (newDay && newDay !== oldDay) {
+      const plan = type === "week" ? weekPlan : monthPlan;
+      const item = plan.find(i => i.id === id);
       if (item) {
-        const taskDate = getDateForWeekday(weekStart, nextDay);
+        const taskDate = getDateForWeekday(weekStart, newDay);
         if (taskDate) {
           const dtRes = await fetch(`${supa.url}/rest/v1/daily_tasks`, {
             method: "POST",
@@ -10511,7 +10508,7 @@ function DailyCheckPanel({ supa, apiKey }) {
               );
             })()}
 
-            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, day) => setDayPlanItem("week", id, day)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
+            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, oldDay, newDay) => setDayPlanItem("week", id, oldDay, newDay)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
           </DCCard>
 
           {/* Month tasks */}
