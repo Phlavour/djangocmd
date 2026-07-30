@@ -8345,20 +8345,30 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const getSd = t => { let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; } return sd; };
             const ft = filteredTrades;
 
+            // Helper: get R value from trade (rr field, sign based on result)
+            const getR = t => {
+              const sd = getSd(t);
+              const rr = parseFloat(sd.rr);
+              if (isNaN(rr) || rr <= 0) return 0;
+              if (t.result === "WIN") return rr;
+              if (t.result === "LOSS") return -rr;
+              return 0; // BE
+            };
+
             // Helper: stat block
             const statBlock = (key, label, color) => {
               const trades = ft.filter(t => getSd(t)[key]);
               const w = trades.filter(t => t.result === "WIN").length;
               const l = trades.filter(t => t.result === "LOSS").length;
               const b = trades.filter(t => t.result === "BE").length;
-              const p = trades.reduce((s,t) => s+(parseFloat(t.profit)||0), 0);
+              const p = trades.reduce((s,t) => s + getR(t), 0);
               const wr = trades.length > 0 ? ((w/trades.length)*100).toFixed(0) : "—";
               return (
                 <div key={key} style={{ textAlign:"center", padding:10, background:`${parseFloat(wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
                   <div style={{ fontSize:11, fontWeight:700, color: color || T.cyan, marginBottom:3 }}>{label}</div>
                   <div style={{ fontSize:22, fontWeight:800, color:parseFloat(wr)>=50?T.green:T.red }}>{wr}{trades.length>0?"%":""}</div>
                   <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{w}W/{b}BE/{l}L · {trades.length}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(1)}R</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(2)}R</div>
                 </div>
               );
             };
@@ -8388,9 +8398,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const shorts = ft.filter(t=>t.direction==="SHORT");
             const dirStat = (trades, label, col) => {
               const w=trades.filter(t=>t.result==="WIN").length, l=trades.filter(t=>t.result==="LOSS").length, b=trades.filter(t=>t.result==="BE").length;
-              const p=trades.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const p=trades.reduce((s,t)=>s+getR(t),0);
               const wr=trades.length>0?((w/trades.length)*100).toFixed(0):"—";
-              return {label,col,w,l,b,p:p.toFixed(1),wr,total:trades.length};
+              return {label,col,w,l,b,p:p.toFixed(2),wr,total:trades.length};
             };
             const dirs = [dirStat(longs,"LONG ▲",T.green), dirStat(shorts,"SHORT ▼",T.red)].filter(d=>d.total>0);
 
@@ -8399,9 +8409,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const sessSt = SESS_8020.map(sess => {
               const st = ft.filter(t=>getSd(t).session===sess);
               const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
-              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const p=st.reduce((s,t)=>s+getR(t),0);
               const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
-              return {sess,total:st.length,w,l,wr,p:p.toFixed(1)};
+              return {sess,total:st.length,w,l,wr,p:p.toFixed(2)};
             }).filter(s=>s.total>0);
 
             // By entry type
@@ -8409,9 +8419,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const entrySt = ENTRIES.map(et => {
               const st = ft.filter(t=>Array.isArray(getSd(t).entry_type)&&getSd(t).entry_type.includes(et));
               const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
-              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const p=st.reduce((s,t)=>s+getR(t),0);
               const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
-              return {et,total:st.length,w,l,b,wr,p:p.toFixed(1)};
+              return {et,total:st.length,w,l,b,wr,p:p.toFixed(2)};
             }).filter(s=>s.total>0);
 
             // By level
@@ -8419,9 +8429,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const levelSt = LEVELS.map(([lv,label,col]) => {
               const st = ft.filter(t=>getSd(t).level===lv);
               const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
-              const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const p=st.reduce((s,t)=>s+getR(t),0);
               const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
-              return {lv,label,col,total:st.length,w,l,b,wr,p:p.toFixed(1)};
+              return {lv,label,col,total:st.length,w,l,b,wr,p:p.toFixed(2)};
             }).filter(s=>s.total>0);
 
             return (<>
@@ -8483,14 +8493,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   {[["conf_bands","Wstęgi",T.green],["conf_vwap","VWAP",T.cyan],["conf_poi","POI",T.amber],["conf_fvg","FVG",T.purple]].map(([key,lbl,col]) => {
                     const st = ft.filter(t=>getSd(t)[key]===true);
                     const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
-                    const p=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+                    const p=st.reduce((s,t)=>s+getR(t),0);
                     const wr=st.length>0?((w/st.length)*100).toFixed(0):"—";
                     return (
                       <div key={key} style={{ textAlign:"center", padding:10, background:`${parseFloat(wr)>=50?T.green:T.red}08`, borderRadius:8, border:`1px solid ${T.border}` }}>
                         <div style={{ fontSize:12, fontWeight:700, color:col, marginBottom:3 }}>{lbl}</div>
                         <div style={{ fontSize:22, fontWeight:800, color:parseFloat(wr)>=50?T.green:T.red }}>{wr}{st.length>0?"%":""}</div>
                         <div style={{ fontSize:9, color:T.textDim, marginTop:2 }}>{w}W/{b}BE/{l}L · {st.length}</div>
-                        <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(1)}R</div>
+                        <div style={{ fontSize:10, fontWeight:700, color:p>=0?T.green:T.red }}>{p>0?"+":""}{p.toFixed(2)}R</div>
                       </div>
                     );
                   })}
