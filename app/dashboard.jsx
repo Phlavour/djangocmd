@@ -5465,7 +5465,7 @@ Respond ONLY with JSON.`;
       s8020_entry_type: Array.isArray(sd.entry_type) ? sd.entry_type : [],
       s8020_level: sd.level || "", s8020_price_read: sd.price_read || "",
       s8020_conf_bands: sd.conf_bands || false, s8020_conf_vwap: sd.conf_vwap || false,
-      s8020_conf_poi: sd.conf_poi || false, s8020_conf_fvg: sd.conf_fvg || false,
+      s8020_conf_poi: sd.conf_poi || false, s8020_conf_fvg: sd.conf_fvg || false, s8020_conf_ob: sd.conf_ob === true, s8020_band_layout: sd.band_layout || "", s8020_knot: sd.knot || "",
       pair: t.pair || "NQ", timeframe: t.timeframe || "1m", notes: t.notes || "",
       trends, rsi: t.rsi || "", pivots,
       entry_candle: String(sd.entry_candle || 1), has_engulfing: sd.has_engulfing || false, v_quality: sd.v_quality || "clear",
@@ -6021,7 +6021,7 @@ Konkretne, mierzalne kroki do wdrożenia.`;
           hts_m1: sd?.hts_m1 || "", hts_m5: sd?.hts_m5 || "", hts_m15: sd?.hts_m15 || "", hts_h1: sd?.hts_h1 || "", hts_h4: sd?.hts_h4 || "", hts_d1: sd?.hts_d1 || "",
           s8020_session: sd?.session || "", s8020_entry_time: sd?.entry_time || "",
           s8020_entry_type: Array.isArray(sd?.entry_type) ? sd.entry_type : [], s8020_level: sd?.level || "", s8020_price_read: sd?.price_read || "",
-          s8020_conf_bands: sd?.conf_bands || false, s8020_conf_vwap: sd?.conf_vwap || false, s8020_conf_poi: sd?.conf_poi || false, s8020_conf_fvg: sd?.conf_fvg || false,
+          s8020_conf_bands: sd?.conf_bands === true, s8020_conf_vwap: sd?.conf_vwap === true, s8020_conf_poi: sd?.conf_poi === true, s8020_conf_fvg: sd?.conf_fvg === true, s8020_conf_ob: sd?.conf_ob === true, s8020_band_layout: sd?.band_layout || "", s8020_knot: sd?.knot || "",
           pair: t.pair, timeframe: t.timeframe, notes: t.notes,
         };
       });
