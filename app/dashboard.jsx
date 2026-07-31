@@ -4856,6 +4856,7 @@ function TradingPanel({ apiKey, supa }) {
   const [dlDate, setDlDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dlNotes, setDlNotes] = useState({}); // {date: {text, photos: []}}
   const [dlMonth, setDlMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [ovMonth, setOvMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [dlSaving, setDlSaving] = useState({});
   const [dlLoaded, setDlLoaded] = useState(false);
   const dlTimerRef = React.useRef({});
@@ -7607,7 +7608,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         const dailyRows = Object.values(byDate).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
 
         // Calendar month state — reuse dlMonth or create simple one
-        const [ovMonth, setOvMonth] = React.useState(()=>({year:new Date().getFullYear(),month:new Date().getMonth()}));
+        // Calendar month state
         const {year:ovY, month:ovM} = ovMonth;
         const daysInMonth = new Date(ovY, ovM+1, 0).getDate();
         const firstDow = (new Date(ovY,ovM,1).getDay()+6)%7;
