@@ -5943,27 +5943,7 @@ Konkretne, mierzalne kroki do wdrożenia.`;
 
   // Helper: get R value — for 8020 use sd.rr, others use t.profit
   const getTradeR = (t) => {
-    let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
-    if (is8020) {
-      const rr = parseFloat(sd?.rr);
-      if (isNaN(rr) || rr <= 0) return 0;
-      if (t.result === "WIN") return rr;
-      if (t.result === "LOSS") return -rr;
-      return 0;
-    }
-    // For all strategies: use t.profit (global R/R field)
-    // Fallback for old IB trades that stored RR in lj_rr
-    const p = parseFloat(t.profit);
-    if (!isNaN(p) && p !== 0) return p;
-    if (stratType === "LIVE_JOURNAL" && sd?.lj_rr) {
-      const rr = parseFloat(sd.lj_rr);
-      if (!isNaN(rr) && rr > 0) {
-        if (t.result === "WIN") return rr;
-        if (t.result === "LOSS") return -rr;
-        return 0;
-      }
-    }
-    return p || 0;
+    return parseFloat(t.profit) || 0;
   };
 
   const totalProfit = filteredTrades.reduce((s, t) => s + getTradeR(t), 0);
@@ -6306,30 +6286,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             return selectedInstruments.includes(instr);
           });
           const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
-          const getR = t => {
-            const sd = getSd(t);
-            const p = parseFloat(t.profit);
-            if (!isNaN(p) && p !== 0) return p;
-            // Fallback for old IB trades with lj_rr
-            if (sd?.lj_rr) {
-              const rr = parseFloat(sd.lj_rr);
-              if (!isNaN(rr) && rr > 0) {
-                if (t.result === "WIN") return rr;
-                if (t.result === "LOSS") return -rr;
-                return 0;
-              }
-            }
-            // Fallback for old 8020 trades with sd.rr
-            if (sd?.rr) {
-              const rr = parseFloat(sd.rr);
-              if (!isNaN(rr) && rr > 0) {
-                if (t.result === "WIN") return rr;
-                if (t.result === "LOSS") return -rr;
-                return 0;
-              }
-            }
-            return p || 0;
-          };
+          const getR = t => parseFloat(t.profit) || 0;
           const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || parseFloat(sd?.profit_usd_lj) || parseFloat(t.profit_usd) || 0; };
           const gWins = ovTrades.filter(t=>t.result==="WIN").length;
           const gLoss = ovTrades.filter(t=>t.result==="LOSS").length;
