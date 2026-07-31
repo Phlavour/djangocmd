@@ -4857,6 +4857,7 @@ function TradingPanel({ apiKey, supa }) {
   const [dlNotes, setDlNotes] = useState({}); // {date: {text, photos: []}}
   const [dlMonth, setDlMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [ovMonth, setOvMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [selectedStratIds, setSelectedStratIds] = useState(null); // null = all
   const [dlSaving, setDlSaving] = useState({});
   const [dlLoaded, setDlLoaded] = useState(false);
   const dlTimerRef = React.useRef({});
@@ -6273,6 +6274,39 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         )}
       </Card>
 
+      {/* ═══ OVERVIEW CARD ═══ */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setSubTab(subTab === "overview" ? "journal" : "overview")}>
+          <Heading icon="🌐">Overview — zbiorowe statystyki</Heading>
+          <span style={{ fontSize: 12, color: T.textDim }}>{subTab === "overview" ? "▲ zwiń" : "▼ rozwiń"}</span>
+        </div>
+        {subTab === "overview" && (
+          <div style={{ marginTop: 12 }}>
+            {/* Strategy selector */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.textDim, textTransform: "uppercase" }}>Strategie:</span>
+              <button onClick={() => setSelectedStratIds(null)} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: !selectedStratIds ? `${T.cyan}20` : T.bg2, color: !selectedStratIds ? T.cyan : T.textSoft, fontWeight: !selectedStratIds ? 700 : 400, borderColor: !selectedStratIds ? T.cyan : T.border }}>Wszystkie</button>
+              {strategies.map(s => {
+                const active = selectedStratIds ? selectedStratIds.includes(s.id) : true;
+                return (
+                  <button key={s.id} onClick={() => {
+                    if (!selectedStratIds) { setSelectedStratIds(strategies.map(x=>x.id).filter(id=>id!==s.id)); }
+                    else if (selectedStratIds.includes(s.id)) { const next=selectedStratIds.filter(id=>id!==s.id); setSelectedStratIds(next.length===0||next.length===strategies.length?null:next); }
+                    else { const next=[...selectedStratIds,s.id]; setSelectedStratIds(next.length===strategies.length?null:next); }
+                  }} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: active ? `${T.purple}20` : T.bg2, color: active ? T.purple : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? T.purple : T.border }}>
+                    {active ? "✓ " : ""}{s.name}
+                  </button>
+                );
+              })}
+            </div>
+            {/* The actual content is rendered in the overview tab below */}
+            <div style={{ fontSize: 11, color: T.textDim, textAlign: "center", padding: 8 }}>
+              Przejdź do zakładki <strong>🌐 Overview</strong> po wybraniu strategii aby zobaczyć pełne statystyki.
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Strategy selector */}
       <Card style={{ marginBottom: 16 }}>
         <Heading icon="📊" right={
@@ -6446,9 +6480,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 )}
               </div>
 
-              {/* Row 2: Pair, TF, Profit (R) — hidden for DR-like and LJ */}
+              {/* Row 2: Pair, TF, R/R, Profit USD — hidden for DR-like and LJ */}
               {!isDRLike && !isLJ && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: 10, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Para</div>
                   <select value={tf.pair} onChange={e => setTf(p => ({...p, pair: e.target.value}))} style={sel}>
@@ -6462,18 +6496,34 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </select>
                 </div>
                 <div>
-                  <div style={label}>Profit (R)</div>
+                  <div style={label}>Risk / Reward (R)</div>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={tf.profit}
                     onChange={e => setTf(p => ({...p, profit: e.target.value}))}
-                    placeholder="np. 2.5, -1.5, 0.3"
+                    placeholder="np. 2.5 lub 1"
                     style={{
                       ...sel, width: "100%", boxSizing: "border-box", textAlign: "center",
                       fontWeight: 700, fontSize: 13,
                       color: parseFloat(tf.profit) > 0 ? T.green : parseFloat(tf.profit) < 0 ? T.red : T.textSoft,
                       borderColor: parseFloat(tf.profit) > 0 ? T.green : parseFloat(tf.profit) < 0 ? T.red : T.border,
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={label}>Zysk / Strata ($)</div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={tf.profit_usd}
+                    onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))}
+                    placeholder="np. 350 lub -120"
+                    style={{
+                      ...sel, width: "100%", boxSizing: "border-box", textAlign: "center",
+                      fontWeight: 700, fontSize: 13,
+                      color: parseFloat(tf.profit_usd) > 0 ? T.green : parseFloat(tf.profit_usd) < 0 ? T.red : T.textSoft,
+                      borderColor: parseFloat(tf.profit_usd) > 0 ? T.green : parseFloat(tf.profit_usd) < 0 ? T.red : T.border,
                     }}
                   />
                 </div>
@@ -7521,7 +7571,9 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
       {/* ═══ OVERVIEW TAB ═══ */}
       {subTab === "overview" && (() => {
-        const allTrades = trades; // all strategies
+        // Strategy multi-select filter
+        const activeIds = selectedStratIds || strategies.map(s => s.id);
+        const allTrades = trades.filter(t => activeIds.includes(t.strategy_id));
         const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
 
         // Helper: get R value per trade (8020 uses sd.rr, others use t.profit)
@@ -7620,7 +7672,33 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
         return (
           <div>
-            {/* Global stats cards */}
+            {/* Strategy selector */}
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.textDim, textTransform: "uppercase" }}>Strategie:</span>
+                <button onClick={() => setSelectedStratIds(null)} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: !selectedStratIds ? `${T.cyan}20` : T.bg2, color: !selectedStratIds ? T.cyan : T.textSoft, fontWeight: !selectedStratIds ? 700 : 400, borderColor: !selectedStratIds ? T.cyan : T.border }}>Wszystkie</button>
+                {strategies.map(s => {
+                  const active = selectedStratIds ? selectedStratIds.includes(s.id) : true;
+                  return (
+                    <button key={s.id} onClick={() => {
+                      if (!selectedStratIds) {
+                        // Start from all, remove this one
+                        setSelectedStratIds(strategies.map(x=>x.id).filter(id=>id!==s.id));
+                      } else if (selectedStratIds.includes(s.id)) {
+                        const next = selectedStratIds.filter(id=>id!==s.id);
+                        setSelectedStratIds(next.length===0 ? null : next.length===strategies.length ? null : next);
+                      } else {
+                        const next = [...selectedStratIds, s.id];
+                        setSelectedStratIds(next.length===strategies.length ? null : next);
+                      }
+                    }} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: active ? `${T.purple}20` : T.bg2, color: active ? T.purple : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? T.purple : T.border }}>
+                      {active ? "✓ " : ""}{s.name}
+                    </button>
+                  );
+                })}
+                <span style={{ fontSize: 10, color: T.textDim, marginLeft: "auto" }}>{allTrades.length} trade'ów</span>
+              </div>
+            </Card>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
               {[
                 {label:"Total Trades", val:gTotal, color:T.cyan},
