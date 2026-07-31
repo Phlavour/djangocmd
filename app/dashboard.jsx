@@ -6356,6 +6356,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
           {[
             ...(activeStrategy !== "ALL" ? [{id:"journal",l:"📝 Journal"}] : []),
+            {id:"overview",l:"🌐 Overview"},
             {id:"stats",l:"📊 Stats"},
             {id:"ai",l:"🤖 AI Analysis"},
             ...(isCalendarStrat ? [{id:"calendar",l:"📅 PnL Calendar"}, {id:"slider",l:"🎞️ Slider"}] : []),
@@ -7516,6 +7517,289 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           </>}
         </div>
       )}
+
+      {/* ═══ OVERVIEW TAB ═══ */}
+      {subTab === "overview" && (() => {
+        const allTrades = trades; // all strategies
+        const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
+
+        // Helper: get R value per trade (8020 uses sd.rr, others use t.profit)
+        const getR = t => {
+          const strat = strategies.find(s => s.id === t.strategy_id);
+          if (strat?.type === "8020") {
+            const sd = getSd(t); const rr = parseFloat(sd?.rr);
+            if (isNaN(rr) || rr <= 0) return 0;
+            return t.result === "WIN" ? rr : t.result === "LOSS" ? -rr : 0;
+          }
+          return parseFloat(t.profit) || 0;
+        };
+
+        // Global stats
+        const gWins = allTrades.filter(t=>t.result==="WIN").length;
+        const gLoss = allTrades.filter(t=>t.result==="LOSS").length;
+        const gBE   = allTrades.filter(t=>t.result==="BE").length;
+        const gTotal = allTrades.length;
+        const gDecisive = gWins + gLoss;
+        const gWR = gDecisive > 0 ? ((gWins/gDecisive)*100).toFixed(1) : "—";
+        const gProfit = allTrades.reduce((s,t)=>s+getR(t),0);
+
+        // Streaks across all trades
+        const sorted = [...allTrades].sort((a,b)=>{
+          const da=getSd(a).trade_date||a.trade_date||a.created_at||"";
+          const db=getSd(b).trade_date||b.trade_date||b.created_at||"";
+          return da.localeCompare(db);
+        });
+        let curW=0,maxW=0,curL=0,maxL=0;
+        sorted.forEach(t=>{
+          if(t.result==="WIN"){curW++;maxW=Math.max(maxW,curW);curL=0;}
+          else if(t.result==="LOSS"){curL++;maxL=Math.max(maxL,curL);curW=0;}
+          else{curW=0;curL=0;}
+        });
+
+        // Per-strategy stats
+        const stratStats = strategies.map(s => {
+          const st = allTrades.filter(t=>t.strategy_id===s.id);
+          const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, be=st.filter(t=>t.result==="BE").length;
+          const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—";
+          const p=st.reduce((s,t)=>s+getR(t),0);
+          return {name:s.name,type:s.type,total:st.length,w,l,be,wr,p:p.toFixed(2)};
+        }).filter(s=>s.total>0);
+
+        // Per weekday
+        const DAYS = [["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
+        const dayStats = DAYS.map(([di,dn]) => {
+          const st = allTrades.filter(t=>{
+            const d=getSd(t).trade_date||t.trade_date||"";
+            if(!d)return false;
+            return String(new Date(d+"T12:00:00").getDay())===di;
+          });
+          const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, be=st.filter(t=>t.result==="BE").length;
+          const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—";
+          const p=st.reduce((s,t)=>s+getR(t),0);
+          return {di,dn,total:st.length,w,l,be,wr,p:p.toFixed(2)};
+        }).filter(s=>s.total>0);
+
+        // Per session
+        const SESSIONS = ["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+        const sessStats = SESSIONS.map(sess=>{
+          const st = allTrades.filter(t=>{
+            const sd=getSd(t);
+            return (sd.session||sd.hts_session||"")===sess;
+          });
+          const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, be=st.filter(t=>t.result==="BE").length;
+          const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—";
+          const p=st.reduce((s,t)=>s+getR(t),0);
+          return {sess,total:st.length,w,l,be,wr,p:p.toFixed(2)};
+        }).filter(s=>s.total>0);
+
+        // Daily PnL — group by date
+        const byDate = {};
+        allTrades.forEach(t=>{
+          const date=getSd(t).trade_date||t.trade_date||"";
+          if(!date)return;
+          if(!byDate[date]) byDate[date]={date,trades:[],pnl:0,w:0,l:0,be:0};
+          byDate[date].trades.push(t);
+          byDate[date].pnl+=getR(t);
+          if(t.result==="WIN")byDate[date].w++;
+          else if(t.result==="LOSS")byDate[date].l++;
+          else byDate[date].be++;
+        });
+        const dailyRows = Object.values(byDate).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
+
+        // Calendar month state — reuse dlMonth or create simple one
+        const [ovMonth, setOvMonth] = React.useState(()=>({year:new Date().getFullYear(),month:new Date().getMonth()}));
+        const {year:ovY, month:ovM} = ovMonth;
+        const daysInMonth = new Date(ovY, ovM+1, 0).getDate();
+        const firstDow = (new Date(ovY,ovM,1).getDay()+6)%7;
+        const cells = [];
+        for(let i=0;i<firstDow;i++) cells.push(null);
+        for(let d=1;d<=daysInMonth;d++) cells.push(`${ovY}-${String(ovM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+        while(cells.length%7!==0) cells.push(null);
+        const today = new Date().toISOString().slice(0,10);
+
+        return (
+          <div>
+            {/* Global stats cards */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
+              {[
+                {label:"Total Trades", val:gTotal, color:T.cyan},
+                {label:"Win Rate", val:`${gWR}%`, color:parseFloat(gWR)>=50?T.green:T.red},
+                {label:"Wins", val:gWins, color:T.green},
+                {label:"BE", val:gBE, color:T.amber},
+                {label:"Losses", val:gLoss, color:T.red},
+                {label:"Total R", val:`${gProfit>0?"+":""}${gProfit.toFixed(2)}R`, color:gProfit>=0?T.green:T.red},
+              ].map(s=>(
+                <Card key={s.label} style={{textAlign:"center",padding:14}}>
+                  <div style={{fontSize:9,color:T.textDim,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>{s.label}</div>
+                  <div style={{fontSize:24,fontWeight:800,color:s.color}}>{s.val}</div>
+                </Card>
+              ))}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+              {/* Streaks */}
+              <Card>
+                <Heading icon="🔥">Streaks (wszystkie strategie)</Heading>
+                <div style={{display:"flex",gap:10}}>
+                  <div style={{flex:1,textAlign:"center",padding:12,background:`${T.green}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,color:T.textDim,marginBottom:4}}>🏆 Max seria WINów</div>
+                    <div style={{fontSize:36,fontWeight:800,color:T.green}}>{maxW}</div>
+                  </div>
+                  <div style={{flex:1,textAlign:"center",padding:12,background:`${T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,color:T.textDim,marginBottom:4}}>💔 Max seria LOSSów</div>
+                    <div style={{fontSize:36,fontWeight:800,color:T.red}}>{maxL}</div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* W/R by weekday */}
+              <Card>
+                <Heading icon="📅">W/R ratio — dzień tygodnia</Heading>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+                  {DAYS.map(([di,dn])=>{
+                    const s=dayStats.find(d=>d.di===di)||{dn,total:0,wr:"—",w:0,l:0,be:0,p:"0"};
+                    const wr=parseFloat(s.wr);
+                    const col=!isNaN(wr)?(wr>=50?T.green:T.red):T.textDim;
+                    return(
+                      <div key={di} style={{textAlign:"center",padding:"8px 4px",background:`${col}08`,borderRadius:6,border:`1px solid ${T.border}`}}>
+                        <div style={{fontSize:10,fontWeight:700,color:col,marginBottom:2}}>{dn}</div>
+                        <div style={{fontSize:14,fontWeight:800,color:col}}>{s.wr}{s.total>0?"%":""}</div>
+                        <div style={{fontSize:8,color:T.textDim}}>{s.w}W/{s.l}L</div>
+                        <div style={{fontSize:8,fontWeight:600,color:parseFloat(s.p)>=0?T.green:T.red}}>{parseFloat(s.p)>0?"+":""}{s.p}R</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+
+            {/* Per-strategy stats */}
+            <Card style={{marginBottom:16}}>
+              <Heading icon="🎯">Wyniki per strategia</Heading>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${T.border}`}}>
+                      {["Strategia","Trades","Wins","BE","Losses","WR %","Total R"].map(h=>(
+                        <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:T.textDim,textTransform:"uppercase"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stratStats.map((s,i)=>(
+                      <tr key={s.name} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg2:"transparent"}}>
+                        <td style={{padding:"8px 10px",fontWeight:700,color:T.cyan}}>{s.name}</td>
+                        <td style={{padding:"8px 10px",color:T.text}}>{s.total}</td>
+                        <td style={{padding:"8px 10px",color:T.green,fontWeight:600}}>{s.w}</td>
+                        <td style={{padding:"8px 10px",color:T.amber}}>{s.be}</td>
+                        <td style={{padding:"8px 10px",color:T.red,fontWeight:600}}>{s.l}</td>
+                        <td style={{padding:"8px 10px",fontWeight:800,color:parseFloat(s.wr)>=50?T.green:T.red}}>{s.wr}{s.total>0?"%":""}</td>
+                        <td style={{padding:"8px 10px",fontWeight:700,color:parseFloat(s.p)>=0?T.green:T.red}}>{parseFloat(s.p)>0?"+":""}{s.p}R</td>
+                      </tr>
+                    ))}
+                    {/* Total row */}
+                    <tr style={{borderTop:`2px solid ${T.border}`,fontWeight:800}}>
+                      <td style={{padding:"8px 10px",color:T.text}}>ŁĄCZNIE</td>
+                      <td style={{padding:"8px 10px"}}>{gTotal}</td>
+                      <td style={{padding:"8px 10px",color:T.green}}>{gWins}</td>
+                      <td style={{padding:"8px 10px",color:T.amber}}>{gBE}</td>
+                      <td style={{padding:"8px 10px",color:T.red}}>{gLoss}</td>
+                      <td style={{padding:"8px 10px",color:parseFloat(gWR)>=50?T.green:T.red}}>{gWR}{gDecisive>0?"%":""}</td>
+                      <td style={{padding:"8px 10px",color:gProfit>=0?T.green:T.red}}>{gProfit>0?"+":""}{gProfit.toFixed(2)}R</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* W/R by session */}
+            {sessStats.length > 0 && (
+              <Card style={{marginBottom:16}}>
+                <Heading icon="🕐">W/R ratio — sesja</Heading>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                  {sessStats.map(s=>(
+                    <div key={s.sess} style={{textAlign:"center",padding:10,background:`${parseFloat(s.wr)>=50?T.green:T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
+                      <div style={{fontSize:11,fontWeight:700,color:T.cyan,marginBottom:3}}>{s.sess}</div>
+                      <div style={{fontSize:22,fontWeight:800,color:parseFloat(s.wr)>=50?T.green:T.red}}>{s.wr}{s.total>0?"%":""}</div>
+                      <div style={{fontSize:9,color:T.textDim}}>{s.w}W/{s.be}BE/{s.l}L · {s.total}</div>
+                      <div style={{fontSize:10,fontWeight:700,color:parseFloat(s.p)>=0?T.green:T.red}}>{parseFloat(s.p)>0?"+":""}{s.p}R</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Calendar + Daily PnL */}
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:16,alignItems:"flex-start"}}>
+              {/* Calendar */}
+              <Card style={{minWidth:340}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <Btn small outline onClick={()=>setOvMonth(p=>{const nm=p.month===0?11:p.month-1;return{year:p.month===0?p.year-1:p.year,month:nm};})}>‹</Btn>
+                  <div style={{fontSize:13,fontWeight:700,color:T.text,textTransform:"capitalize"}}>
+                    {new Date(ovY,ovM,1).toLocaleDateString("pl-PL",{month:"long",year:"numeric"})}
+                  </div>
+                  <Btn small outline onClick={()=>setOvMonth(p=>{const nm=p.month===11?0:p.month+1;return{year:p.month===11?p.year+1:p.year,month:nm};})}>›</Btn>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+                  {["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d=>(
+                    <div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:T.textDim}}>{d}</div>
+                  ))}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                  {cells.map((date,i)=>{
+                    if(!date) return <div key={`e${i}`}/>;
+                    const day=byDate[date];
+                    const isT=date===today;
+                    const pnl=day?.pnl||0;
+                    const hasTrades=day&&day.trades.length>0;
+                    const col=hasTrades?(pnl>0?T.green:pnl<0?T.red:T.amber):T.border;
+                    return(
+                      <div key={date} style={{minHeight:44,borderRadius:5,padding:"3px 4px",border:`1px solid ${isT?"#3b82f6":hasTrades?col:T.border}`,background:hasTrades?`${col}10`:T.bg2}}>
+                        <div style={{fontSize:10,fontWeight:isT?800:500,color:isT?"#60a5fa":T.textSoft}}>{parseInt(date.slice(8))}</div>
+                        {hasTrades&&<>
+                          <div style={{fontSize:9,fontWeight:700,color:col}}>{pnl>0?"+":""}{pnl.toFixed(1)}R</div>
+                          <div style={{fontSize:7,color:T.textDim}}>{day.w}W/{day.l}L</div>
+                        </>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              {/* Daily PnL table */}
+              <Card>
+                <Heading icon="📋">Dzienny PnL (ostatnie 30 dni)</Heading>
+                <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:460,overflowY:"auto"}}>
+                  {dailyRows.map(day=>{
+                    const stratBreakdown = strategies.map(s=>{
+                      const st=day.trades.filter(t=>t.strategy_id===s.id);
+                      if(!st.length)return null;
+                      const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
+                      return `${s.name}: ${w}W/${l}L`;
+                    }).filter(Boolean).join(" · ");
+                    return(
+                      <div key={day.date} style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg2,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:T.cyan,whiteSpace:"nowrap",minWidth:90}}>
+                          {new Date(day.date+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"short",day:"numeric",month:"short"})}
+                        </div>
+                        <div style={{fontSize:14,fontWeight:800,color:day.pnl>=0?T.green:T.red,minWidth:60}}>
+                          {day.pnl>0?"+":""}{day.pnl.toFixed(2)}R
+                        </div>
+                        <div style={{fontSize:11,color:T.textSoft}}>
+                          <span style={{color:T.green}}>{day.w}W</span> / <span style={{color:T.amber}}>{day.be}BE</span> / <span style={{color:T.red}}>{day.l}L</span>
+                          {" "}· {day.trades.length} trades
+                        </div>
+                        {stratBreakdown&&<div style={{fontSize:10,color:T.textDim,marginLeft:"auto"}}>{stratBreakdown}</div>}
+                      </div>
+                    );
+                  })}
+                  {dailyRows.length===0&&<div style={{fontSize:12,color:T.textDim,fontStyle:"italic"}}>Brak trade'ów z datami</div>}
+                </div>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ═══ STATS TAB ═══ */}
       {subTab === "stats" && activeStrategy && (() => {
