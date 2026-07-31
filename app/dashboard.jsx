@@ -6295,7 +6295,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           });
           const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
           const getR = t => { const rr = parseFloat(t.profit); return isNaN(rr) ? 0 : rr; };
-          const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || parseFloat(t.profit_usd) || 0; };
+          const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || parseFloat(sd?.profit_usd_lj) || parseFloat(t.profit_usd) || 0; };
           const gWins = ovTrades.filter(t=>t.result==="WIN").length;
           const gLoss = ovTrades.filter(t=>t.result==="LOSS").length;
           const gBE   = ovTrades.filter(t=>t.result==="BE").length;
@@ -6717,8 +6717,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {stratType === "HTS" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.cyan, marginBottom: 8, textTransform: "uppercase" }}>HTS Strategy Fields</div>
 
-              {/* Session + Entry Time + R/R */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {/* Session + Entry Time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.hts_session || ""} onChange={e => setTf(p => ({...p, hts_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
@@ -6753,10 +6753,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       setTf(p => ({...p, hts_entry_time: ""}));
                     }
                   }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <div style={label}>Risk / Reward</div>
-                  <input type="text" value={tf.hts_rr || ""} onChange={e => setTf(p => ({...p, hts_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
 
@@ -6881,8 +6877,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {stratType === "8020" && <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 8, textTransform: "uppercase" }}>80/20 Strategy Fields</div>
 
-              {/* Session + Entry Time + R/R */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {/* Session + Entry Time */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                 <div>
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.s8020_session || ""} onChange={e => setTf(p => ({...p, s8020_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
@@ -6917,10 +6913,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       setTf(p => ({...p, s8020_entry_time: ""}));
                     }
                   }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <div style={label}>Risk / Reward</div>
-                  <input type="text" value={tf.s8020_rr || ""} onChange={e => setTf(p => ({...p, s8020_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
               </div>
 
@@ -7051,8 +7043,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <input type="text" value={tf.profit_usd} onChange={e => setTf(p => ({...p, profit_usd: e.target.value}))} placeholder="np. 350 lub -120" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
                 </div>
                 <div>
-                  <div style={label}>Risk / Reward</div>
-                  <input type="text" value={tf.lj_rr} onChange={e => setTf(p => ({...p, lj_rr: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700 }} />
+                  <div style={label}>Risk / Reward (R) — z pola globalnego powyżej</div>
+                  <input type="text" value={tf.profit} onChange={e => setTf(p => ({...p, profit: e.target.value}))} placeholder="np. 1, 0.5, 2" style={{ ...sel, width: "100%", boxSizing: "border-box", textAlign: "center", fontWeight: 700, color: parseFloat(tf.profit)>0?T.green:parseFloat(tf.profit)<0?T.red:T.textSoft }} />
                 </div>
               </div>
               {/* TIMING: Date | Entry Time | Duration | Range Size */}
