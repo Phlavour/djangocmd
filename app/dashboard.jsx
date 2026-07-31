@@ -6928,7 +6928,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "em_vwap_retest",     label: "VWAP Retest" },
                     { id: "em_band_retest",      label: "Wstęga Retest" },
                     { id: "em_5min_gap",         label: "5min GAP" },
-                    { id: "em_3565_retest",      label: "35/65 Retest" },
+                    { id: "em_3565_retest",      label: "25/50 Retest" },
                     { id: "em_pullback_random",  label: "Pullback Random" },
                     { id: "em_pa_fomo",          label: "⊘ PA FOMO" },
                     { id: "em_8020",             label: "80/20" },
@@ -6952,6 +6952,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "LH",     label: "L/H" },
                     { id: "BAND",   label: "Wstęga" },
                     { id: "VWAP",   label: "VWAP" },
+                    { id: "25PCT",  label: "25%" },
+                    { id: "50PCT",  label: "50%" },
                     { id: "RANDOM", label: "⊘ Random", warn: true },
                   ].map(opt => (
                     <button key={opt.id} onClick={() => setTf(p => ({...p, sl_type: p.sl_type === opt.id ? "" : opt.id}))} style={{ ...sel, flex: 1, padding: "6px 4px", background: tf.sl_type === opt.id ? `${opt.warn ? T.red : T.cyan}20` : T.bg2, color: tf.sl_type === opt.id ? (opt.warn ? T.red : T.cyan) : T.textSoft, fontWeight: tf.sl_type === opt.id ? 700 : 400, borderColor: tf.sl_type === opt.id ? (opt.warn ? T.red : T.cyan) : T.border }}>
@@ -9285,11 +9287,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Stop Loss</div>
-                    <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       <FilterBtn groupKey="ib_sl" value="ALL" label="ALL" />
                       <FilterBtn groupKey="ib_sl" value="LH" label="L/H" activeColor={T.cyan} />
                       <FilterBtn groupKey="ib_sl" value="BAND" label="Wstęga" activeColor={T.purple} />
                       <FilterBtn groupKey="ib_sl" value="VWAP" label="VWAP" activeColor={T.amber} />
+                      <FilterBtn groupKey="ib_sl" value="25PCT" label="25%" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_sl" value="50PCT" label="50%" activeColor={T.cyan} />
                       <FilterBtn groupKey="ib_sl" value="RANDOM" label="Random" activeColor={T.red} />
                     </div>
                   </div>
@@ -9308,7 +9312,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="ib_em" value="em_vwap_retest" label="VWAP Retest" activeColor={T.cyan} />
                       <FilterBtn groupKey="ib_em" value="em_band_retest" label="Wstęga Retest" activeColor={T.purple} />
                       <FilterBtn groupKey="ib_em" value="em_5min_gap" label="5min GAP" activeColor={T.amber} />
-                      <FilterBtn groupKey="ib_em" value="em_3565_retest" label="35/65" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_em" value="em_3565_retest" label="25/50" activeColor={T.green} />
                       <FilterBtn groupKey="ib_em" value="em_pullback_random" label="Pullback" />
                       <FilterBtn groupKey="ib_em" value="em_pa_fomo" label="PA FOMO" activeColor={T.red} />
                       <FilterBtn groupKey="ib_em" value="em_8020" label="80/20" activeColor={T.green} />
