@@ -4857,7 +4857,10 @@ function TradingPanel({ apiKey, supa }) {
   const [dlNotes, setDlNotes] = useState({}); // {date: {text, photos: []}}
   const [dlMonth, setDlMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [ovMonth, setOvMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
-  const [selectedStratIds, setSelectedStratIds] = useState(null); // null = all
+  const [selectedStratIds, setSelectedStratIds] = useState(null);
+  const [ovSelectedDay, setOvSelectedDay] = useState(null);
+  const OV_INSTRUMENTS = ["NQ", "ES", "BTC", "ETH", "GOLD", "DAX", "EUR/USD", "GBP/USD"];
+  const [selectedInstruments, setSelectedInstruments] = useState(["NQ", "ES"]); // BTC off by default
   const [dlSaving, setDlSaving] = useState({});
   const [dlLoaded, setDlLoaded] = useState(false);
   const dlTimerRef = React.useRef({});
@@ -6276,35 +6279,161 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
       {/* ═══ OVERVIEW CARD ═══ */}
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setSubTab(subTab === "overview" ? "journal" : "overview")}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setSubTab(subTab === "overview" ? "journal" : "overview")}>
           <Heading icon="🌐">Overview — zbiorowe statystyki</Heading>
           <span style={{ fontSize: 12, color: T.textDim }}>{subTab === "overview" ? "▲ zwiń" : "▼ rozwiń"}</span>
         </div>
-        {subTab === "overview" && (
-          <div style={{ marginTop: 12 }}>
-            {/* Strategy selector */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.textDim, textTransform: "uppercase" }}>Strategie:</span>
-              <button onClick={() => setSelectedStratIds(null)} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: !selectedStratIds ? `${T.cyan}20` : T.bg2, color: !selectedStratIds ? T.cyan : T.textSoft, fontWeight: !selectedStratIds ? 700 : 400, borderColor: !selectedStratIds ? T.cyan : T.border }}>Wszystkie</button>
-              {strategies.map(s => {
-                const active = selectedStratIds ? selectedStratIds.includes(s.id) : true;
+        {subTab === "overview" && (() => {
+          const activeIds = selectedStratIds || strategies.map(s => s.id);
+          const ovTrades = trades.filter(t => {
+            if (!activeIds.includes(t.strategy_id)) return false;
+            // Instrument filter — check t.pair, then strategy_data fields
+            const sd = (() => { let s = t.strategy_data; try { if(typeof s==="string") s=JSON.parse(s); } catch{s={};} return s; })();
+            const instr = t.pair || sd?.instrument || sd?.hts_pair || "NQ";
+            return selectedInstruments.includes(instr);
+          });
+          const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
+          const getR = t => { const rr = parseFloat(t.profit); return isNaN(rr) ? 0 : rr; };
+          const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || 0; };
+          const gWins = ovTrades.filter(t=>t.result==="WIN").length;
+          const gLoss = ovTrades.filter(t=>t.result==="LOSS").length;
+          const gBE   = ovTrades.filter(t=>t.result==="BE").length;
+          const gTotal = ovTrades.length;
+          const gDecisive = gWins + gLoss;
+          const gWR = gDecisive > 0 ? ((gWins/gDecisive)*100).toFixed(1) : "—";
+          const gProfit = ovTrades.reduce((s,t)=>s+getR(t),0);
+          const gUSD = ovTrades.reduce((s,t)=>s+getUSD(t),0);
+          const sorted = [...ovTrades].sort((a,b)=>{ const da=getSd(a).trade_date||a.trade_date||""; const db=getSd(b).trade_date||b.trade_date||""; return da.localeCompare(db); });
+          let curW=0,maxW=0,curL=0,maxL=0;
+          sorted.forEach(t=>{ if(t.result==="WIN"){curW++;maxW=Math.max(maxW,curW);curL=0;} else if(t.result==="LOSS"){curL++;maxL=Math.max(maxL,curL);curW=0;} else{curW=0;curL=0;} });
+          const stratStats = strategies.map(s => { const st=ovTrades.filter(t=>t.strategy_id===s.id); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); const u=st.reduce((s,t)=>s+getUSD(t),0); return {name:s.name,total:st.length,w,l,be,wr,p:p.toFixed(2),u:u.toFixed(0)}; }).filter(s=>s.total>0);
+          const DAYS=[["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
+          const dayStats = DAYS.map(([di,dn])=>{ const st=ovTrades.filter(t=>{ const d=getSd(t).trade_date||t.trade_date||""; return d&&String(new Date(d+"T12:00:00").getDay())===di; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {di,dn,total:st.length,w,l,wr,p:p.toFixed(2)}; });
+          const SESSIONS=["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+          const sessStats=SESSIONS.map(sess=>{ const st=ovTrades.filter(t=>{ const sd=getSd(t); return (sd.session||sd.hts_session||"")===sess; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {sess,total:st.length,w,l,be,wr,p:p.toFixed(2)}; }).filter(s=>s.total>0);
+          const byDate={};
+          ovTrades.forEach(t=>{ const date=getSd(t).trade_date||t.trade_date||""; if(!date)return; if(!byDate[date])byDate[date]={date,trades:[],pnl:0,usd:0,w:0,l:0,be:0}; byDate[date].trades.push(t); byDate[date].pnl+=getR(t); byDate[date].usd+=getUSD(t); if(t.result==="WIN")byDate[date].w++; else if(t.result==="LOSS")byDate[date].l++; else byDate[date].be++; });
+          const dailyRows=Object.values(byDate).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
+          const {year:ovY,month:ovM}=ovMonth;
+          const daysInMonth=new Date(ovY,ovM+1,0).getDate();
+          const firstDow=(new Date(ovY,ovM,1).getDay()+6)%7;
+          const cells=[];
+          for(let i=0;i<firstDow;i++) cells.push(null);
+          for(let d=1;d<=daysInMonth;d++) cells.push(`${ovY}-${String(ovM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+          while(cells.length%7!==0) cells.push(null);
+          const todayStr=new Date().toISOString().slice(0,10);
+          const selDayTrades=ovSelectedDay?(byDate[ovSelectedDay]?.trades||[]):[];
+          return (
+            <div style={{ marginTop:12 }}>
+              {/* Strategy selector */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:8, padding:10, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                <span style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", minWidth:70 }}>Strategie:</span>
+                <button onClick={()=>setSelectedStratIds(null)} style={{ ...sel, padding:"4px 12px", fontSize:11, background:!selectedStratIds?`${T.cyan}20`:T.bg2, color:!selectedStratIds?T.cyan:T.textSoft, fontWeight:!selectedStratIds?700:400, borderColor:!selectedStratIds?T.cyan:T.border }}>Wszystkie</button>
+                {strategies.map(s=>{ const active=selectedStratIds?selectedStratIds.includes(s.id):true; return(<button key={s.id} onClick={()=>{ if(!selectedStratIds){setSelectedStratIds(strategies.map(x=>x.id).filter(id=>id!==s.id));} else if(selectedStratIds.includes(s.id)){const next=selectedStratIds.filter(id=>id!==s.id);setSelectedStratIds(next.length===0||next.length===strategies.length?null:next);} else{const next=[...selectedStratIds,s.id];setSelectedStratIds(next.length===strategies.length?null:next);} }} style={{ ...sel, padding:"4px 12px", fontSize:11, background:active?`${T.purple}20`:T.bg2, color:active?T.purple:T.textSoft, fontWeight:active?700:400, borderColor:active?T.purple:T.border }}>{active?"✓ ":""}{s.name}</button>); })}
+                <span style={{ fontSize:10, color:T.textDim, marginLeft:"auto" }}>{gTotal} trade'ów</span>
+              </div>
+
+              {/* Instrument filter */}
+              {(() => {
+                // Detect which instruments actually exist in filtered-by-strategy trades
+                const allForStrat = trades.filter(t => (selectedStratIds||strategies.map(s=>s.id)).includes(t.strategy_id));
+                const usedInstrs = [...new Set(allForStrat.map(t => {
+                  const sd = (() => { let s=t.strategy_data; try{if(typeof s==="string")s=JSON.parse(s);}catch{s={};} return s; })();
+                  return t.pair || sd?.instrument || sd?.hts_pair || "NQ";
+                }))].filter(i => OV_INSTRUMENTS.includes(i) || i);
+                if (usedInstrs.length <= 1) return null;
                 return (
-                  <button key={s.id} onClick={() => {
-                    if (!selectedStratIds) { setSelectedStratIds(strategies.map(x=>x.id).filter(id=>id!==s.id)); }
-                    else if (selectedStratIds.includes(s.id)) { const next=selectedStratIds.filter(id=>id!==s.id); setSelectedStratIds(next.length===0||next.length===strategies.length?null:next); }
-                    else { const next=[...selectedStratIds,s.id]; setSelectedStratIds(next.length===strategies.length?null:next); }
-                  }} style={{ ...sel, padding: "4px 12px", fontSize: 11, background: active ? `${T.purple}20` : T.bg2, color: active ? T.purple : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? T.purple : T.border }}>
-                    {active ? "✓ " : ""}{s.name}
-                  </button>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:16, padding:10, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", minWidth:70 }}>Instrument:</span>
+                    <button onClick={()=>setSelectedInstruments(usedInstrs)} style={{ ...sel, padding:"4px 12px", fontSize:11, background:selectedInstruments.length===usedInstrs.length?`${T.cyan}20`:T.bg2, color:selectedInstruments.length===usedInstrs.length?T.cyan:T.textSoft, fontWeight:selectedInstruments.length===usedInstrs.length?700:400, borderColor:selectedInstruments.length===usedInstrs.length?T.cyan:T.border }}>Wszystkie</button>
+                    {usedInstrs.map(instr => {
+                      const active = selectedInstruments.includes(instr);
+                      const col = instr==="NQ"?T.cyan:instr==="ES"?T.purple:instr==="BTC"?T.amber:T.green;
+                      return (
+                        <button key={instr} onClick={()=>setSelectedInstruments(p => active && p.length>1 ? p.filter(i=>i!==instr) : active ? p : [...p, instr])}
+                          style={{ ...sel, padding:"4px 12px", fontSize:11, fontWeight:active?700:400, background:active?`${col}20`:T.bg2, color:active?col:T.textSoft, borderColor:active?col:T.border }}>
+                          {active?"✓ ":""}{instr}
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
-              })}
+              })()}
+              {/* Global stats */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:8, marginBottom:16 }}>
+                {[{label:"Trades",val:gTotal,color:T.cyan},{label:"Win Rate",val:`${gWR}%`,color:parseFloat(gWR)>=50?T.green:T.red},{label:"Wins",val:gWins,color:T.green},{label:"BE",val:gBE,color:T.amber},{label:"Losses",val:gLoss,color:T.red},{label:"Total R",val:`${gProfit>0?"+":""}${gProfit.toFixed(2)}R`,color:gProfit>=0?T.green:T.red},{label:"Total $",val:`${gUSD>0?"+":""}${gUSD.toFixed(0)}$`,color:gUSD>=0?T.green:T.red}].map(s=>(
+                  <div key={s.label} style={{ textAlign:"center", padding:"10px 6px", background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                    <div style={{ fontSize:9, color:T.textDim, textTransform:"uppercase", fontWeight:700, marginBottom:4 }}>{s.label}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.val}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+                <div style={{ padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", marginBottom:10 }}>🔥 Streaks</div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <div style={{ flex:1, textAlign:"center", padding:10, background:`${T.green}08`, borderRadius:6, border:`1px solid ${T.border}` }}><div style={{ fontSize:9, color:T.textDim }}>Max WINów</div><div style={{ fontSize:32, fontWeight:800, color:T.green }}>{maxW}</div></div>
+                    <div style={{ flex:1, textAlign:"center", padding:10, background:`${T.red}08`, borderRadius:6, border:`1px solid ${T.border}` }}><div style={{ fontSize:9, color:T.textDim }}>Max LOSSów</div><div style={{ fontSize:32, fontWeight:800, color:T.red }}>{maxL}</div></div>
+                  </div>
+                </div>
+                <div style={{ padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", marginBottom:10 }}>📅 W/R — Dzień tygodnia</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
+                    {dayStats.map(({di,dn,total,w,l,wr})=>{ const col=total>0?(parseFloat(wr)>=50?T.green:T.red):T.textDim; return(<div key={di} style={{ textAlign:"center", padding:"6px 2px", background:`${col}08`, borderRadius:5, border:`1px solid ${T.border}` }}><div style={{ fontSize:9, fontWeight:700, color:col }}>{dn}</div><div style={{ fontSize:13, fontWeight:800, color:col }}>{wr}{total>0?"%":""}</div><div style={{ fontSize:7, color:T.textDim }}>{w}W/{l}L</div></div>); })}
+                  </div>
+                </div>
+              </div>
+              {/* Per-strategy table */}
+              <div style={{ marginBottom:16, padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", marginBottom:10 }}>🎯 Wyniki per strategia</div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead><tr style={{ borderBottom:`2px solid ${T.border}` }}>{["Strategia","Trades","W","BE","L","WR%","R","$"].map(h=>(<th key={h} style={{ padding:"4px 8px", textAlign:"left", fontSize:10, fontWeight:700, color:T.textDim }}>{h}</th>))}</tr></thead>
+                  <tbody>
+                    {stratStats.map((s,i)=>(<tr key={s.name} style={{ borderBottom:`1px solid ${T.border}`, background:i%2===0?"transparent":T.bg2 }}><td style={{ padding:"6px 8px", fontWeight:700, color:T.cyan }}>{s.name}</td><td style={{ padding:"6px 8px" }}>{s.total}</td><td style={{ padding:"6px 8px", color:T.green }}>{s.w}</td><td style={{ padding:"6px 8px", color:T.amber }}>{s.be}</td><td style={{ padding:"6px 8px", color:T.red }}>{s.l}</td><td style={{ padding:"6px 8px", fontWeight:800, color:parseFloat(s.wr)>=50?T.green:T.red }}>{s.wr}{s.total>0?"%":""}</td><td style={{ padding:"6px 8px", fontWeight:700, color:parseFloat(s.p)>=0?T.green:T.red }}>{parseFloat(s.p)>0?"+":""}{s.p}R</td><td style={{ padding:"6px 8px", fontWeight:700, color:parseFloat(s.u)>=0?T.green:T.red }}>{parseFloat(s.u)>0?"+":""}{s.u}$</td></tr>))}
+                    <tr style={{ borderTop:`2px solid ${T.border}`, fontWeight:800 }}><td style={{ padding:"6px 8px" }}>ŁĄCZNIE</td><td style={{ padding:"6px 8px" }}>{gTotal}</td><td style={{ padding:"6px 8px", color:T.green }}>{gWins}</td><td style={{ padding:"6px 8px", color:T.amber }}>{gBE}</td><td style={{ padding:"6px 8px", color:T.red }}>{gLoss}</td><td style={{ padding:"6px 8px", color:parseFloat(gWR)>=50?T.green:T.red }}>{gWR}{gDecisive>0?"%":""}</td><td style={{ padding:"6px 8px", color:gProfit>=0?T.green:T.red }}>{gProfit>0?"+":""}{gProfit.toFixed(2)}R</td><td style={{ padding:"6px 8px", color:gUSD>=0?T.green:T.red }}>{gUSD>0?"+":""}{gUSD.toFixed(0)}$</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              {sessStats.length>0&&(<div style={{ marginBottom:16, padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}><div style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", marginBottom:10 }}>🕐 W/R — Sesja</div><div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>{sessStats.map(s=>(<div key={s.sess} style={{ textAlign:"center", padding:8, background:`${parseFloat(s.wr)>=50?T.green:T.red}08`, borderRadius:6, border:`1px solid ${T.border}` }}><div style={{ fontSize:10, fontWeight:700, color:T.cyan }}>{s.sess}</div><div style={{ fontSize:18, fontWeight:800, color:parseFloat(s.wr)>=50?T.green:T.red }}>{s.wr}{s.total>0?"%":""}</div><div style={{ fontSize:8, color:T.textDim }}>{s.w}W/{s.be}BE/{s.l}L · {s.total}</div><div style={{ fontSize:9, fontWeight:700, color:parseFloat(s.p)>=0?T.green:T.red }}>{parseFloat(s.p)>0?"+":""}{s.p}R</div></div>))}</div></div>)}
+              {/* Calendar + Day detail */}
+              <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:16 }}>
+                <div style={{ padding:12, background:T.bg2, borderRadius:8, border:`1px solid ${T.border}` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                    <button onClick={()=>setOvMonth(p=>{const nm=p.month===0?11:p.month-1;return{year:p.month===0?p.year-1:p.year,month:nm};})} style={{ ...sel, padding:"4px 10px" }}>‹</button>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.text, textTransform:"capitalize" }}>{new Date(ovY,ovM,1).toLocaleDateString("pl-PL",{month:"long",year:"numeric"})}</div>
+                    <button onClick={()=>setOvMonth(p=>{const nm=p.month===11?0:p.month+1;return{year:p.month===11?p.year+1:p.year,month:nm};})} style={{ ...sel, padding:"4px 10px" }}>›</button>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2, marginBottom:4 }}>{["Pn","Wt","Śr","Cz","Pt","Sb","Nd"].map(d=>(<div key={d} style={{ textAlign:"center", fontSize:9, fontWeight:700, color:T.textDim }}>{d}</div>))}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 }}>
+                    {cells.map((date,i)=>{ if(!date)return <div key={`e${i}`}/>; const day=byDate[date]; const isT=date===todayStr; const isSel=date===ovSelectedDay; const pnl=day?.pnl||0; const hasTrades=day&&day.trades.length>0; const col=hasTrades?(pnl>0?T.green:pnl<0?T.red:T.amber):T.border; return(<div key={date} onClick={()=>setOvSelectedDay(isSel?null:date)} style={{ minHeight:46, borderRadius:5, padding:"3px 4px", cursor:hasTrades?"pointer":"default", border:`2px solid ${isSel?T.cyan:isT?"#3b82f6":hasTrades?col:T.border}`, background:isSel?`${T.cyan}15`:hasTrades?`${col}10`:T.bg2 }}><div style={{ fontSize:10, fontWeight:isT?800:500, color:isT?"#60a5fa":T.textSoft }}>{parseInt(date.slice(8))}</div>{hasTrades&&<><div style={{ fontSize:9, fontWeight:700, color:col }}>{pnl>0?"+":""}{pnl.toFixed(1)}R</div><div style={{ fontSize:7, color:T.textDim }}>{day.w}W/{day.l}L</div></>}</div>); })}
+                  </div>
+                </div>
+                <div>
+                  {ovSelectedDay?(<>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:T.cyan }}>{new Date(ovSelectedDay+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"long",day:"numeric",month:"long"})}</div>
+                      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                        {byDate[ovSelectedDay]&&<><span style={{ fontSize:12, fontWeight:700, color:byDate[ovSelectedDay].pnl>=0?T.green:T.red }}>{byDate[ovSelectedDay].pnl>0?"+":""}{byDate[ovSelectedDay].pnl.toFixed(2)}R</span><span style={{ fontSize:11, color:T.green }}>{byDate[ovSelectedDay].w}W</span><span style={{ fontSize:11, color:T.amber }}>{byDate[ovSelectedDay].be}BE</span><span style={{ fontSize:11, color:T.red }}>{byDate[ovSelectedDay].l}L</span></>}
+                        <button onClick={()=>setOvSelectedDay(null)} style={{ ...sel, padding:"3px 10px", fontSize:11 }}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:420, overflowY:"auto" }}>
+                      {selDayTrades.map(t=>{ const sd=getSd(t); const strat=strategies.find(s=>s.id===t.strategy_id); const rr=parseFloat(t.profit)||0; const usd=getUSD(t); const resCol=t.result==="WIN"?T.green:t.result==="LOSS"?T.red:T.amber; return(<div key={t.id} onClick={()=>{setActiveStrategy(t.strategy_id);startEdit(t);}} style={{ padding:"10px 14px", background:T.bg2, borderRadius:8, border:`1px solid ${T.border}`, cursor:"pointer", display:"flex", gap:12, alignItems:"center" }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}><div style={{ width:6, height:40, borderRadius:3, background:resCol, flexShrink:0 }}/><div style={{ flex:1, minWidth:0 }}><div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:3 }}><span style={{ fontSize:11, fontWeight:800, color:resCol }}>{t.result}</span><span style={{ fontSize:10, color:T.textDim }}>{t.direction}</span><span style={{ fontSize:10, color:T.cyan }}>{strat?.name||"?"}</span>{(sd.hts_session||sd.session)&&<span style={{ fontSize:10, color:T.textDim }}>{sd.hts_session||sd.session}</span>}</div>{t.description&&<div style={{ fontSize:11, color:T.textSoft, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.description}</div>}</div><div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:13, fontWeight:800, color:rr>=0?T.green:T.red }}>{rr>0?"+":""}{rr.toFixed(2)}R</div>{usd!==0&&<div style={{ fontSize:10, color:usd>=0?T.green:T.red }}>{usd>0?"+":""}{usd.toFixed(0)}$</div>}</div></div>); })}
+                      {selDayTrades.length===0&&<div style={{ fontSize:12, color:T.textDim, fontStyle:"italic" }}>Brak trade'ów</div>}
+                    </div>
+                  </>):(<>
+                    <div style={{ fontSize:11, fontWeight:700, color:T.textDim, textTransform:"uppercase", marginBottom:10 }}>📋 Dzienny PnL — ostatnie 30 dni</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:450, overflowY:"auto" }}>
+                      {dailyRows.map(day=>{ const stratB=strategies.map(s=>{ const st=day.trades.filter(t=>t.strategy_id===s.id); if(!st.length)return null; const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length; return `${s.name}: ${w}W/${l}L`; }).filter(Boolean).join(" · "); return(<div key={day.date} onClick={()=>{setOvSelectedDay(day.date);setOvMonth({year:parseInt(day.date.slice(0,4)),month:parseInt(day.date.slice(5,7))-1});}} style={{ padding:"8px 12px", borderRadius:8, border:`1px solid ${T.border}`, background:T.bg2, display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", cursor:"pointer" }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}><div style={{ fontSize:12, fontWeight:700, color:T.cyan, minWidth:90 }}>{new Date(day.date+"T12:00:00").toLocaleDateString("pl-PL",{weekday:"short",day:"numeric",month:"short"})}</div><div style={{ fontSize:14, fontWeight:800, color:day.pnl>=0?T.green:T.red, minWidth:55 }}>{day.pnl>0?"+":""}{day.pnl.toFixed(2)}R</div>{day.usd!==0&&<div style={{ fontSize:11, fontWeight:700, color:day.usd>=0?T.green:T.red }}>{day.usd>0?"+":""}{day.usd.toFixed(0)}$</div>}<div style={{ fontSize:11, color:T.textSoft }}><span style={{ color:T.green }}>{day.w}W</span> / <span style={{ color:T.amber }}>{day.be}BE</span> / <span style={{ color:T.red }}>{day.l}L</span> · {day.trades.length}</div>{stratB&&<div style={{ fontSize:10, color:T.textDim, marginLeft:"auto" }}>{stratB}</div>}</div>); })}
+                      {dailyRows.length===0&&<div style={{ fontSize:12, color:T.textDim, fontStyle:"italic" }}>Brak trade'ów z datami</div>}
+                    </div>
+                  </>)}
+                </div>
+              </div>
             </div>
-            {/* The actual content is rendered in the overview tab below */}
-            <div style={{ fontSize: 11, color: T.textDim, textAlign: "center", padding: 8 }}>
-              Przejdź do zakładki <strong>🌐 Overview</strong> po wybraniu strategii aby zobaczyć pełne statystyki.
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </Card>
 
       {/* Strategy selector */}
