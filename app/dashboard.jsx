@@ -4832,7 +4832,7 @@ function TradingPanel({ apiKey, supa }) {
     s8020_session: "", s8020_entry_time: "", s8020_rr: "", s8020_knot: "",
     s8020_entry_type: [],
     s8020_level: "",
-    s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false,
+    s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false, s8020_conf_ob: false, s8020_band_layout: "",
     req_8020: false, req_fvg: false, req_instrument: false,
     pair: "NQ", timeframe: "1m", notes: "",
     trends: {}, rsi: "", pivots: {},
@@ -4881,7 +4881,7 @@ function TradingPanel({ apiKey, supa }) {
     // DR/Lunch Box
     entry_type: "ALL", bands_overlap: "ALL", dr_session_f: "ALL", dr_trade_num: "ALL", dr_smt: "ALL",
     // 8020
-    s8020_level: "ALL", s8020_entry: "ALL", s8020_session_f: "ALL", s8020_conf: "ALL", s8020_knot: "ALL",
+    s8020_level: "ALL", s8020_entry: "ALL", s8020_session_f: "ALL", s8020_conf: "ALL", s8020_knot: "ALL", s8020_band_layout: "ALL",
     // HTS
     hts_setup: "ALL", hts_session_f: "ALL", hts_trade_type: "ALL", hts_band_type: "ALL",
     hts_entry_model_f: "ALL", hts_conf: "ALL",
@@ -5332,7 +5332,7 @@ Respond ONLY with JSON.`;
     } : stratType === "8020" ? {
       session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
-      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false, conf_ob: tf.s8020_conf_ob || false, band_layout: tf.s8020_band_layout || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
@@ -5499,7 +5499,7 @@ Respond ONLY with JSON.`;
     } : stratType === "8020" ? {
       session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
-      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false,
+      conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false, conf_ob: tf.s8020_conf_ob || false, band_layout: tf.s8020_band_layout || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } :     stratType === "V_SHAPE" ? {
       entry_candle: parseInt(tf.entry_candle) || 1,
@@ -6780,12 +6780,13 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               {/* Extra Confluences */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8 }}>Extra Confluences</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8 }}>
                   {[
                     { id: "s8020_conf_bands", label: "Wstęgi" },
                     { id: "s8020_conf_vwap",  label: "VWAP" },
                     { id: "s8020_conf_poi",   label: "POI" },
                     { id: "s8020_conf_fvg",   label: "FVG" },
+                    { id: "s8020_conf_ob",    label: "OB" },
                   ].map(ec => (
                     <button key={ec.id} onClick={() => setTf(p => ({...p, [ec.id]: !p[ec.id]}))} style={{ ...sel, padding: "6px 4px", background: tf[ec.id] ? `${T.green}20` : T.bg2, color: tf[ec.id] ? T.green : T.textSoft, fontWeight: tf[ec.id] ? 700 : 400, borderColor: tf[ec.id] ? T.green : T.border }}>
                       {tf[ec.id] ? "✓ " : ""}{ec.label}
@@ -6805,6 +6806,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     const active = tf.s8020_knot === opt.id;
                     return (
                       <button key={opt.id} onClick={() => setTf(p => ({...p, s8020_knot: p.s8020_knot === opt.id ? "" : opt.id}))}
+                        style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${opt.color}20` : T.bg2, color: active ? opt.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? opt.color : T.border }}>
+                        {active ? "✓ " : ""}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ułożenie Wstęg */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ ...label, marginBottom: 8 }}>Ułożenie Wstęg</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "trend", label: "Trend", color: T.cyan },
+                    { id: "pomiedzy", label: "Pomiędzy Wstęgami", color: T.purple },
+                  ].map(opt => {
+                    const active = tf.s8020_band_layout === opt.id;
+                    return (
+                      <button key={opt.id} onClick={() => setTf(p => ({...p, s8020_band_layout: p.s8020_band_layout === opt.id ? "" : opt.id}))}
                         style={{ ...sel, flex: 1, padding: "8px 4px", background: active ? `${opt.color}20` : T.bg2, color: active ? opt.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? opt.color : T.border }}>
                         {active ? "✓ " : ""}{opt.label}
                       </button>
@@ -8504,7 +8524,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               <Card style={{ marginBottom:16 }}>
                 <Heading icon="⚡">Performance by Extra Confluences</Heading>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-                  {[["conf_bands","Wstęgi",T.green],["conf_vwap","VWAP",T.cyan],["conf_poi","POI",T.amber],["conf_fvg","FVG",T.purple]].map(([key,lbl,col]) => {
+                  {[["conf_bands","Wstęgi",T.green],["conf_vwap","VWAP",T.cyan],["conf_poi","POI",T.amber],["conf_fvg","FVG",T.purple],["conf_ob","OB","#F97316"]].map(([key,lbl,col]) => {
                     const st = ft.filter(t=>getSd(t)[key]===true);
                     const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, b=st.filter(t=>t.result==="BE").length;
                     const p=st.reduce((s,t)=>s+getR(t),0);
@@ -9051,6 +9071,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           if (sliderFilters.s8020_session_f !== "ALL" && sd?.session !== sliderFilters.s8020_session_f) return false;
           if (sliderFilters.s8020_conf !== "ALL" && !sd?.[sliderFilters.s8020_conf]) return false;
           if (sliderFilters.s8020_knot !== "ALL" && sd?.knot !== sliderFilters.s8020_knot) return false;
+          if (sliderFilters.s8020_band_layout !== "ALL" && sd?.band_layout !== sliderFilters.s8020_band_layout) return false;
           // HTS
           if (sliderFilters.hts_setup !== "ALL" && sd?.setup_type !== sliderFilters.hts_setup) return false;
           if (sliderFilters.hts_session_f !== "ALL" && sd?.hts_session !== sliderFilters.hts_session_f) return false;
@@ -9163,6 +9184,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="s8020_conf" value="conf_vwap" label="VWAP" activeColor={T.cyan} />
                       <FilterBtn groupKey="s8020_conf" value="conf_poi" label="POI" activeColor={T.amber} />
                       <FilterBtn groupKey="s8020_conf" value="conf_fvg" label="FVG" activeColor={T.purple} />
+                      <FilterBtn groupKey="s8020_conf" value="conf_ob" label="OB" activeColor={T.amber} />
                     </div>
                   </div>
                   <div>
@@ -9171,6 +9193,14 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <FilterBtn groupKey="s8020_knot" value="ALL" label="ALL" />
                       <FilterBtn groupKey="s8020_knot" value="w_range" label="W Range'u" activeColor={T.green} />
                       <FilterBtn groupKey="s8020_knot" value="poza_rangem" label="Poza Rangem" activeColor={T.red} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Ułożenie Wstęg</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <FilterBtn groupKey="s8020_band_layout" value="ALL" label="ALL" />
+                      <FilterBtn groupKey="s8020_band_layout" value="trend" label="Trend" activeColor={T.cyan} />
+                      <FilterBtn groupKey="s8020_band_layout" value="pomiedzy" label="Pomiędzy" activeColor={T.purple} />
                     </div>
                   </div>
                 </>}
