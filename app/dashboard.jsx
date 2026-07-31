@@ -5331,11 +5331,11 @@ Respond ONLY with JSON.`;
       trade_type: tf.trade_type || "standard",
       hts_pair: tf.hts_pair || "NQ", hts_session: tf.hts_session || "", hts_entry_time: tf.hts_entry_time || "",
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
-      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
+      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "", profit_usd: parseFloat(tf.profit_usd) || 0,
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "", profit_usd: parseFloat(tf.profit_usd) || 0,
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false, conf_ob: tf.s8020_conf_ob || false, band_layout: tf.s8020_band_layout || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -5498,11 +5498,11 @@ Respond ONLY with JSON.`;
       trade_type: tf.trade_type || "standard",
       hts_pair: tf.hts_pair || "NQ", hts_session: tf.hts_session || "", hts_entry_time: tf.hts_entry_time || "",
       hts_extra_8020: tf.hts_extra_8020 || false, hts_extra_fvg: tf.hts_extra_fvg || false, hts_extra_vwap: tf.hts_extra_vwap || false, hts_extra_poi: tf.hts_extra_poi || false,
-      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "",
+      hts_rr: tf.hts_rr || "", hts_entry_model: tf.hts_entry_model || "", hts_candle_5m: tf.hts_candle_5m || "", hts_candle_15m: tf.hts_candle_15m || "", profit_usd: parseFloat(tf.profit_usd) || 0,
       hts_m1: tf.hts_m1 || "", hts_m5: tf.hts_m5 || "", hts_m15: tf.hts_m15 || "", hts_h1: tf.hts_h1 || "", hts_h4: tf.hts_h4 || "", hts_d1: tf.hts_d1 || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
     } : stratType === "8020" ? {
-      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "",
+      session: tf.s8020_session || "", entry_time: tf.s8020_entry_time || "", rr: tf.s8020_rr || "", knot: tf.s8020_knot || "", profit_usd: parseFloat(tf.profit_usd) || 0,
       entry_type: tf.s8020_entry_type || [], level: tf.s8020_level || "", price_read: tf.s8020_price_read || "",
       conf_bands: tf.s8020_conf_bands || false, conf_vwap: tf.s8020_conf_vwap || false, conf_poi: tf.s8020_conf_poi || false, conf_fvg: tf.s8020_conf_fvg || false, conf_ob: tf.s8020_conf_ob || false, band_layout: tf.s8020_band_layout || "",
       trade_date: tf.trade_date || new Date().toISOString().slice(0, 10),
@@ -6295,7 +6295,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           });
           const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
           const getR = t => { const rr = parseFloat(t.profit); return isNaN(rr) ? 0 : rr; };
-          const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || 0; };
+          const getUSD = t => { const sd = getSd(t); return parseFloat(sd?.profit_usd) || parseFloat(t.profit_usd) || 0; };
           const gWins = ovTrades.filter(t=>t.result==="WIN").length;
           const gLoss = ovTrades.filter(t=>t.result==="LOSS").length;
           const gBE   = ovTrades.filter(t=>t.result==="BE").length;
@@ -6419,7 +6419,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       </div>
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:420, overflowY:"auto" }}>
-                      {selDayTrades.map(t=>{ const sd=getSd(t); const strat=strategies.find(s=>s.id===t.strategy_id); const rr=parseFloat(t.profit)||0; const usd=getUSD(t); const resCol=t.result==="WIN"?T.green:t.result==="LOSS"?T.red:T.amber; return(<div key={t.id} onClick={()=>{setActiveStrategy(t.strategy_id);startEdit(t);}} style={{ padding:"10px 14px", background:T.bg2, borderRadius:8, border:`1px solid ${T.border}`, cursor:"pointer", display:"flex", gap:12, alignItems:"center" }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}><div style={{ width:6, height:40, borderRadius:3, background:resCol, flexShrink:0 }}/><div style={{ flex:1, minWidth:0 }}><div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:3 }}><span style={{ fontSize:11, fontWeight:800, color:resCol }}>{t.result}</span><span style={{ fontSize:10, color:T.textDim }}>{t.direction}</span><span style={{ fontSize:10, color:T.cyan }}>{strat?.name||"?"}</span>{(sd.hts_session||sd.session)&&<span style={{ fontSize:10, color:T.textDim }}>{sd.hts_session||sd.session}</span>}</div>{t.description&&<div style={{ fontSize:11, color:T.textSoft, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.description}</div>}</div><div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:13, fontWeight:800, color:rr>=0?T.green:T.red }}>{rr>0?"+":""}{rr.toFixed(2)}R</div>{usd!==0&&<div style={{ fontSize:10, color:usd>=0?T.green:T.red }}>{usd>0?"+":""}{usd.toFixed(0)}$</div>}</div></div>); })}
+                      {selDayTrades.map(t=>{ const sd=getSd(t); const strat=strategies.find(s=>s.id===t.strategy_id); const rr=parseFloat(t.profit)||0; const usd=getUSD(t); const resCol=t.result==="WIN"?T.green:t.result==="LOSS"?T.red:T.amber; return(<div key={t.id} onClick={()=>{setActiveStrategy(t.strategy_id);startEdit(t);}} style={{ padding:"10px 14px", background:T.bg2, borderRadius:8, border:`1px solid ${T.border}`, cursor:"pointer", display:"flex", gap:12, alignItems:"center" }} onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan} onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}><div style={{ width:6, height:40, borderRadius:3, background:resCol, flexShrink:0 }}/><div style={{ flex:1, minWidth:0 }}><div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:3 }}><span style={{ fontSize:11, fontWeight:800, color:resCol }}>{t.result}</span><span style={{ fontSize:10, color:T.textDim }}>{t.direction}</span><span style={{ fontSize:10, color:T.cyan }}>{strat?.name||"?"}</span>{(sd.hts_session||sd.session)&&<span style={{ fontSize:10, color:T.textDim }}>{sd.hts_session||sd.session}</span>}</div>{t.description&&<div style={{ fontSize:11, color:T.textSoft, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.description}</div>}</div><div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:13, fontWeight:800, color:rr>=0?T.green:T.red }}>{rr>0?"+":""}{rr.toFixed(2)}R</div><div style={{ fontSize:11, fontWeight:600, color:usd>=0?T.green:T.red }}>{usd>0?"+":""}{usd.toFixed(0)}$</div></div></div>); })}
                       {selDayTrades.length===0&&<div style={{ fontSize:12, color:T.textDim, fontStyle:"italic" }}>Brak trade'ów</div>}
                     </div>
                   </>):(<>
