@@ -5261,7 +5261,8 @@ Respond ONLY with JSON.`;
           const newDate = (parsed.trade_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.trade_date)) ? parsed.trade_date : "";
           const detect8020Session = (t) => {
             const [h, m] = t.split(":").map(Number); const mins = h*60+m;
-            if (mins >= 20*60 || mins < 2*60) return "Asia";
+            if (mins >= 20*60) return "Asia";
+            if (mins >= 0 && mins < 2*60) return "London Pre-Market";
             if (mins >= 2*60 && mins < 5*60) return "London";
             if (mins >= 5*60 && mins < 9*60+30) return "Pre-Market";
             if (mins >= 9*60+30 && mins < 11*60) return "NY AM";
@@ -6302,7 +6303,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           const stratStats = strategies.map(s => { const st=ovTrades.filter(t=>t.strategy_id===s.id); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); const u=st.reduce((s,t)=>s+getUSD(t),0); return {name:s.name,total:st.length,w,l,be,wr,p:p.toFixed(2),u:u.toFixed(0)}; }).filter(s=>s.total>0);
           const DAYS=[["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
           const dayStats = DAYS.map(([di,dn])=>{ const st=ovTrades.filter(t=>{ const d=getSd(t).trade_date||t.trade_date||""; return d&&String(new Date(d+"T12:00:00").getDay())===di; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {di,dn,total:st.length,w,l,wr,p:p.toFixed(2)}; });
-          const SESSIONS=["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+          const SESSIONS=["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
           const sessStats=SESSIONS.map(sess=>{ const st=ovTrades.filter(t=>{ const sd=getSd(t); return (sd.session||sd.hts_session||"")===sess; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {sess,total:st.length,w,l,be,wr,p:p.toFixed(2)}; }).filter(s=>s.total>0);
           const byDate={};
           ovTrades.forEach(t=>{ const date=getSd(t).trade_date||t.trade_date||""; if(!date)return; if(!byDate[date])byDate[date]={date,trades:[],pnl:0,usd:0,w:0,l:0,be:0}; byDate[date].trades.push(t); byDate[date].pnl+=getR(t); byDate[date].usd+=getUSD(t); if(t.result==="WIN")byDate[date].w++; else if(t.result==="LOSS")byDate[date].l++; else byDate[date].be++; });
@@ -6715,7 +6716,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.hts_session || ""} onChange={e => setTf(p => ({...p, hts_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
                     <option value="">— wybierz —</option>
-                    <option value="Asia">🌏 Asia (20:00–02:00)</option>
+                    <option value="Asia">🌏 Asia (20:00–00:00)</option>
+                    <option value="London Pre-Market">🌙 London Pre-Market (00:00–02:00)</option>
                     <option value="London">🇬🇧 London (02:00–05:00)</option>
                     <option value="Pre-Market">🌅 Pre-Market (05:00–09:30)</option>
                     <option value="NY AM">🗽 NY AM (09:30–11:00)</option>
@@ -6733,7 +6735,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       const [h, m] = t.split(":").map(Number);
                       const mins = h * 60 + m;
                       let sess = "Overnight";
-                      if (mins >= 20*60 || mins < 2*60) sess = "Asia";
+                      if (mins >= 20*60) sess = "Asia";
+                      else if (mins >= 0 && mins < 2*60) sess = "London Pre-Market";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
                       else if (mins >= 5*60 && mins < 9*60+30) sess = "Pre-Market";
                       else if (mins >= 9*60+30 && mins < 11*60) sess = "NY AM";
@@ -6875,7 +6878,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                   <div style={label}>Sesja (EST)</div>
                   <select value={tf.s8020_session || ""} onChange={e => setTf(p => ({...p, s8020_session: e.target.value}))} style={{ ...sel, width: "100%" }}>
                     <option value="">— wybierz —</option>
-                    <option value="Asia">🌏 Asia (20:00–02:00)</option>
+                    <option value="Asia">🌏 Asia (20:00–00:00)</option>
+                    <option value="London Pre-Market">🌙 London Pre-Market (00:00–02:00)</option>
                     <option value="London">🇬🇧 London (02:00–05:00)</option>
                     <option value="Pre-Market">🌅 Pre-Market (05:00–09:30)</option>
                     <option value="NY AM">🗽 NY AM (09:30–11:00)</option>
@@ -6893,7 +6897,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       const [h, m] = t.split(":").map(Number);
                       const mins = h * 60 + m;
                       let sess = "Overnight";
-                      if (mins >= 20*60 || mins < 2*60) sess = "Asia";
+                      if (mins >= 20*60) sess = "Asia";
+                      else if (mins >= 0 && mins < 2*60) sess = "London Pre-Market";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
                       else if (mins >= 5*60 && mins < 9*60+30) sess = "Pre-Market";
                       else if (mins >= 9*60+30 && mins < 11*60) sess = "NY AM";
@@ -8822,7 +8827,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
           {/* Session Performance */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (() => {
-            const SESSIONS = ["Asia", "London", "Pre-Market", "NY AM", "NY Lunch", "NY PM", "After Hours", "Overnight"];
+            const SESSIONS = ["Asia", "London Pre-Market", "London", "Pre-Market", "NY AM", "NY Lunch", "NY PM", "After Hours", "Overnight"];
             const sessStats = SESSIONS.map(sess => {
               const st = filteredTrades.filter(t => {
                 let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -8917,7 +8922,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const dirs = [dirStat(longs,"LONG ▲",T.green), dirStat(shorts,"SHORT ▼",T.red)].filter(d=>d.total>0);
 
             // By session
-            const SESS_8020 = ["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+            const SESS_8020 = ["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
             const sessSt = SESS_8020.map(sess => {
               const st = ft.filter(t=>getSd(t).session===sess);
               const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
@@ -9648,6 +9653,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="s8020_session_f" value="ALL" label="ALL" />
                       <FilterBtn groupKey="s8020_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="s8020_session_f" value="London Pre-Market" label="London PM" activeColor={T.textDim} />
                       <FilterBtn groupKey="s8020_session_f" value="London" label="London" activeColor={T.purple} />
                       <FilterBtn groupKey="s8020_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
                       <FilterBtn groupKey="s8020_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
@@ -9689,6 +9695,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="hts_session_f" value="ALL" label="ALL" />
                       <FilterBtn groupKey="hts_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="hts_session_f" value="London Pre-Market" label="London PM" activeColor={T.textDim} />
                       <FilterBtn groupKey="hts_session_f" value="London" label="London" activeColor={T.purple} />
                       <FilterBtn groupKey="hts_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
                       <FilterBtn groupKey="hts_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
@@ -9747,6 +9754,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="ib_session_f" value="ALL" label="ALL" />
                       <FilterBtn groupKey="ib_session_f" value="Asia" label="Asia" />
+                      <FilterBtn groupKey="ib_session_f" value="London Pre-Market" label="London PM" activeColor={T.textDim} />
                       <FilterBtn groupKey="ib_session_f" value="London" label="London" activeColor={T.purple} />
                       <FilterBtn groupKey="ib_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
                       <FilterBtn groupKey="ib_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
