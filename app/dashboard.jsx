@@ -9117,6 +9117,63 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </div>
             </>);
           })()}
+
+          {/* ─── IB (LIVE_JOURNAL) STATS ─── */}
+          {isLJ && (() => {
+            const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
+            const ft = filteredTrades;
+            const SESSIONS_IB = ["London", "NY"];
+            const DAYS = [["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
+            const sessSt = SESSIONS_IB.map(sess => {
+              const st=ft.filter(t=>getSd(t).session===sess);
+              const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length, be=st.filter(t=>t.result==="BE").length;
+              const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—";
+              const r=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0);
+              const usd=st.reduce((s,t)=>s+(parseFloat(getSd(t).profit_usd)||0),0);
+              return {sess,total:st.length,w,l,be,wr,r:r.toFixed(2),usd:usd.toFixed(0)};
+            }).filter(s=>s.total>0);
+            const sessDay = SESSIONS_IB.map(sess => ({
+              sess,
+              byDay: DAYS.map(([di,dn]) => {
+                const st=ft.filter(t=>{ const sd=getSd(t); if(sd.session!==sess)return false; const d=sd.trade_date||t.trade_date||""; return d&&String(new Date(d+"T12:00:00").getDay())===di; });
+                const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
+                const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—";
+                return {di,dn,total:st.length,w,l,wr};
+              })
+            }));
+            const BUCKETS=[{label:"0–100",min:0,max:100},{label:"100–200",min:100,max:200},{label:"200–400",min:200,max:400},{label:"400–600",min:400,max:600},{label:"600+",min:600,max:Infinity}];
+            const rangeSt=BUCKETS.map(b=>{ const st=ft.filter(t=>{ const r=parseFloat(getSd(t).lj_range_size); return !isNaN(r)&&r>=b.min&&r<b.max; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const r=st.reduce((s,t)=>s+(parseFloat(t.profit)||0),0); return {label:b.label,total:st.length,w,l,be,wr,r:r.toFixed(2)}; }).filter(s=>s.total>0);
+            if(!sessSt.length&&!rangeSt.length) return null;
+            return (<>
+              {sessSt.length>0&&(<Card style={{marginBottom:16}}><Heading icon="🕐">Performance per Sesja (IB)</Heading>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                  {sessSt.map(s=>{ const col=s.sess==="London"?T.purple:T.green; return(<div key={s.sess} style={{padding:14,background:`${parseFloat(s.wr)>=50?T.green:T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:14,fontWeight:800,color:col,marginBottom:8}}>{s.sess==="London"?"🇬🇧":"🗽"} {s.sess}</div>
+                    <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:9,color:T.textDim,textTransform:"uppercase"}}>Win Rate</div><div style={{fontSize:28,fontWeight:800,color:parseFloat(s.wr)>=50?T.green:T.red}}>{s.wr}{s.total>0?"%":""}</div><div style={{fontSize:10,color:T.textDim}}>{s.w}W/{s.be}BE/{s.l}L · {s.total}</div></div>
+                      <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                        <div style={{padding:"6px 10px",background:T.bg2,borderRadius:6,border:`1px solid ${T.border}`}}><span style={{fontSize:10,color:T.textDim}}>R/R: </span><span style={{fontSize:13,fontWeight:700,color:parseFloat(s.r)>=0?T.green:T.red}}>{parseFloat(s.r)>0?"+":""}{s.r}R</span></div>
+                        <div style={{padding:"6px 10px",background:T.bg2,borderRadius:6,border:`1px solid ${T.border}`}}><span style={{fontSize:10,color:T.textDim}}>Zysk: </span><span style={{fontSize:13,fontWeight:700,color:parseFloat(s.usd)>=0?T.green:T.red}}>{parseFloat(s.usd)>0?"+":""}{s.usd}$</span></div>
+                      </div>
+                    </div>
+                  </div>); })}
+                </div>
+              </Card>)}
+              {sessDay.some(s=>s.byDay.some(d=>d.total>0))&&(<Card style={{marginBottom:16}}><Heading icon="📅">Skuteczność Sesja × Dzień tygodnia</Heading>
+                {sessDay.map(({sess,byDay})=>(<div key={sess} style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:700,color:sess==="London"?T.purple:T.green,marginBottom:6}}>{sess==="London"?"🇬🇧":"🗽"} {sess}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+                    {byDay.map(({di,dn,total,w,l,wr})=>{ const col=total>0?(parseFloat(wr)>=50?T.green:T.red):T.border; return(<div key={di} style={{textAlign:"center",padding:"8px 4px",background:total>0?`${col}08`:T.bg2,borderRadius:6,border:`1px solid ${total>0?col:T.border}`}}><div style={{fontSize:10,fontWeight:700,color:col}}>{dn}</div><div style={{fontSize:16,fontWeight:800,color:col}}>{total>0?`${wr}%`:"—"}</div><div style={{fontSize:8,color:T.textDim}}>{total>0?`${w}W/${l}L`:""}</div></div>); })}
+                  </div>
+                </div>))}
+              </Card>)}
+              {rangeSt.length>0&&(<Card style={{marginBottom:16}}><Heading icon="📏">Skuteczność per Rozmiar Range'a</Heading>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                  {rangeSt.map(s=>(<div key={s.label} style={{textAlign:"center",padding:10,background:`${parseFloat(s.wr)>=50?T.green:T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}><div style={{fontSize:11,fontWeight:700,color:T.cyan,marginBottom:4}}>{s.label}</div><div style={{fontSize:22,fontWeight:800,color:parseFloat(s.wr)>=50?T.green:T.red}}>{s.wr}{s.total>0?"%":""}</div><div style={{fontSize:9,color:T.textDim}}>{s.w}W/{s.be}BE/{s.l}L · {s.total}</div><div style={{fontSize:10,fontWeight:700,color:parseFloat(s.r)>=0?T.green:T.red,marginTop:4}}>{parseFloat(s.r)>0?"+":""}{s.r}R</div></div>))}
+                </div>
+              </Card>)}
+            </>);
+          })()}
         </div>
         );
       })()}
