@@ -7133,6 +7133,25 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 </div>
               </div>
 
+              {/* SESJA */}
+              <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                <div style={{ ...label, marginBottom: 8 }}>Sesja</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "London", label: "🇬🇧 London", color: T.purple },
+                    { id: "NY",     label: "🗽 NY",      color: T.green },
+                  ].map(opt => {
+                    const active = tf.session === opt.id;
+                    return (
+                      <button key={opt.id} onClick={() => setTf(p => ({...p, session: p.session === opt.id ? "" : opt.id}))}
+                        style={{ ...sel, flex: 1, padding: "8px 6px", background: active ? `${opt.color}20` : T.bg2, color: active ? opt.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? opt.color : T.border }}>
+                        {active ? "✓ " : ""}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* FORMACJA */}
               <div style={{ marginBottom: 12, padding: 10, background: T.bg2, borderRadius: 8, border: `1px solid ${T.border}` }}>
                 <div style={{ ...label, marginBottom: 8 }}>Formacja</div>
@@ -9753,12 +9772,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4, fontWeight: 600 }}>Sesja</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="ib_session_f" value="ALL" label="ALL" />
-                      <FilterBtn groupKey="ib_session_f" value="Asia" label="Asia" />
-                      <FilterBtn groupKey="ib_session_f" value="London Pre-Market" label="London PM" activeColor={T.textDim} />
                       <FilterBtn groupKey="ib_session_f" value="London" label="London" activeColor={T.purple} />
-                      <FilterBtn groupKey="ib_session_f" value="NY AM" label="NY AM" activeColor={T.green} />
-                      <FilterBtn groupKey="ib_session_f" value="NY Lunch" label="Lunch" activeColor={T.amber} />
-                      <FilterBtn groupKey="ib_session_f" value="NY PM" label="NY PM" activeColor={T.cyan} />
+                      <FilterBtn groupKey="ib_session_f" value="NY" label="NY" activeColor={T.green} />
                     </div>
                   </div>
                   <div>
