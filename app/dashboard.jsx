@@ -5269,7 +5269,7 @@ Respond ONLY with JSON.`;
             if (mins >= 11*60 && mins < 13*60) return "NY Lunch";
             if (mins >= 13*60 && mins < 16*60) return "NY PM";
             if (mins >= 16*60 && mins < 20*60) return "After Hours";
-            return "Overnight";
+            return "After Hours"; // fallback - should not occur
           };
           setTf(prev => ({
             ...prev,
@@ -5291,7 +5291,7 @@ Respond ONLY with JSON.`;
             if (mins >= 9*60+30 && mins < 11*60) return "NY AM";   // 09:30–11:00
             if (mins >= 11*60 && mins < 13*60) return "NY Lunch";  // 11:00–13:00
             if (mins >= 13*60 && mins < 16*60) return "NY PM";     // 13:00–16:00
-            return "Overnight";
+            return "After Hours"; // fallback - should not occur
           };
           const entryTime = (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : "";
           const session = entryTime ? detectSession(entryTime) : "";
@@ -6303,7 +6303,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           const stratStats = strategies.map(s => { const st=ovTrades.filter(t=>t.strategy_id===s.id); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); const u=st.reduce((s,t)=>s+getUSD(t),0); return {name:s.name,total:st.length,w,l,be,wr,p:p.toFixed(2),u:u.toFixed(0)}; }).filter(s=>s.total>0);
           const DAYS=[["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
           const dayStats = DAYS.map(([di,dn])=>{ const st=ovTrades.filter(t=>{ const d=getSd(t).trade_date||t.trade_date||""; return d&&String(new Date(d+"T12:00:00").getDay())===di; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {di,dn,total:st.length,w,l,wr,p:p.toFixed(2)}; });
-          const SESSIONS=["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+          const SESSIONS=["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours"];
           const sessStats=SESSIONS.map(sess=>{ const st=ovTrades.filter(t=>{ const sd=getSd(t); return (sd.session||sd.hts_session||"")===sess; }); const w=st.filter(t=>t.result==="WIN").length,l=st.filter(t=>t.result==="LOSS").length,be=st.filter(t=>t.result==="BE").length; const dec=w+l; const wr=dec>0?((w/dec)*100).toFixed(0):"—"; const p=st.reduce((s,t)=>s+getR(t),0); return {sess,total:st.length,w,l,be,wr,p:p.toFixed(2)}; }).filter(s=>s.total>0);
           const byDate={};
           ovTrades.forEach(t=>{ const date=getSd(t).trade_date||t.trade_date||""; if(!date)return; if(!byDate[date])byDate[date]={date,trades:[],pnl:0,usd:0,w:0,l:0,be:0}; byDate[date].trades.push(t); byDate[date].pnl+=getR(t); byDate[date].usd+=getUSD(t); if(t.result==="WIN")byDate[date].w++; else if(t.result==="LOSS")byDate[date].l++; else byDate[date].be++; });
@@ -6724,7 +6724,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <option value="NY Lunch">☕ NY Lunch (11:00–13:00)</option>
                     <option value="NY PM">🌆 NY PM (13:00–16:00)</option>
                     <option value="After Hours">🌇 After Hours (16:00–20:00)</option>
-                    <option value="Overnight">🌙 Overnight</option>
                   </select>
                 </div>
                 <div>
@@ -6734,7 +6733,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     if (t) {
                       const [h, m] = t.split(":").map(Number);
                       const mins = h * 60 + m;
-                      let sess = "Overnight";
+                      let sess = "After Hours";
                       if (mins >= 20*60) sess = "Asia";
                       else if (mins >= 0 && mins < 2*60) sess = "London Pre-Market";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
@@ -6886,7 +6885,6 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <option value="NY Lunch">☕ NY Lunch (11:00–13:00)</option>
                     <option value="NY PM">🌆 NY PM (13:00–16:00)</option>
                     <option value="After Hours">🌇 After Hours (16:00–20:00)</option>
-                    <option value="Overnight">🌙 Overnight</option>
                   </select>
                 </div>
                 <div>
@@ -6896,7 +6894,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     if (t) {
                       const [h, m] = t.split(":").map(Number);
                       const mins = h * 60 + m;
-                      let sess = "Overnight";
+                      let sess = "After Hours";
                       if (mins >= 20*60) sess = "Asia";
                       else if (mins >= 0 && mins < 2*60) sess = "London Pre-Market";
                       else if (mins >= 2*60 && mins < 5*60) sess = "London";
@@ -7770,7 +7768,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
         }).filter(s=>s.total>0);
 
         // Per session
-        const SESSIONS = ["Asia","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+        const SESSIONS = ["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours"];
         const sessStats = SESSIONS.map(sess=>{
           const st = allTrades.filter(t=>{
             const sd=getSd(t);
@@ -8846,7 +8844,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
 
           {/* Session Performance */}
           {(stratType === "HTS" || (activeStrategy !== "ALL" && !activeStratObj?.type)) && (() => {
-            const SESSIONS = ["Asia", "London Pre-Market", "London", "Pre-Market", "NY AM", "NY Lunch", "NY PM", "After Hours", "Overnight"];
+            const SESSIONS = ["Asia", "London Pre-Market", "London", "Pre-Market", "NY AM", "NY Lunch", "NY PM", "After Hours"];
             const sessStats = SESSIONS.map(sess => {
               const st = filteredTrades.filter(t => {
                 let sd = t.strategy_data; try { if (typeof sd === "string") sd = JSON.parse(sd); } catch { sd = {}; }
@@ -8941,7 +8939,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             const dirs = [dirStat(longs,"LONG ▲",T.green), dirStat(shorts,"SHORT ▼",T.red)].filter(d=>d.total>0);
 
             // By session
-            const SESS_8020 = ["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours","Overnight"];
+            const SESS_8020 = ["Asia","London Pre-Market","London","Pre-Market","NY AM","NY Lunch","NY PM","After Hours"];
             const sessSt = SESS_8020.map(sess => {
               const st = ft.filter(t=>getSd(t).session===sess);
               const w=st.filter(t=>t.result==="WIN").length, l=st.filter(t=>t.result==="LOSS").length;
