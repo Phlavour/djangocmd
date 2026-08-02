@@ -6479,7 +6479,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     style={{ ...sel, borderRadius: "8px 0 0 8px", padding: "8px 14px", fontSize: 12, fontWeight: 700, minWidth: 80, background: `${T.cyan}10`, borderColor: T.cyan }}
                   />
                 ) : (
-                  <button onClick={() => setActiveStrategy(s.id)} onDoubleClick={() => { setEditingStratId(s.id); setEditingStratName(s.name); }} style={{
+                  <button onClick={() => { setActiveStrategy(s.id); if (s.type === "LIVE_JOURNAL") setTf(p => ({...p, timeframe: "1m"})); }} onDoubleClick={() => { setEditingStratId(s.id); setEditingStratName(s.name); }} style={{
                     background: activeStrategy === s.id ? `${T.cyan}15` : T.bg2,
                     border: `1px solid ${activeStrategy === s.id ? T.cyan : T.border}`,
                     borderRadius: "8px 0 0 8px", padding: "8px 14px", cursor: "pointer",
@@ -7144,6 +7144,22 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                       <button key={opt.id} onClick={() => setTf(p => ({...p, session: p.session === opt.id ? "" : opt.id}))}
                         style={{ ...sel, flex: 1, padding: "8px 6px", background: active ? `${opt.color}20` : T.bg2, color: active ? opt.color : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? opt.color : T.border }}>
                         {active ? "✓ " : ""}{opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* TIMEFRAME IB */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ ...label, marginBottom: 8 }}>Timeframe</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["1m", "3m", "5m"].map(tfv => {
+                    const active = tf.timeframe === tfv;
+                    return (
+                      <button key={tfv} onClick={() => setTf(p => ({...p, timeframe: tfv}))}
+                        style={{ ...sel, flex: 1, padding: "8px 6px", background: active ? `${T.cyan}20` : T.bg2, color: active ? T.cyan : T.textSoft, fontWeight: active ? 700 : 400, borderColor: active ? T.cyan : T.border }}>
+                        {tfv}
                       </button>
                     );
                   })}
