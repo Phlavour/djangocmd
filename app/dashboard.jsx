@@ -11568,9 +11568,6 @@ Jedno mocne zdanie.`;
               {textarea(daySum[selectedDay] || "", e => handleDaySumChange(selectedDay, e.target.value), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
             </div>
           </DCCard>
-        </div>
-
-
 
           {/* Dzienna Rutyna */}
           <DCCard>
@@ -11593,6 +11590,9 @@ Jedno mocne zdanie.`;
               <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
             )}
           </DCCard>
+
+        </div>
+
 
 
         {/* COL 2: Tasks */}
