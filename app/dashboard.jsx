@@ -10827,6 +10827,11 @@ function DailyCheckPanel({ supa, apiKey }) {
   const [newMonthCat, setNewMonthCat] = useState("inne");
   const [newWeekDay, setNewWeekDay] = useState("");
   const [weekSort, setWeekSort] = useState("default"); // default | category | day
+  // Monthly Challenge
+  const [challenge, setChallenge] = useState(null); // {name, requirements:[{task_key, label, target_pct, target_days}]}
+  const [challengeEdit, setChallengeEdit] = useState(false);
+  const [challengeName, setChallengeName] = useState("");
+  const [challengeReqs, setChallengeReqs] = useState([]); // [{task_key, target_pct}]
   const [planTab, setPlanTab] = useState("week");
 
   // Load checklist + tasks
@@ -10936,6 +10941,33 @@ function DailyCheckPanel({ supa, apiKey }) {
       body: JSON.stringify([{ check_date: noteModal.date, task_key: noteModal.key, completed: checklist[k] || false, notes: noteText }]),
     }).catch(console.error);
     setNoteModal(null);
+  };
+
+  // Monthly Challenge — save/load from daily_notes with note_type='challenge'
+  const saveChallenge = async (data) => {
+    if (!supa?.url) return;
+    await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ note_type: "challenge", note_date: monthStart, content: JSON.stringify(data) }]),
+    }).catch(console.error);
+  };
+
+  React.useEffect(() => {
+    if (!supa?.url) return;
+    fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.challenge&note_date=eq.${monthStart}`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => {
+        if (Array.isArray(rows) && rows[0]) {
+          try { const d = JSON.parse(rows[0].content); setChallenge(d); setChallengeName(d.name||""); setChallengeReqs(d.requirements||[]); } catch {}
+        } else { setChallenge(null); setChallengeName(""); setChallengeReqs([]); }
+      }).catch(console.error);
+  }, [monthStart, supa?.url]);
+
+  const handleSaveChallenge = () => {
+    const data = { name: challengeName, requirements: challengeReqs };
+    setChallenge(data);
+    setChallengeEdit(false);
+    saveChallenge(data);
   };
 
   const saveDaySum = async (date, content) => {
@@ -11455,6 +11487,114 @@ Jedno mocne zdanie.`;
 
         {/* COL 2: Tasks */}
         <div>
+
+          {/* ═══ MONTHLY CHALLENGE ═══ */}
+          <DCCard style={{ marginBottom: 16, background: "linear-gradient(135deg, #1e3a5f 0%, #0f2027 100%)", border: "2px solid #f59e0b", borderRadius: 14, position: "relative", overflow: "hidden" }}>
+            {/* Decorative glow */}
+            <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(245,158,11,0.12)", pointerEvents: "none" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 20 }}>🏆</span>
+                {!challengeEdit && challenge?.name ? (
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b", letterSpacing: ".02em" }}>{challenge.name}</div>
+                ) : (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8" }}>MONTHLY CHALLENGE</div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => { setChallengeEdit(!challengeEdit); }} style={{ fontSize: 10, padding: "4px 10px", borderRadius: 6, border: "1px solid #f59e0b", background: "transparent", color: "#f59e0b", cursor: "pointer", fontWeight: 600 }}>
+                  {challengeEdit ? "✕ Anuluj" : "✎ Edytuj"}
+                </button>
+              </div>
+            </div>
+
+            {challengeEdit ? (
+              /* Edit mode */
+              <div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4, textTransform: "uppercase", fontWeight: 700 }}>Nazwa Challenge'u</div>
+                  <input value={challengeName} onChange={e => setChallengeName(e.target.value)} placeholder="np. Healthy August"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid #f59e0b", background: "rgba(245,158,11,0.08)", color: "#fff", fontSize: 13, fontWeight: 700, boxSizing: "border-box", outline: "none", fontFamily: "inherit" }} />
+                </div>
+                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", fontWeight: 700 }}>Wymagania (Daily Taski)</div>
+                {tasks.map(t => {
+                  const req = challengeReqs.find(r => r.task_key === t.task_key);
+                  const pct = req?.target_pct || 0;
+                  const daysInM = new Date(parseInt(monthStart.slice(0,4)), parseInt(monthStart.slice(5,7)), 0).getDate();
+                  const targetDays = Math.ceil(daysInM * pct / 100);
+                  return (
+                    <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <input type="checkbox" checked={pct > 0} onChange={e => {
+                        if (e.target.checked) setChallengeReqs(p => [...p.filter(r=>r.task_key!==t.task_key), {task_key:t.task_key, label:t.label, target_pct:90}]);
+                        else setChallengeReqs(p => p.filter(r=>r.task_key!==t.task_key));
+                      }} style={{ accentColor: "#f59e0b", width: 16, height: 16, cursor: "pointer" }} />
+                      <span style={{ flex: 1, fontSize: 12, color: pct > 0 ? "#fff" : "#64748b" }}>{t.label}</span>
+                      {pct > 0 && <>
+                        <input type="number" value={pct} min={1} max={100} onChange={e => setChallengeReqs(p => p.map(r => r.task_key===t.task_key ? {...r, target_pct:parseInt(e.target.value)||90} : r))}
+                          style={{ width: 52, padding: "3px 6px", borderRadius: 5, border: "1px solid #f59e0b", background: "rgba(245,158,11,0.08)", color: "#f59e0b", fontSize: 12, fontWeight: 700, textAlign: "center", outline: "none" }} />
+                        <span style={{ fontSize: 10, color: "#94a3b8" }}>% ({targetDays}d)</span>
+                      </>}
+                    </div>
+                  );
+                })}
+                <button onClick={handleSaveChallenge} style={{ marginTop: 10, width: "100%", padding: "8px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#000", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>💾 Zapisz Challenge</button>
+              </div>
+            ) : challenge?.requirements?.length > 0 ? (
+              /* View mode — show progress */
+              (() => {
+                const daysInM = new Date(parseInt(monthStart.slice(0,4)), parseInt(monthStart.slice(5,7)), 0).getDate();
+                const allDays = Array.from({length: daysInM}, (_,i) => `${monthStart}-${String(i+1).padStart(2,"0")}`);
+                return (
+                  <div>
+                    {challenge.requirements.map(req => {
+                      const done = allDays.filter(d => checklist[`${d}_${req.task_key}`]).length;
+                      const targetDays = Math.ceil(daysInM * req.target_pct / 100);
+                      const pct = Math.round(done / targetDays * 100);
+                      const achieved = done >= targetDays;
+                      const colBar = achieved ? "#22c55e" : pct >= 70 ? "#f59e0b" : "#ef4444";
+                      return (
+                        <div key={req.task_key} style={{ marginBottom: 10 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 14 }}>{achieved ? "✅" : "⏳"}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: achieved ? "#22c55e" : "#e2e8f0" }}>{req.label}</span>
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: colBar }}>{done}/{targetDays} dni ({req.target_pct}%)</span>
+                          </div>
+                          <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${Math.min(100, Math.round(done/targetDays*100))}%`, background: colBar, borderRadius: 3, transition: "width .4s" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Overall */}
+                    {(() => {
+                      const allAchieved = challenge.requirements.every(req => {
+                        const done = allDays.filter(d => checklist[`${d}_${req.task_key}`]).length;
+                        return done >= Math.ceil(daysInM * req.target_pct / 100);
+                      });
+                      const doneCount = challenge.requirements.filter(req => {
+                        const done = allDays.filter(d => checklist[`${d}_${req.task_key}`]).length;
+                        return done >= Math.ceil(daysInM * req.target_pct / 100);
+                      }).length;
+                      return (
+                        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: allAchieved ? "rgba(34,197,94,0.15)" : "rgba(245,158,11,0.08)", border: `1px solid ${allAchieved?"#22c55e":"#f59e0b"}`, textAlign: "center" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: allAchieved ? "#22c55e" : "#f59e0b" }}>
+                            {allAchieved ? "🏆 Challenge ukończony!" : `${doneCount}/${challenge.requirements.length} wymagań spełnionych`}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()
+            ) : (
+              <div style={{ textAlign: "center", padding: "12px 0", color: "#64748b", fontSize: 12 }}>
+                Kliknij ✎ Edytuj aby skonfigurować challenge miesiąca
+              </div>
+            )}
+          </DCCard>
+
           {/* Daily one-off tasks */}
           <DCCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -11521,12 +11661,6 @@ Jedno mocne zdanie.`;
             {/* Header with nav */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <DCHead icon="📅">Taski na ten tydzień</DCHead>
-              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                <span style={{ fontSize: 9, color: DC.dim, marginRight: 2 }}>Sortuj:</span>
-                {[["default","Kolejność"],["category","Kategoria"],["day","Dzień"]].map(([val, lbl]) => (
-                  <button key={val} onClick={() => setWeekSort(val)} style={{ fontSize: 9, padding: "3px 7px", borderRadius: 5, border: `1px solid ${weekSort===val?DC.cyan:DC.border}`, background: weekSort===val?`${DC.cyan}20`:DC.bg2, color: weekSort===val?DC.cyan:DC.dim, cursor: "pointer", fontWeight: weekSort===val?700:400 }}>{lbl}</button>
-                ))}
-              </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button onClick={() => { const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()-7); setWeekStart(d.toISOString().slice(0,10)); }} style={{ background: DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>‹</button>
                 <span style={{ fontSize:11, fontWeight:600, color:DC.soft, minWidth:130, textAlign:"center" }}>
@@ -11537,7 +11671,7 @@ Jedno mocne zdanie.`;
               </div>
             </div>
 
-            {/* Progress */}
+            {/* Progress + sort row */}
             {weekPlan.length > 0 && (() => {
               const done = weekPlan.filter(i => i.completed).length;
               const total = weekPlan.length;
@@ -11549,15 +11683,22 @@ Jedno mocne zdanie.`;
                     <span style={{ fontSize:11, color:DC.soft }}>{done}/{total} ukończonych</span>
                     <span style={{ fontSize:13, fontWeight:800, color:col }}>{pct}%</span>
                   </div>
-                  <div style={{ height:6, background:DC.border, borderRadius:3, overflow:"hidden" }}>
+                  <div style={{ height:6, background:DC.border, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} />
+                  </div>
+                  {/* Sort row */}
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span style={{ fontSize:9, color:DC.dim }}>Sortuj:</span>
+                    {[["default","Kolejność"],["category","Kategoria"],["day","Dzień"]].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setWeekSort(val)} style={{ fontSize:9, padding:"3px 8px", borderRadius:5, border:`1px solid ${weekSort===val?DC.cyan:DC.border}`, background:weekSort===val?`${DC.cyan}20`:DC.bg2, color:weekSort===val?DC.cyan:DC.dim, cursor:"pointer", fontWeight:weekSort===val?700:400 }}>{lbl}</button>
+                    ))}
                   </div>
                 </div>
               );
             })()}
 
             <PlanList items={(() => {
-              const DAY_ORDER = {"1":0,"2":1,"3":2,"4":3,"5":4,"6":5,"0":6,"":7};
+              const DAY_ORDER = {"1":0,"2":1,"3":2,"4":3,"5":4,"6":5,"0":6,"":99};
               const CAT_ORDER = PLAN_CATS.map(c=>c.id);
               if (weekSort === "category") return [...weekPlan].sort((a,b) => CAT_ORDER.indexOf(a.category||"inne") - CAT_ORDER.indexOf(b.category||"inne"));
               if (weekSort === "day") return [...weekPlan].sort((a,b) => (DAY_ORDER[a.assigned_day||""]||7) - (DAY_ORDER[b.assigned_day||""]||7));
