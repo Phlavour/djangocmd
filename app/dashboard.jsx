@@ -10823,7 +10823,8 @@ function DailyCheckPanel({ supa, apiKey }) {
   const [newWeekCat, setNewWeekCat] = useState("inne");
   const [newMonthCat, setNewMonthCat] = useState("inne");
   const [newWeekDay, setNewWeekDay] = useState("");
-  const [planTab, setPlanTab] = useState("week"); // week | month
+  const [weekSort, setWeekSort] = useState("default"); // default | category | day
+  const [planTab, setPlanTab] = useState("week");
 
   // Load checklist + tasks
   useEffect(() => {
@@ -11420,6 +11421,12 @@ function DailyCheckPanel({ supa, apiKey }) {
             {/* Header with nav */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <DCHead icon="📅">Taski na ten tydzień</DCHead>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <span style={{ fontSize: 9, color: DC.dim, marginRight: 2 }}>Sortuj:</span>
+                {[["default","Kolejność"],["category","Kategoria"],["day","Dzień"]].map(([val, lbl]) => (
+                  <button key={val} onClick={() => setWeekSort(val)} style={{ fontSize: 9, padding: "3px 7px", borderRadius: 5, border: `1px solid ${weekSort===val?DC.cyan:DC.border}`, background: weekSort===val?`${DC.cyan}20`:DC.bg2, color: weekSort===val?DC.cyan:DC.dim, cursor: "pointer", fontWeight: weekSort===val?700:400 }}>{lbl}</button>
+                ))}
+              </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button onClick={() => { const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()-7); setWeekStart(d.toISOString().slice(0,10)); }} style={{ background: DC.bg2, border:`1px solid ${DC.border}`, borderRadius:6, color:DC.soft, padding:"4px 8px", fontSize:11, cursor:"pointer" }}>‹</button>
                 <span style={{ fontSize:11, fontWeight:600, color:DC.soft, minWidth:130, textAlign:"center" }}>
@@ -11449,7 +11456,13 @@ function DailyCheckPanel({ supa, apiKey }) {
               );
             })()}
 
-            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, oldDay, newDay) => setDayPlanItem("week", id, oldDay, newDay)} onFail={item => markFailed(item)} onCarry={item => carryOverToNextWeek(item)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
+            <PlanList items={(() => {
+              const DAY_ORDER = {"1":0,"2":1,"3":2,"4":3,"5":4,"6":5,"0":6,"":7};
+              const CAT_ORDER = PLAN_CATS.map(c=>c.id);
+              if (weekSort === "category") return [...weekPlan].sort((a,b) => CAT_ORDER.indexOf(a.category||"inne") - CAT_ORDER.indexOf(b.category||"inne"));
+              if (weekSort === "day") return [...weekPlan].sort((a,b) => (DAY_ORDER[a.assigned_day||""]||7) - (DAY_ORDER[b.assigned_day||""]||7));
+              return weekPlan;
+            })()} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, oldDay, newDay) => setDayPlanItem("week", id, oldDay, newDay)} onFail={item => markFailed(item)} onCarry={item => carryOverToNextWeek(item)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
           </DCCard>
 
           {/* Month tasks */}
