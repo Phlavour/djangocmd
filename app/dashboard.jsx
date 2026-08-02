@@ -10863,7 +10863,7 @@ function DailyCheckPanel({ supa, apiKey }) {
         if (!Array.isArray(rows)) return;
         const ds = {};
         rows.forEach(r => { ds[r.note_date] = r.content || ""; });
-        setDaySum(ds);
+        setDaySum(prev => ({...prev, ...ds}));
       }).catch(console.error);
   }, [monthStart, supa?.url, tick]);
 
@@ -10874,6 +10874,18 @@ function DailyCheckPanel({ supa, apiKey }) {
       .then(r => r.json()).then(rows => { if (Array.isArray(rows) && rows[0]) setWeekNote(rows[0].content || ""); else setWeekNote(""); }).catch(console.error);
     fetch(`${supa.url}/rest/v1/plan_items?plan_type=eq.week&plan_date=eq.${weekStart}&order=sort_order.asc`, { headers: supa.headers })
       .then(r => r.json()).then(rows => { if (Array.isArray(rows)) setWeekPlan(rows); else setWeekPlan([]); }).catch(console.error);
+
+    // Load checklist for week days that may cross month boundary
+    const wDates = Array.from({length:7}, (_,i) => { const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().slice(0,10); });
+    const minDate = wDates[0];
+    const maxDate = wDates[6];
+    fetch(`${supa.url}/rest/v1/daily_checklist?check_date=gte.${minDate}&check_date=lte.${maxDate}`, { headers: supa.headers })
+      .then(r => r.json()).then(rows => {
+        if (!Array.isArray(rows)) return;
+        const extra = {};
+        rows.forEach(r => { extra[`${r.check_date}_${r.task_key}`] = r.completed === true; });
+        setChecklist(prev => ({...prev, ...extra}));
+      }).catch(console.error);
   }, [weekStart, supa?.url, tick]);
 
   // Load monthly note + plan when monthStart changes
