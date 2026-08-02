@@ -11420,48 +11420,6 @@ Jedno mocne zdanie.`;
             </div>
           </DCCard>
 
-          <DCCard style={{ marginBottom: 16 }}>
-            <DCHead icon="📋">
-              {selectedDay === today
-                ? `Dzisiaj — ${new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}`
-                : new Date(selectedDay + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
-              }
-            </DCHead>
-            {loading ? <div style={{ color: DC.dim, fontSize: 12 }}>Ładowanie...</div> : tasks.length === 0 ? <div style={{ color: DC.dim, fontSize: 12 }}>Brak zadań.</div> : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {tasks.map(t => {
-                  const k = `${selectedDay}_${t.task_key}`;
-                  const done = checklist[k];
-                  const note = dayNotes[k];
-                  return (
-                    <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: done ? `${DC.green}12` : "#fff", borderRadius: 8, border: `1px solid ${done ? DC.green : DC.border}`, transition: "all .2s" }}>
-                      <button onClick={() => !saving[k] && toggle(selectedDay, t.task_key)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${done ? DC.green : DC.border}`, background: done ? DC.green : "transparent", cursor: saving[k] ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {done && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800 }}>✓</span>}
-                      </button>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: done ? 700 : 500, color: done ? DC.green : DC.text }}>{t.label}</div>
-                        {note && <div style={{ fontSize: 10, color: DC.dim, marginTop: 2, fontStyle: "italic" }}>{note}</div>}
-                      </div>
-                      <button onClick={() => { setNoteModal({ date: selectedDay, key: t.task_key, label: t.label }); setNoteText(note || ""); }} style={{ fontSize: 12, color: DC.dim, background: "none", border: "none", cursor: "pointer" }} title="Notatka">📝</button>
-                    </div>
-                  );
-                })}
-                {(() => { const { done, tot, pct } = score(selectedDay); return <div style={{ marginTop: 4, padding: "8px 12px", background: DC.bg2, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 11, color: DC.soft }}>{done}/{tot} zadań</span><span style={{ fontSize: 16, fontWeight: 800, color: col(pct) }}>{pct}%</span></div>; })()}
-              </div>
-            )}
-
-            {/* Daily summary textarea */}
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${DC.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: DC.soft, textTransform: "uppercase", letterSpacing: ".06em" }}>Podsumowanie dnia</div>
-                <div style={{ fontSize: 9, color: daySumSaving[selectedDay] ? DC.amber : DC.dim }}>
-                  {daySumSaving[selectedDay] ? "💾 Zapisuję..." : "auto-save"}
-                </div>
-              </div>
-              {textarea(daySum[selectedDay] || "", e => handleDaySumChange(selectedDay, e.target.value), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
-            </div>
-          </DCCard>
-
         {/* ═══ MONTHLY CHALLENGE ═══ */}
         <DCCard style={{ marginBottom: 16, background: "linear-gradient(135deg, #1e3a5f 0%, #0f2027 100%)", border: "2px solid #f59e0b", borderRadius: 14, position: "relative", overflow: "hidden" }}>
           {/* Decorative glow */}
@@ -11568,6 +11526,48 @@ Jedno mocne zdanie.`;
             </div>
           )}
         </DCCard>
+
+          <DCCard style={{ marginBottom: 16 }}>
+            <DCHead icon="📋">
+              {selectedDay === today
+                ? `Dzisiaj — ${new Date(today + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}`
+                : new Date(selectedDay + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+              }
+            </DCHead>
+            {loading ? <div style={{ color: DC.dim, fontSize: 12 }}>Ładowanie...</div> : tasks.length === 0 ? <div style={{ color: DC.dim, fontSize: 12 }}>Brak zadań.</div> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {tasks.map(t => {
+                  const k = `${selectedDay}_${t.task_key}`;
+                  const done = checklist[k];
+                  const note = dayNotes[k];
+                  return (
+                    <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: done ? `${DC.green}12` : "#fff", borderRadius: 8, border: `1px solid ${done ? DC.green : DC.border}`, transition: "all .2s" }}>
+                      <button onClick={() => !saving[k] && toggle(selectedDay, t.task_key)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${done ? DC.green : DC.border}`, background: done ? DC.green : "transparent", cursor: saving[k] ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {done && <span style={{ color: "#fff", fontSize: 12, fontWeight: 800 }}>✓</span>}
+                      </button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: done ? 700 : 500, color: done ? DC.green : DC.text }}>{t.label}</div>
+                        {note && <div style={{ fontSize: 10, color: DC.dim, marginTop: 2, fontStyle: "italic" }}>{note}</div>}
+                      </div>
+                      <button onClick={() => { setNoteModal({ date: selectedDay, key: t.task_key, label: t.label }); setNoteText(note || ""); }} style={{ fontSize: 12, color: DC.dim, background: "none", border: "none", cursor: "pointer" }} title="Notatka">📝</button>
+                    </div>
+                  );
+                })}
+                {(() => { const { done, tot, pct } = score(selectedDay); return <div style={{ marginTop: 4, padding: "8px 12px", background: DC.bg2, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 11, color: DC.soft }}>{done}/{tot} zadań</span><span style={{ fontSize: 16, fontWeight: 800, color: col(pct) }}>{pct}%</span></div>; })()}
+              </div>
+            )}
+
+            {/* Daily summary textarea */}
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${DC.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: DC.soft, textTransform: "uppercase", letterSpacing: ".06em" }}>Podsumowanie dnia</div>
+                <div style={{ fontSize: 9, color: daySumSaving[selectedDay] ? DC.amber : DC.dim }}>
+                  {daySumSaving[selectedDay] ? "💾 Zapisuję..." : "auto-save"}
+                </div>
+              </div>
+              {textarea(daySum[selectedDay] || "", e => handleDaySumChange(selectedDay, e.target.value), "Jak minął dzień? Co zrobiłeś, czego się nauczyłeś, jak się czułeś...")}
+            </div>
+          </DCCard>
         </div>
 
 
