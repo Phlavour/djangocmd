@@ -11227,7 +11227,7 @@ function DailyCheckPanel({ supa, apiKey }) {
     const failedTasks = weekPlan.filter(i => i.failed);
     const failedSection = failedTasks.length > 0 ? `\n\nNiewykonane taski (${failedTasks.length}):\n${failedTasks.map(i => `❌ ${i.text}`).join("\n")}` : "";
     fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)${weekNoteText}${wPlan}${failedSection}\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n${failedTasks.length > 0 ? "**❌ NIEWYKONANE TASKI — co poszło nie tak i jak to naprawić w przyszłym tygodniu**\n" : ""}**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**` }] })
     }).then(r => r.json()).then(d => { setAiOut(d.content?.map(b => b.text || "").join("") || "Błąd."); }).catch(() => setAiOut("Błąd API.")).finally(() => setAiLoading(false));
   };
