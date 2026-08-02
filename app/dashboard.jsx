@@ -11462,29 +11462,6 @@ Jedno mocne zdanie.`;
             </div>
           </DCCard>
 
-          {/* Dzienna Rutyna */}
-          <DCCard>
-            <DCHead icon="🔄">Dzienna Rutyna</DCHead>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
-              {tasks.map(t => (
-                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}>
-                  <span style={{ flex: 1 }}>{t.label}</span>
-                  <button onClick={() => deleteTask(t.task_key)} title="Usuń z rutyny" style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}>✕</button>
-                </div>
-              ))}
-            </div>
-            {addingTask ? (
-              <div style={{ display: "flex", gap: 6 }}>
-                <input autoFocus value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
-                <DCBtn small bg={DC.green} onClick={addTask}>Dodaj</DCBtn>
-                <DCBtn small style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => { setAddingTask(false); setNewTask(""); }}>Anuluj</DCBtn>
-              </div>
-            ) : (
-              <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
-            )}
-          </DCCard>
-
-
         {/* ═══ MONTHLY CHALLENGE ═══ */}
         <DCCard style={{ marginBottom: 16, background: "linear-gradient(135deg, #1e3a5f 0%, #0f2027 100%)", border: "2px solid #f59e0b", borderRadius: 14, position: "relative", overflow: "hidden" }}>
           {/* Decorative glow */}
@@ -11592,6 +11569,31 @@ Jedno mocne zdanie.`;
           )}
         </DCCard>
         </div>
+
+
+
+          {/* Dzienna Rutyna */}
+          <DCCard>
+            <DCHead icon="🔄">Dzienna Rutyna</DCHead>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+              {tasks.map(t => (
+                <div key={t.task_key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: DC.bg2, borderRadius: 6, fontSize: 12, color: DC.text }}>
+                  <span style={{ flex: 1 }}>{t.label}</span>
+                  <button onClick={() => deleteTask(t.task_key)} title="Usuń z rutyny" style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {addingTask ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input autoFocus value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") { setAddingTask(false); setNewTask(""); } }} placeholder="Nazwa nowego zadania..." style={{ ...sel, flex: 1 }} />
+                <DCBtn small bg={DC.green} onClick={addTask}>Dodaj</DCBtn>
+                <DCBtn small style={{ background: "#fff", color: DC.soft, border: `1px solid ${DC.border}` }} onClick={() => { setAddingTask(false); setNewTask(""); }}>Anuluj</DCBtn>
+              </div>
+            ) : (
+              <DCBtn small bg={DC.cyan} onClick={() => setAddingTask(true)}>+ Nowe zadanie</DCBtn>
+            )}
+          </DCCard>
+
 
         {/* COL 2: Tasks */}
         <div>
