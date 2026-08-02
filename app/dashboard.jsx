@@ -10797,6 +10797,9 @@ function DailyCheckPanel({ supa, apiKey }) {
   const [weekStart, setWeekStart] = useState(() => getWeekKey(today));
   const [weekTab, setWeekTab] = useState("overview");
   const [aiOut, setAiOut] = useState("");
+  const [savedAiOut, setSavedAiOut] = useState(""); // last saved analysis
+  const [aiSaving, setAiSaving] = useState(false);
+  const [prevWeekAi, setPrevWeekAi] = useState(""); // previous week's analysis
   const [aiLoading, setAiLoading] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [addingTask, setAddingTask] = useState(false);
@@ -11214,23 +11217,108 @@ function DailyCheckPanel({ supa, apiKey }) {
   const wkMax = wkDates.reduce((s, d) => s + score(d).tot, 0);
   const wkPct = wkMax > 0 ? Math.round(wkTotal / wkMax * 100) : 0;
 
+  const saveAiAnalysis = async (text) => {
+    if (!supa?.url || !text) return;
+    setAiSaving(true);
+    await fetch(`${supa.url}/rest/v1/daily_notes?on_conflict=note_type,note_date`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([{ note_type: "ai_weekly", note_date: weekStart, content: text }]),
+    }).catch(console.error);
+    setSavedAiOut(text);
+    setAiSaving(false);
+  };
+
+  const deleteAiAnalysis = async () => {
+    if (!supa?.url || !confirm("Usunąć zapisaną analizę?")) return;
+    await fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.ai_weekly&note_date=eq.${weekStart}`, { method: "DELETE", headers: supa.headers }).catch(console.error);
+    setSavedAiOut(""); setAiOut("");
+  };
+
+  const loadAiForWeek = async (wStart) => {
+    if (!supa?.url) return "";
+    try {
+      const rows = await fetch(`${supa.url}/rest/v1/daily_notes?note_type=eq.ai_weekly&note_date=eq.${wStart}`, { headers: supa.headers }).then(r => r.json());
+      return Array.isArray(rows) && rows[0] ? rows[0].content : "";
+    } catch { return ""; }
+  };
+
+  // Load saved AI when weekStart changes
+  React.useEffect(() => {
+    setSavedAiOut(""); setAiOut("");
+    loadAiForWeek(weekStart).then(setSavedAiOut);
+    // Load previous week analysis
+    const prevWeek = (() => { const d = new Date(weekStart + "T12:00:00"); d.setDate(d.getDate()-7); return d.toISOString().slice(0,10); })();
+    loadAiForWeek(prevWeek).then(setPrevWeekAi);
+  }, [weekStart, supa?.url]);
+
   const genAI = async () => {
     if (!apiKey) return;
     setAiLoading(true); setAiOut("");
+
+    // Per-day per-task data
     const data = wkDates.map(d => {
       const dl = new Date(d + "T12:00:00").toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+      const done = tasks.filter(t => checklist[`${d}_${t.task_key}`]).length;
       const tasks_lines = tasks.map(t => `  ${checklist[`${d}_${t.task_key}`] ? "✅" : "❌"} ${t.label}`).join("\n");
-      const note = daySum[d] ? `  Notatka: ${daySum[d]}` : "";
-      return `${dl}:\n${tasks_lines}${note ? "\n" + note : ""}`;
+      const note = daySum[d] ? `  📝 Notatka: ${daySum[d]}` : "";
+      return `${dl} (${done}/${tasks.length}):\n${tasks_lines}${note ? "\n" + note : ""}`;
     }).join("\n\n");
-    const weekNoteText = weekNote ? `\nNotatki tygodniowe: ${weekNote}` : "";
-    const wPlan = weekPlan.length > 0 ? `\nPlan tygodnia:\n${weekPlan.map(i => `${i.completed ? "✅" : i.failed ? "❌ NIEWYKONANE" : "⏳"} ${i.text}`).join("\n")}` : "";
+
+    // Per-task weekly summary
+    const perTask = tasks.map(t => {
+      const cnt = wkDates.filter(d => checklist[`${d}_${t.task_key}`]).length;
+      return `  ${t.label}: ${cnt}/7`;
+    }).join("\n");
+
+    const weekNoteText = weekNote ? `\n\n📝 Notatki tygodniowe:\n${weekNote}` : "";
+    const wPlan = weekPlan.length > 0 ? `\n\n📋 Plan tygodnia:\n${weekPlan.map(i => `${i.completed ? "✅" : i.failed ? "❌ NIEWYKONANE" : "⏳"} ${i.text}`).join("\n")}` : "";
     const failedTasks = weekPlan.filter(i => i.failed);
-    const failedSection = failedTasks.length > 0 ? `\n\nNiewykonane taski (${failedTasks.length}):\n${failedTasks.map(i => `❌ ${i.text}`).join("\n")}` : "";
+    const failedSection = failedTasks.length > 0 ? `\n\n❌ Niewykonane taski:\n${failedTasks.map(i => `- ${i.text}`).join("\n")}` : "";
+    const prevSection = prevWeekAi ? `\n\n📊 ANALIZA POPRZEDNIEGO TYGODNIA (do porównania):\n${prevWeekAi.slice(0, 800)}` : "";
+
+    const prompt = `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.
+
+DANE TYGODNIA ${weekStart}:
+Wynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)
+
+Wyniki per nawyk:
+${perTask}${weekNoteText}${wPlan}${failedSection}${prevSection}
+
+Szczegóły dzienne:
+${data}
+
+Przygotuj analizę w tym formacie:
+
+**📊 WYNIK TYGODNIA**
+Ogólna ocena, wynik checklisty, porównanie z poprzednim tygodniem (jeśli są dane).
+
+**✅ CO POSZŁO DOBRZE**
+Konkretne nawyki i dni które wyróżniły się pozytywnie.
+
+**⚠️ CO WYMAGA UWAGI**
+Nawyki które były problematyczne, wzorce które warto zmienić.
+${failedTasks.length > 0 ? `
+**❌ NIEWYKONANE TASKI**
+Co poszło nie tak z niewykonanymi taskami i jak to naprawić.
+` : ""}
+**📈 PROGRES vs POPRZEDNI TYDZIEŃ**
+${prevWeekAi ? "Porównaj wyniki i wskaż konkretny progres lub regres." : "Brak danych z poprzedniego tygodnia — ustal baseline."}
+
+**🎯 3 KONKRETNE CELE NA PRZYSZŁY TYDZIEŃ**
+Mierzalne, realistyczne.
+
+**💪 MOTYWACJA**
+Jedno mocne zdanie.`;
+
     fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)${weekNoteText}${wPlan}${failedSection}\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n${failedTasks.length > 0 ? "**❌ NIEWYKONANE TASKI — co poszło nie tak i jak to naprawić w przyszłym tygodniu**\n" : ""}**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**` }] })
-    }).then(r => r.json()).then(d => { setAiOut(d.content?.map(b => b.text || "").join("") || "Błąd."); }).catch(() => setAiOut("Błąd API.")).finally(() => setAiLoading(false));
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 2500, messages: [{ role: "user", content: prompt }] })
+    }).then(r => r.json()).then(d => {
+      const text = d.content?.map(b => b.text || "").join("") || "Błąd.";
+      setAiOut(text);
+    }).catch(() => setAiOut("Błąd API.")).finally(() => setAiLoading(false));
   };
 
   const sel = { background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" };
@@ -11558,11 +11646,40 @@ function DailyCheckPanel({ supa, apiKey }) {
 
             {weekTab === "ai" && (
               <div>
-                <DCBtn bg={DC.cyan} onClick={genAI} disabled={aiLoading || !apiKey} style={{ marginBottom: 10, width: "100%" }}>
+                <DCBtn bg={DC.cyan} onClick={genAI} disabled={aiLoading || !apiKey} style={{ marginBottom: 8, width: "100%" }}>
                   {aiLoading ? "⏳ Generuję..." : "🤖 Generuj AI podsumowanie tygodnia"}
                 </DCBtn>
                 {!apiKey && <div style={{ fontSize: 10, color: DC.red, marginBottom: 8 }}>Brak Claude API Key w Settings</div>}
-                {aiOut && <div style={{ fontSize: 11, lineHeight: 1.8, color: DC.text, whiteSpace: "pre-wrap", maxHeight: 350, overflowY: "auto", padding: 12, background: DC.bg2, borderRadius: 8, border: `1px solid ${DC.border}` }}>{aiOut}</div>}
+                {aiOut && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: DC.cyan, textTransform: "uppercase" }}>Nowa analiza</span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <DCBtn small bg={DC.green} disabled={aiSaving} onClick={() => saveAiAnalysis(aiOut)}>{aiSaving ? "Zapisuję..." : "💾 Zapisz"}</DCBtn>
+                        <DCBtn small bg={DC.soft} onClick={() => setAiOut("")}>✕ Zamknij</DCBtn>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, lineHeight: 1.8, color: DC.text, whiteSpace: "pre-wrap", maxHeight: 500, overflowY: "auto", padding: 12, background: DC.bg2, borderRadius: 8, border: `1px solid ${DC.cyan}` }}>{aiOut}</div>
+                  </div>
+                )}
+                {savedAiOut && !aiOut && (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: DC.soft, textTransform: "uppercase" }}>💾 Zapisana analiza — {weekStart}</span>
+                      <DCBtn small bg={DC.red} onClick={deleteAiAnalysis}>🗑 Usuń</DCBtn>
+                    </div>
+                    <div style={{ fontSize: 11, lineHeight: 1.8, color: DC.text, whiteSpace: "pre-wrap", maxHeight: 500, overflowY: "auto", padding: 12, background: DC.bg2, borderRadius: 8, border: `1px solid ${DC.border}` }}>{savedAiOut}</div>
+                  </div>
+                )}
+                {!aiOut && !savedAiOut && (
+                  <div style={{ fontSize: 11, color: DC.dim, textAlign: "center", padding: 16, fontStyle: "italic" }}>Brak analizy dla tygodnia {weekStart}. Kliknij "Generuj" aby stworzyć.</div>
+                )}
+                {prevWeekAi && !aiOut && (
+                  <div style={{ marginTop: 12, padding: 10, background: DC.bg2, borderRadius: 8, border: `1px solid ${DC.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: DC.dim, marginBottom: 4 }}>📊 Analiza poprzedniego tygodnia (uwzględniona w nowej)</div>
+                    <div style={{ fontSize: 10, color: DC.soft, lineHeight: 1.5, maxHeight: 100, overflowY: "auto" }}>{prevWeekAi.slice(0, 400)}...</div>
+                  </div>
+                )}
               </div>
             )}
           </DCCard>
