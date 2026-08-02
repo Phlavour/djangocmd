@@ -1,0 +1,1389 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © xwaytheory
+
+//@version=6
+indicator(title = 'HTS - Wstęgi', overlay = true)
+
+// HTS Wstęgi - Tytuły
+t1 = '1. HTS Wstęgi - Główne'
+t1a = ' ⭢ a) Kolorowanie świec'
+t1b = ' ⭢ b) Tło trendu'
+t1c = ' ⭢ c) Symbol zmiany trendu'
+t1d = ' ⭢ d) Kolorowanie wstęg wg. ceny'
+t2 = '2. HTS Wstęgi - Drugi interwał czasowy'
+t2a = ' ⭢ a) Automatyczne dopasowanie interwału'
+t3 = '3. Pivot Points'
+t3a = ' ⭢ a) Projekcja przyszłych poziomów Pivot'
+t4 = '4. Kijun-Sen'
+t5 = '5. Kijun-Sen - Drugi interwał czasowy'
+t6 = '6. Tabela trendów'
+t6a = ' ⭢ a) RSI w Tabeli trendów'
+t6b = ' ⭢ b) Pivot Points w Tabeli trendów'
+t7 = '7. Bandy ATR'
+t8 = '8. VIDYA + TMA'
+t9 = '9. VIDYA + TMA - Drugi interwał czasowy'
+t10 = '10. Dowolne dwie średnie kroczące'
+t11 = '11. VWAP'
+t12 = '12. PO3 - Power of Three'
+
+// HTS Wstęgi - Grupy
+g0 = 'HTS - Wstęgi - Podstawowe wskaźniki'
+g1 = '1. HTS Wstęgi - główny interwał czasowy - ustawienia'
+g1a = '1. a) Kolorowanie świec - GŁÓWNE KOLORY'
+g1b = '1. b) Tło trendu - ustawienia'
+g1c = '1. c) Symbol zmiany trendu - ustawienia'
+g1d = '1. d) Kolorowanie wstęg wg. ceny - ustawienia'
+g2 = '2. HTS Wstęgi - Drugi interwał czasowy - ustawienia'
+g3 = '3. Pivot Points - ustawienia'
+g3a = '3. a) Pivot Points - Projekcja przyszłych poziomów - ustawienia'
+g4 = '4. Kijun-Sen - ustawienia'
+g5 = '5. Kijun-Sen - Drugi interwał czasowy - ustawienia'
+g6 = '6. Tabela trendów - ustawienia'
+g6a = '6. a) Tabela trendów - interwały - ustawienia'
+g6b = '6. b) Tabela trendów - Poziomy Pivot Points - ustawienia'
+g00 = 'HTS - Wstęgi - Wskaźniki Społeczności'
+g7 = '7. Bandy ATR - ustawienia'
+g8 = '8. VIDYA + TMA - ustawienia'
+g9 = '9. VIDYA + TMA - Drugi interwał czasowy - ustawienia'
+g10 = '10. Dowolne dwie średnie kroczące - ustawienia'
+g11 = '11. VWAP - Volume Weighted Average Price - ustawienia'
+g12 = '12. PO3 - Power of Three - ustawienia'
+
+// HTS Wstęgi - Włącz/Wyłącz
+show_hts = input.bool(true, title = t1, group = g0)
+show_candle_coloring = input.bool(false, title = t1a, group = g0, tooltip = "Świece zmieniają kolor zgodnie z zasadą podążania za trendem szybszej średniej kroczącej. 1. Zamknięcie świecy powyżej powoduje zakolorowanie świecy na zielono. 2. Zamknięcie wewnątrz wstęgi zakolorwuje świece na szaro. 3. Zamknięcie poniżej wstęgi zakoloruje świece na czerwono.")
+show_trend_background = input.bool(false, title = t1b, group = g0, tooltip = "Wraz z przecięciem i wyznaczeniem trendu tło zmienia barwe na zieloną lub czerwoną.")
+show_trend_symbols = input.bool(true, title = t1c, group = g0, tooltip = "Wraz z przecięciem i wyznaczeniem trendu powstaje symbol ⏺ o barwie zielonej lub czerwonej.")
+show_price_based_coloring = input.bool(false, title = t1d, group = g0, tooltip = "Wstęgi (Szybka oraz Wolna) są barwione wraz z przekraczającą Ceną")
+show_hts2 = input.bool(false, title = t2, group = g0)
+auto_tf2_enabled = input.bool(true, title = t2a, group = g0, tooltip = "Interwał zostanie dobrany automatycznie wg schematu: Od m1 - do m15 = H1 | H1 - H4 = D1 | D1 = W1 | W1 = M1. Gdy wyłączone, używany jest interwał wybrany ręcznie w ustawieniach dla HTS - Wstęgi - Drugi interwał czasowy.")
+show_pivot_points = input.bool(false, title = t3, group = g0)
+showProjectionInput = input.bool(title=t3a, defval=false, group=g0, tooltip = "Projekcja ma za zadanie pokazać nam jak będą wyglądały poziomy pivotów na nastepnej sesji. Niekiedy potrzebuje więcej czasu na swoje obliczenia... Cierpliwości :)")
+show_kijun_sen = input.bool(false, title = t4, group = g0)
+show_kijun_sen2 = input.bool(false, title = t5, group = g0)
+show_trend_table = input.bool(true, title = t6, group = g0)
+show_rsi_row = input.bool(true, title = t6a, group = g0)
+var show_pivots_column = input.bool(true, title = t6b, group = g0)
+show_atr_band = input.bool(false, title = t7, group = g00)
+show_vidya_tma = input.bool(false, title = t8, group = g00)
+show_vidya_tma2 = input.bool(false, title = t9, group = g00)
+show_double_ema = input.bool(false, title = t10, group = g00)
+show_vwap = input.bool(false, title = t11, group = g00)
+var show_po3 = input.bool(false, title = t12, group = g00)
+
+// HTS Wstęgi - Główne
+mamethod = input.string(title = 'Metoda wstęg HTS:', defval = 'EMA', options = ['RMA', 'EMA', 'SMA', 'WMA', 'VWMA'], group = g1)
+lenFast = input.int(66, title = 'Długość szybszej wstęgi HTS:', group = g1)
+lenSlow = input.int(288, title = 'Długość wolniejszej wstęgi HTS:', group = g1)
+HTSFastColor = input.color(color.new(#00bcd4, 70), title = 'Kolor linii szybszej wstęgi HTS:', group = g1)
+HTSSlowColor = input.color(color.new(#f23645, 70), title = 'Kolor linii wolniejszej wstęgi HTS:', group = g1)
+HTSFastFillColor = input.color(color.new(#00bcd4, 93), title = 'Kolor wypełnienia szybszej wstęgi HTS:', group = g1)
+HTSSlowFillColor = input.color(color.new(#f23645, 93), title = 'Kolor wypełnienia wolniejszej wstęgi HTS:', group = g1)
+
+// Ustawienia Kolorowania świec
+candle_coloring_tf = input.timeframe('', title = 'Interwał dla koloryzacji świec:', group = g1a)
+candle_up_color = input.color(#089981, title = 'Kolor wzrostowy:', group = g1a)
+candle_down_color = input.color(#f23645, title = 'Kolor spadkowy:', group = g1a)
+candle_neutral_color = input.color(#b2b5be, title = 'Kolor neutralny:', group = g1a)
+
+// HTS Wstęgi - Tło trendu - ustawienia
+trend_bg_up_color = input.color(color.new(#00bcd4, 97), title = 'Kolor tła trendu wzrostowego:', group = g1b)
+trend_bg_down_color = input.color(color.new(#f23645, 97), title = 'Kolor tła trendu spadkowego:', group = g1b)
+
+// HTS Wstęgi - Symbol zmiany trendu - ustawienia
+trend_symbol_up_color = input.color(color.new(#00bcd4, 30), title = 'Kolor symbolu zmiany trendu wzrostowego:', group = g1c)
+trend_symbol_down_color = input.color(color.new(#f23645, 30), title = 'Kolor symbolu zmiany trendu spadkowego:', group = g1c)
+
+// HTS Wstęgi - Kolorowanie wstęg wg. ceny (momentum) - ustawienia
+momentum_up_color = input.color(color.new(#00bcd4, 70), title = 'Kolor wzrostowy wstęgi:', group = g1d)
+momentum_down_color = input.color(color.new(#f23645, 70), title = 'Kolor spadkowy wstęgi:', group = g1d)
+momentum_smoothing = input.int(20, title = 'Wygładzanie pędu wstęg:', minval=1, group = g1d)
+
+// Funkcja do obliczania różnych typów średnich kroczących
+plotmafunc(isrc, ilength, itype) =>
+    switch itype
+        'RMA' => ta.rma(isrc, ilength)
+        'EMA' => ta.ema(isrc, ilength)
+        'SMA' => ta.sma(isrc, ilength)
+        'WMA' => ta.wma(isrc, ilength)
+        'VWMA' => ta.vwma(isrc, ilength)
+
+// Obliczenie szybkich i wolnych HTS
+HTSFastHigh = plotmafunc(high, lenFast, mamethod)
+HTSFastLow = plotmafunc(low, lenFast, mamethod)
+HTSSlowHigh = plotmafunc(high, lenSlow, mamethod)
+HTSSlowLow = plotmafunc(low, lenSlow, mamethod)
+
+// Obliczenie pędu (momentum) dla każdej wstęgi niezależnie
+fast_ma_hl2 = (HTSFastHigh + HTSFastLow) / 2
+fast_ma_hl2_avg = ta.sma(fast_ma_hl2, momentum_smoothing)
+fast_momentum_color = fast_ma_hl2 > fast_ma_hl2_avg ? momentum_up_color : momentum_down_color
+
+slow_ma_hl2 = (HTSSlowHigh + HTSSlowLow) / 2
+slow_ma_hl2_avg = ta.sma(slow_ma_hl2, momentum_smoothing)
+slow_momentum_color = slow_ma_hl2 > slow_ma_hl2_avg ? momentum_up_color : momentum_down_color
+
+// Przypisanie ostatecznych kolorów do rysowania
+// Jeśli opcja jest włączona, użyj kolorów pędu. Jeśli wyłączona, użyj statycznych kolorów.
+color dynamicFastColor = show_price_based_coloring ? fast_momentum_color : HTSFastColor
+color dynamicSlowColor = show_price_based_coloring ? slow_momentum_color : HTSSlowColor
+
+// Ustawienie kolorów wypełnienia - użyj kolorów zdefiniowanych przez użytkownika lub dynamicznych z zachowaniem przezroczystości
+color dynamicFastFillColor = show_price_based_coloring ? 
+     color.new(fast_momentum_color, color.t(HTSFastFillColor)) : HTSFastFillColor
+color dynamicSlowFillColor = show_price_based_coloring ? 
+     color.new(slow_momentum_color, color.t(HTSSlowFillColor)) : HTSSlowFillColor
+
+// Rysowanie HTS z możliwością zmiany kolorów
+plot_HTSFastHigh = plot(show_hts ? HTSFastHigh : na, color = dynamicFastColor, linewidth = 1, title = 'HTS - Wstęgi - Linia szybszej High:')
+plot_HTSFastLow = plot(show_hts ? HTSFastLow : na, color = dynamicFastColor, linewidth = 1, title = 'HTS - Wstęgi - Linia szybszej Low:')
+plot_HTSSlowHigh = plot(show_hts ? HTSSlowHigh : na, color = dynamicSlowColor, linewidth = 1, title = 'HTS - Wstęgi - Linia wolnej High:')
+plot_HTSSlowLow = plot(show_hts ? HTSSlowLow : na, color = dynamicSlowColor, linewidth = 1, title = 'HTS - Wstęgi - Linia wolnej Low:')
+
+// Wypełnienie tła między HTS dla lepszej wizualizacji
+fill(plot_HTSFastHigh, plot_HTSFastLow, title = 'Wypełnienie szybszej wstęgi HTS:', color = show_hts ? dynamicFastFillColor : na)
+fill(plot_HTSSlowHigh, plot_HTSSlowLow, title = 'Wypełnienie wolniejszej wstęgi HTS:', color = show_hts ? dynamicSlowFillColor : na)
+
+// Definicja trendów na podstawie HTS
+isUptrend = HTSFastLow > HTSSlowHigh
+isDowntrend = HTSFastHigh < HTSSlowLow
+
+// Obliczenie sygnałów przecięcia - przypisanie do zmiennych globalnych
+uptrendCrossover = ta.crossover(HTSFastLow, HTSSlowHigh)
+downtrendCrossunder = ta.crossunder(HTSFastHigh, HTSSlowLow)
+
+// Implementacja tła trendu (1.b)
+bgcolor(show_hts and show_trend_background ? isUptrend ? trend_bg_up_color : isDowntrend ? trend_bg_down_color : na : na)
+
+// Implementacja symbolu zmiany trendu (1.c) - używanie zmiennych globalnych
+plot(show_hts and show_trend_symbols and uptrendCrossover ? HTSSlowHigh : na, title = 'Symbol przecięcia w górę', color = trend_symbol_up_color, style = plot.style_circles, linewidth = 3)
+plot(show_hts and show_trend_symbols and downtrendCrossunder ? HTSSlowLow : na, title = 'Symbol przecięcia w dół', color = trend_symbol_down_color, style = plot.style_circles, linewidth = 3)
+
+// HTS Wstęgi - Koloryzowanie świec
+// Pobranie wartości HTS z wybranego interwału
+h1_hts_high = request.security(syminfo.tickerid, candle_coloring_tf, HTSFastHigh, lookahead = barmerge.lookahead_on)
+h1_hts_low = request.security(syminfo.tickerid, candle_coloring_tf, HTSFastLow, lookahead = barmerge.lookahead_on)
+
+// Funkcja do określania koloru świecy na podstawie HTS
+f_getCandleColor() =>
+    if show_candle_coloring
+        if close > h1_hts_high
+            candle_up_color
+        else if close < h1_hts_low
+            candle_down_color
+        else
+            candle_neutral_color
+    else
+        na
+
+// Zastosowanie kolorów do świec na wykresie
+candle_color = f_getCandleColor()
+plotcandle(open, high, low, close, color = candle_color, wickcolor = candle_color, bordercolor = candle_color)
+
+// HTS Wstęgi - Drugi interwał czasowy
+// Ustawienia dla drugiego interwału
+tf2_manual = input.timeframe(title = 'HTS - Ręczny wybór interwału:', defval = '60', group = g2)
+
+// Funkcja do automatycznego określania interwału
+f_getAutoTimeframe2() =>
+    string result = tf2_manual // Domyślna wartość, jeśli żaden warunek nie jest spełniony
+    if timeframe.isminutes and timeframe.multiplier <= 15
+        result := '60' // Ustaw interwał H1 dla wykresów od m1 do m15
+    else if (timeframe.isminutes and timeframe.multiplier >= 60 and timeframe.multiplier <= 240) or (timeframe.isintraday and not timeframe.isminutes)
+        result := 'D' // Ustaw interwał D1 dla wykresów od H1 do H4
+    else if timeframe.isdaily
+        result := 'W' // Ustaw interwał W1 dla wykresu D1
+    else if timeframe.isweekly
+        result := 'M' // Ustaw interwał M1 dla wykresu W1
+    result
+
+// Ostateczne przypisanie interwału do zmiennej tf2
+string tf2 = auto_tf2_enabled ? f_getAutoTimeframe2() : tf2_manual
+
+// Pozostałe ustawienia bez zmian
+mamethod2 = input.string(title = 'Metoda wstęg HTS - Drugi interwał czasowy:', defval = 'EMA', options = ['RMA', 'EMA', 'SMA', 'WMA', 'VWMA'], group = g2)
+shortval2 = input.int(66, title = 'Długość szybszej wstęgi HTS - Drugi interwał czasowy:', group = g2)
+longval2 = input.int(288, title = 'Długość wolniejszej wstęgi HTS - Drugi interwał czasowy:', group = g2)
+HTSFastColor2 = input.color(color.new(#00bcd4, 80), title = 'Kolor szybszej wstęgi HTS - Drugi interwał:', group = g2)
+HTSSlowColor2 = input.color(color.new(#f23645, 80), title = 'Kolor wolniejszej wstęgi HTS - Drugi interwał:', group = g2)
+
+HTSFastFillColor2 = input.color(color.new(#00bcd4, 99), title = 'Kolor wypełnienia szybszej wstęgi HTS - Drugi interwał:', group = g2)
+HTSSlowFillColor2 = input.color(color.new(#f23645, 99), title = 'Kolor wypełnienia wolniejszej wstęgi HTS - Drugi interwał:', group = g2)
+
+// Rysowanie średnich kroczących dla drugiego interwału
+plotsh2 = plot(show_hts2 ? request.security(syminfo.tickerid, tf2, plotmafunc(high, shortval2, mamethod2), gaps = barmerge.gaps_on) : na, color = HTSFastColor2, linewidth = 1, title = 'HTS - Wstęgi - Linia szybszej High - Drugi interwał czasowy:')
+plotsl2 = plot(show_hts2 ? request.security(syminfo.tickerid, tf2, plotmafunc(low, shortval2, mamethod2), gaps = barmerge.gaps_on) : na, color = HTSFastColor2, linewidth = 1, title = 'HTS - Wstęgi - Linia szybszej Low - Drugi interwał czasowy:')
+plotlh2 = plot(show_hts2 ? request.security(syminfo.tickerid, tf2, plotmafunc(high, longval2, mamethod2), gaps = barmerge.gaps_on) : na, color = HTSSlowColor2, linewidth = 1, title = 'HTS - Wstęgi - Linia wolnej High - Drugi interwał czasowy:')
+plotll2 = plot(show_hts2 ? request.security(syminfo.tickerid, tf2, plotmafunc(low, longval2, mamethod2), gaps = barmerge.gaps_on) : na, color = HTSSlowColor2, linewidth = 1, title = 'HTS - Wstęgi - Linia wolnej Low - Drugi interwał czasowy:')
+
+fill(plotsh2, plotsl2, title = 'Wypełnienie szybszej wstęgi HTS - Drugi interwał:', color = show_hts2 ? HTSFastFillColor2 : na, fillgaps = true)
+fill(plotlh2, plotll2, title = 'Wypełnienie wolniejszej wstęgi HTS - Drugi interwał:', color = show_hts2 ? HTSSlowFillColor2 : na, fillgaps = true)
+
+// HTS Wstęgi - Pivot Points
+// Ustawienia dla Pivot Points
+AUTO = 'Auto'
+DAILY = 'Daily'
+WEEKLY = 'Weekly'
+MONTHLY = 'Monthly'
+QUARTERLY = 'Quarterly'
+YEARLY = 'Yearly'
+BIYEARLY = 'Biyearly'
+TRIYEARLY = 'Triyearly'
+QUINQUENNIALLY = 'Quinquennially'
+DECENNIALLY = 'Decennially'
+
+TRADITIONAL = 'Traditional'
+FIBONACCI = 'Fibonacci'
+WOODIE = 'Woodie'
+CLASSIC = 'Classic'
+DEMARK = 'DM'
+CAMARILLA = 'Camarilla'
+
+pivotTypeInput = input.string(title="Typ pivotów:", defval="Traditional", options=["Traditional", "Fibonacci", "Woodie", "Classic", "DM", "Camarilla"], group=g3)
+pivotAnchorInput = input.string(title="Interwał czasowy pivotów:", defval="Daily", options=["Auto", "Daily", "Weekly", "Monthly", "Quarterly", "Yearly", "Biyearly", "Triyearly", "Quinquennially", "Decennially"], group=g3)
+maxHistoricalPivotsInput = input.int(title="Liczba pivotów wstecz:", defval=1, minval=1, maxval=6, display = display.data_window, group=g3)
+isDailyBasedInput = input.bool(title="Użyj wartości dziennych:", defval=true, display = display.data_window, tooltip="Gdy ta opcja jest odznaczona, Punkty Pivot będą używać danych intraday do obliczeń na wykresach o niższym interwale. Jeśli na wykresie wyświetlane są godziny handlu pozasesyjnego, zostaną one uwzględnione. Jeżeli wartości OHLC intraday różnią się od wartości z interwału dziennego (co jest typowe dla akcji), obliczone poziomy pivot również będą inne.", group=g3)
+showLabelsInput = input.bool(title="Pokaż etykiety:", defval=true, group=g3, display = display.data_window)
+showPricesInput = input.bool(title="Pokaż wartości:", defval=true, group=g3, display = display.data_window)
+positionLabelsInput = input.string("Po lewej", "Pozycja etykiet:", options=["Po lewej", "Po prawej"], group=g3, display = display.data_window)
+linewidthInput = input.int(title="Grubość linii:", defval=1, minval=1, maxval=100, group=g3, display = display.data_window)
+
+pColorInput = input.color(#b2b5be, "PP", inline="PP", group=g3, display = display.data_window)
+pShowInput = input.bool(true, "", inline="PP", group=g3, display = display.data_window)
+s1ColorInput = input.color(#089981, "S1", inline="S1/R1" , group=g3, display = display.data_window)
+s1ShowInput = input.bool(true, "", inline="S1/R1", group=g3, display = display.data_window)
+r1ColorInput = input.color(#ff3d2e, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R1", inline="S1/R1", group=g3, display = display.data_window)
+r1ShowInput = input.bool(true, "", inline="S1/R1", group=g3, display = display.data_window)
+s2ColorInput = input.color(#089981, "S2", inline="S2/R2", group=g3, display = display.data_window)
+s2ShowInput = input.bool(true, "", inline="S2/R2", group=g3, display = display.data_window)
+r2ColorInput = input.color(#ff3d2e, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R2", inline="S2/R2", group=g3, display = display.data_window)
+r2ShowInput = input.bool(true, "", inline="S2/R2", group=g3, tooltip = "Nie dotyczy dla typu DM", display = display.data_window)
+s3ColorInput = input.color(#089981, "S3", inline="S3/R3", group=g3, display = display.data_window)
+s3ShowInput = input.bool(true, "", inline="S3/R3", group=g3, display = display.data_window)
+r3ColorInput = input.color(#ff3d2e, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R3", inline="S3/R3", group=g3, display = display.data_window)
+r3ShowInput = input.bool(true, "", inline="S3/R3", group=g3, tooltip = "Nie dotyczy dla typu DM", display = display.data_window)
+s4ColorInput = input.color(#089981, "S4", inline="S4/R4", group=g3, display = display.data_window)
+s4ShowInput = input.bool(false, "", inline="S4/R4", group=g3, display = display.data_window)
+r4ColorInput = input.color(#ff3d2e, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R4", inline="S4/R4", group=g3, display = display.data_window)
+r4ShowInput = input.bool(false, "", inline="S4/R4", group=g3, tooltip = "Nie dotyczy dla typów: Fibonacci, DM", display = display.data_window)
+s5ColorInput = input.color(#089981, "S5", inline="S5/R5", group=g3, display = display.data_window)
+s5ShowInput = input.bool(false, "", inline="S5/R5", group=g3, display = display.data_window)
+r5ColorInput = input.color(#ff3d2e, "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R5", inline="S5/R5", group=g3, display = display.data_window)
+r5ShowInput = input.bool(false, "", inline="S5/R5", group=g3, tooltip = "Nie dotyczy dla typów: Fibonacci, Woodie, Klasyczny, DM", display = display.data_window)
+
+projPPColorInput = input.color(color.new(#b2b5be, 50), "PP (proj.)", inline="PP", group=g3a)
+projS1ColorInput = input.color(color.new(#089981, 50), "S1 (proj.)", inline="S1/R1", group=g3a)
+projR1ColorInput = input.color(color.new(#ff3d2e, 50), "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R1 (proj.)", inline="S1/R1", group=g3a)
+projS2ColorInput = input.color(color.new(#089981, 50), "S2 (proj.)", inline="S2/R2", group=g3a)
+projR2ColorInput = input.color(color.new(#ff3d2e, 50), "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R2 (proj.)", inline="S2/R2", group=g3a)
+projS3ColorInput = input.color(color.new(#089981, 50), "S3 (proj.)", inline="S3/R3", group=g3a)
+projR3ColorInput = input.color(color.new(#ff3d2e, 50), "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R3 (proj.)", inline="S3/R3", group=g3a)
+projS4ColorInput = input.color(color.new(#089981, 50), "S4 (proj.)", inline="S4/R4", group=g3a)
+projR4ColorInput = input.color(color.new(#ff3d2e, 50), "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R4 (proj.)", inline="S4/R4", group=g3a)
+projS5ColorInput = input.color(color.new(#089981, 50), "S5 (proj.)", inline="S5/R5", group=g3a)
+projR5ColorInput = input.color(color.new(#ff3d2e, 50), "‏  ‏  ‏  ‏  ‏  ‏  ‏  ‏R5 (proj.)", inline="S5/R5", group=g3a)
+
+type graphicSettings
+    string levelName
+    color levelColor
+    bool showLevel
+
+var graphicSettingsArray = array.from(
+     graphicSettings.new(" PP", pColorInput, pShowInput),
+     graphicSettings.new("R1", r1ColorInput, r1ShowInput), graphicSettings.new("S1", s1ColorInput, s1ShowInput),
+     graphicSettings.new("R2", r2ColorInput, r2ShowInput), graphicSettings.new("S2", s2ColorInput, s2ShowInput),
+     graphicSettings.new("R3", r3ColorInput, r3ShowInput), graphicSettings.new("S3", s3ColorInput, s3ShowInput),
+     graphicSettings.new("R4", r4ColorInput, r4ShowInput), graphicSettings.new("S4", s4ColorInput, s4ShowInput),
+     graphicSettings.new("R5", r5ColorInput, r5ShowInput), graphicSettings.new("S5", s5ColorInput, s5ShowInput))
+
+autoAnchor = switch
+    timeframe.isintraday => timeframe.multiplier <= 15 ? "1D" : "1W"
+    timeframe.isdaily    => "1M"
+    => "12M"
+
+pivotTimeframe = switch pivotAnchorInput
+    "Auto"          => autoAnchor
+    "Daily"         => "1D"
+    "Weekly"        => "1W"
+    "Monthly"       => "1M"
+    "Quarterly"     => "3M"
+    => "12M"
+
+pivotYearMultiplier = switch pivotAnchorInput
+    "Biyearly"         => 2
+    "Triyearly"        => 3
+    "Quinquennially"   => 5
+    "Decennially"      => 10
+    => 1
+
+numOfPivotLevels = switch pivotTypeInput
+    "Traditional" => 11
+    "Camarilla"   => 11
+    "Woodie"      => 9
+    "Classic"     => 9
+    "Fibonacci"   => 7
+    "DM"          => 3
+
+type pivotGraphic
+    line pivotLine
+    label pivotLabel
+
+method delete(pivotGraphic graphic) =>
+    graphic.pivotLine.delete()
+    graphic.pivotLabel.delete()
+
+var drawnGraphics = matrix.new<pivotGraphic>()
+
+localPivotTimeframeChange = timeframe.change(pivotTimeframe) and year % pivotYearMultiplier == 0
+securityPivotTimeframeChange = timeframe.change(timeframe.period) and year % pivotYearMultiplier == 0
+
+pivotTimeframeChangeCounter(condition) => 
+    var count = 0
+    if condition and bar_index > 0
+        count += 1
+    count
+
+localPivots = ta.pivot_point_levels(pivotTypeInput, localPivotTimeframeChange)
+securityPivotPointsArray = ta.pivot_point_levels(pivotTypeInput, securityPivotTimeframeChange)
+
+securityTimeframe = timeframe.isintraday ? "1D" : timeframe.period
+[securityPivots, securityPivotCounter] = request.security(syminfo.tickerid, pivotTimeframe, [securityPivotPointsArray, pivotTimeframeChangeCounter(securityPivotTimeframeChange)], lookahead = barmerge.lookahead_on)
+pivotPointsArray = isDailyBasedInput ? securityPivots : localPivots
+
+affixOldPivots(endTime) =>
+    if drawnGraphics.rows() > 0
+        lastGraphics = drawnGraphics.row(drawnGraphics.rows() - 1)
+
+        for graphic in lastGraphics
+            graphic.pivotLine.set_x2(endTime)
+            if positionLabelsInput == "Po prawej"
+                graphic.pivotLabel.set_x(endTime)
+
+drawNewPivots(startTime) =>
+    
+    newGraphics = array.new<pivotGraphic>()
+
+    for [index, coord] in pivotPointsArray
+        levelSettings = graphicSettingsArray.get(index)
+        if not na(coord) and levelSettings.showLevel
+            lineEndTime = startTime + timeframe.in_seconds(pivotTimeframe) * 1000 * pivotYearMultiplier
+            pivotLine = line.new(startTime, coord, lineEndTime, coord, xloc = xloc.bar_time, color=levelSettings.levelColor, width=linewidthInput)
+            pivotLabel = label.new(x = positionLabelsInput == "Po lewej" ? startTime : lineEndTime,
+                               y = coord,
+                               text = (showLabelsInput ? levelSettings.levelName + " " : "") + (showPricesInput ? "(" + str.tostring(coord, format.mintick) + ")" : ""),
+                               style = positionLabelsInput == "Po lewej" ? label.style_label_right : label.style_label_left,
+                               textcolor = levelSettings.levelColor,
+                               color = #00000000,
+                               xloc=xloc.bar_time)
+            
+            newGraphics.push(pivotGraphic.new(pivotLine, pivotLabel))
+    
+    drawnGraphics.add_row(array_id = newGraphics)
+
+    if drawnGraphics.rows() > maxHistoricalPivotsInput
+        oldGraphics = drawnGraphics.remove_row(0)
+        
+        for graphic in oldGraphics
+            graphic.delete()
+
+f_calculatePivots(pivotType, h, l, c, o) =>
+    p = (h + l + c) / 3
+    p_w = (h + l + 2 * c) / 4
+    p_c = (h + l + o) / 3
+    priceRange = h - l
+
+    s1 = float(na), s2 = float(na), s3 = float(na), s4 = float(na), s5 = float(na)
+    r1 = float(na), r2 = float(na), r3 = float(na), r4 = float(na), r5 = float(na)
+    
+    switch pivotType
+        "Traditional" =>
+            s1 := 2 * p - h
+            r1 := 2 * p - l
+            s2 := p - priceRange
+            r2 := p + priceRange
+            s3 := l - 2 * (h - p)
+            r3 := h + 2 * (p - l)
+            s4 := p - 2 * priceRange
+            r4 := p + 2 * priceRange
+            s5 := l - 3 * (h - p)
+            r5 := h + 3 * (p - l)
+        "Fibonacci" =>
+            s1 := p - 0.382 * priceRange
+            r1 := p + 0.382 * priceRange
+            s2 := p - 0.618 * priceRange
+            r2 := p + 0.618 * priceRange
+            s3 := p - 1.0 * priceRange
+            r3 := p + 1.0 * priceRange
+        "Woodie" =>
+            p := p_w
+            s1 := 2 * p - h
+            r1 := 2 * p - l
+            s2 := p - priceRange
+            r2 := p + priceRange
+            s3 := l - 2 * (h - p)
+            r3 := h + 2 * (p - l)
+        "Classic" =>
+            p := p_c
+            s1 := 2 * p - h
+            r1 := 2 * p - l
+            s2 := p - priceRange
+            r2 := p + priceRange
+            s3 := p - 2 * priceRange
+            r3 := p + 2 * priceRange
+        "DM" =>
+            if c > o
+                p := 2 * h + l + c
+            if c < o
+                p := h + 2 * l + c
+            if c == o
+                p := h + l + 2 * c
+            p := p / 4
+            s1 := p - priceRange
+            r1 := p + priceRange
+        "Camarilla" =>
+            s1 := c - priceRange * 1.1 / 12
+            r1 := c + priceRange * 1.1 / 12
+            s2 := c - priceRange * 1.1 / 6
+            r2 := c + priceRange * 1.1 / 6
+            s3 := c - priceRange * 1.1 / 4
+            r3 := c + priceRange * 1.1 / 4
+            s4 := c - priceRange * 1.1 / 2
+            r4 := c + priceRange * 1.1 / 2
+            s5 := r4 + 1.168 * (r4 - r3)
+            r5 := c - (s4 - c)
+            
+    array.from(p, r1, s1, r2, s2, r3, s3, r4, s4, r5, s5)
+
+var projectionGraphics = array.new<pivotGraphic>()
+
+drawProjection(levels, startTime) =>
+    for graphic in projectionGraphics
+        graphic.delete()
+    projectionGraphics.clear()
+
+    for [index, coord] in levels
+        levelSettings = graphicSettingsArray.get(index)
+        if not na(coord) and levelSettings.showLevel
+            levelSettings := graphicSettingsArray.get(index)
+        if not na(coord) and levelSettings.showLevel
+            color projectionColor = switch index
+                0 => projPPColorInput
+                1 => projR1ColorInput
+                2 => projS1ColorInput
+                3 => projR2ColorInput
+                4 => projS2ColorInput
+                5 => projR3ColorInput
+                6 => projS3ColorInput
+                7 => projR4ColorInput
+                8 => projS4ColorInput
+                9 => projR5ColorInput
+                10 => projS5ColorInput
+            default = levelSettings.levelColor
+
+            lineEndTime = startTime + timeframe.in_seconds("1D") * 1000
+            pivotLine = line.new(startTime, coord, lineEndTime, coord, xloc = xloc.bar_time, color=projectionColor, width=linewidthInput, style=line.style_dotted)
+
+            labelText = (showLabelsInput ? "◀ Przyszły poziom " + str.trim(levelSettings.levelName) + " " : "") + (showPricesInput ? "(" + str.tostring(coord, format.mintick) + ")" : "")
+            labelXPosition = positionLabelsInput == "Po prawej" ? startTime : lineEndTime
+            labelStyle = positionLabelsInput == "Po prawej" ? label.style_label_right : label.style_label_left
+
+            pivotLabel = label.new(x = labelXPosition,
+                                   y = coord,
+                                   text = labelText,
+                                   style = labelStyle,
+                                   textcolor = projectionColor,
+                                   color = #00000000,
+                                   xloc=xloc.bar_time)
+
+            projectionGraphics.push(pivotGraphic.new(pivotLine, pivotLabel))
+
+
+if (show_pivot_points)
+    [pivots, pivotCounter] = request.security(syminfo.tickerid, pivotTimeframe, [ta.pivot_point_levels(pivotTypeInput, securityPivotTimeframeChange), pivotTimeframeChangeCounter(securityPivotTimeframeChange)], lookahead = barmerge.lookahead_on)
+    pivotPointsArray := pivots
+
+    securityPivotDrawConditionStatic = pivotCounter != pivotCounter[1]
+
+    if (securityPivotDrawConditionStatic)
+        affixOldPivots(time)
+        drawNewPivots(time)
+
+    var FIRST_BAR_TIME = time
+    if (barstate.islastconfirmedhistory and drawnGraphics.columns() == 0)
+        if not na(pivots) and pivotCounter > 0
+            drawNewPivots(FIRST_BAR_TIME)
+        else
+            runtime.error("Not enough data to calculate Pivot Points. Lower the Pivots Timeframe in the indicator settings.")
+
+
+    [h_proj, l_proj, c_proj, o_proj, day_time_close_proj] = request.security(syminfo.tickerid, "1D", [high, low, close, open, time_close], lookahead=barmerge.lookahead_off)
+
+    if showProjectionInput and (pivotAnchorInput == "Daily" or (pivotAnchorInput == "Auto" and timeframe.isintraday and timeframe.multiplier <= 15))
+        if barstate.islast
+            projectionLevels = f_calculatePivots(pivotTypeInput, h_proj, l_proj, c_proj, o_proj)
+            nextDayStartTime = day_time_close_proj
+            drawProjection(projectionLevels, nextDayStartTime)
+                
+// HTS Wstęgi - Kijun-Sen
+// Ustawienia dla Kijun-Sen
+basePeriods = input.int(26, title = 'Okres Kijun-Sen:', group = g4)
+kijun_color = input.color(color.new(#ffeb3b, 20), 'Kolor Kijun-Sen:', group = g4)
+
+donchian(len) =>
+    math.avg(ta.lowest(len), ta.highest(len))
+
+baseLine = donchian(basePeriods)
+
+plot(show_kijun_sen ? baseLine : na, 'Linia Kijun-Sen:', kijun_color, 1)
+
+// HTS Wstęgi - Kijun-Sen - Drugi interwał czasowy
+// Ustawienia dla drugiego Kijun-Sen
+kijun2_tf = input.timeframe(title = 'Interwał czasowy:', defval = '60', group = g5)
+kijun2_basePeriods = input.int(26, title = 'Okres Kijun-Sen - Drugi interwał czasowy:', group = g5)
+kijun2_color = input.color(color.new(#ffeb3b, 20), 'Kolor Kijun-Sen - Drugi interwał czasowy:', group = g5)
+
+kijun2_donchian(len) =>
+    math.avg(ta.lowest(len), ta.highest(len))
+
+kijun2_baseLine = request.security(syminfo.tickerid, kijun2_tf, kijun2_donchian(kijun2_basePeriods), gaps = barmerge.gaps_on)
+
+plot(show_kijun_sen2 ? kijun2_baseLine : na, 'Linia Kijun-Sen - Drugi interwał:', kijun2_color, 1)
+
+// HTS Wstęgi - Tabela
+// Ustawienia dla tabeli trendów
+tableLocation = input.string('Prawy dolny róg', title='Położenie tabeli:', options=['Lewy górny róg', 'Lewa strona środek', 'Lewy dolny róg', 'Środek góra', 'Środek', 'Środek dół', 'Prawy górny róg', 'Prawa strona środek', 'Prawy dolny róg'], group=g6)
+tableFontSize = input.string(size.small, "Wielkość czcionki:", options=[size.auto, size.tiny, size.small, size.normal, size.large, size.huge], group=g6)
+neutralSymbol = input.string('■', title='Symbol neutralny:', options=['●', '⏺', '▪', '■', '🐈', '🐱', '😸', '😹', '😺', '😻', '😼', '😽', '😾', '😿', '🙀'], group=g6)
+rsiLength = input.int(14, title='Długość RSI:', group=g6)
+table_bg_color = input.color(color.new(#1e222d, 80), title="Kolor tła tabeli", group=g6)
+
+show_tf1 = input.bool(true, title="Interwał 1", group=g6a, inline='tf1')
+tf1 = input.timeframe('1', title='', group=g6a, inline='tf1')
+show_tf2_tbl = input.bool(false, title="Interwał 2", group=g6a, inline='tf2_tbl')
+tf2_tbl = input.timeframe('3', title='', group=g6a, inline='tf2_tbl')
+show_tf3 = input.bool(true, title="Interwał 3", group=g6a, inline='tf3')
+tf3 = input.timeframe('5', title='', group=g6a, inline='tf3')
+show_tf4 = input.bool(false, title="Interwał 4", group=g6a, inline='tf4')
+tf4 = input.timeframe('15', title='', group=g6a, inline='tf4')
+show_tf5 = input.bool(true, title="Interwał 5", group=g6a, inline='tf5')
+tf5 = input.timeframe('30', title='', group=g6a, inline='tf5')
+show_tf6 = input.bool(false, title="Interwał 6", group=g6a, inline='tf6')
+tf6 = input.timeframe('45', title='', group=g6a, inline='tf6')
+show_tf7 = input.bool(true, title="Interwał 7", group=g6a, inline='tf7')
+tf7 = input.timeframe('60', title='', group=g6a, inline='tf7')
+show_tf8 = input.bool(true, title="Interwał 8", group=g6a, inline='tf8')
+tf8 = input.timeframe('120', title='', group=g6a, inline='tf8')
+show_tf9 = input.bool(false, title="Interwał 9", group=g6a, inline='tf9')
+tf9 = input.timeframe('180', title='', group=g6a, inline='tf9')
+show_tf10 = input.bool(true, title="Interwał 10", group=g6a, inline='tf10')
+tf10 = input.timeframe('240', title='', group=g6a, inline='tf10')
+show_tf11 = input.bool(true, title="Interwał 11", group=g6a, inline='tf11')
+tf11 = input.timeframe('D', title='', group=g6a, inline='tf11')
+show_tf12 = input.bool(false, title="Interwał 12", group=g6a, inline='tf12')
+tf12 = input.timeframe('W', title='', group=g6a, inline='tf12')
+
+show_pivot_p = input.bool(true, "PP", group=g6b, inline="PP")
+show_pivot_s1 = input.bool(true, "S1", group=g6b, inline="S1/R1")
+show_pivot_r1 = input.bool(true, "R1", group=g6b, inline="S1/R1")
+show_pivot_s2 = input.bool(true, "S2", group=g6b, inline="S2/R2")
+show_pivot_r2 = input.bool(true, "R2", group=g6b, inline="S2/R2")
+show_pivot_s3 = input.bool(true, "S3", group=g6b, inline="S3/R3")
+show_pivot_r3 = input.bool(true, "R3", group=g6b, inline="S3/R3")
+show_pivot_s4 = input.bool(false, "S4", group=g6b, inline="S4/R4")
+show_pivot_r4 = input.bool(false, "R4", group=g6b, inline="S4/R4")
+show_pivot_s5 = input.bool(false, "S5", group=g6b, inline="S5/R5")
+show_pivot_r5 = input.bool(false, "R5", group=g6b, inline="S5/R5")
+
+show_pivot_daily = input.bool(true, "Pokaż Daily", group=g6b, inline="pivots7")
+show_pivot_weekly = input.bool(false, "Pokaż Weekly", group=g6b, inline="pivots7")
+
+var table mainTable = na
+
+var active_tfs = array.new_string(0)
+
+if barstate.isfirst
+    if show_tf1
+        array.push(active_tfs, tf1)
+    if show_tf2_tbl
+        array.push(active_tfs, tf2_tbl)
+    if show_tf3
+        array.push(active_tfs, tf3)
+    if show_tf4
+        array.push(active_tfs, tf4)
+    if show_tf5
+        array.push(active_tfs, tf5)
+    if show_tf6
+        array.push(active_tfs, tf6)
+    if show_tf7
+        array.push(active_tfs, tf7)
+    if show_tf8
+        array.push(active_tfs, tf8)
+    if show_tf9
+        array.push(active_tfs, tf9)
+    if show_tf10
+        array.push(active_tfs, tf10)
+    if show_tf11
+        array.push(active_tfs, tf11)
+    if show_tf12
+        array.push(active_tfs, tf12)
+
+// Zmienna globalna dla pozycji tabeli
+get_table_position(location_string) =>
+    switch location_string
+        'Lewy górny róg' => position.top_left
+        'Lewa strona środek' => position.middle_left
+        'Lewy dolny róg' => position.bottom_left
+        'Środek góra' => position.top_center
+        'Środek' => position.middle_center
+        'Środek dół' => position.bottom_center
+        'Prawy górny róg' => position.top_right
+        'Prawa strona środek' => position.middle_right
+        => position.bottom_right
+
+var tablePos = get_table_position(tableLocation)
+
+f_getTrend() =>
+    HTSFastHigh_local = plotmafunc(high, lenFast, mamethod)
+    HTSFastLow_local = plotmafunc(low, lenFast, mamethod)
+    HTSSlowHigh_local = plotmafunc(high, lenSlow, mamethod)
+    HTSSlowLow_local = plotmafunc(low, lenSlow, mamethod)
+    // RSI obliczane w kontekście funkcji
+    rsi_val = ta.rsi(close, rsiLength)
+    [HTSFastLow_local > HTSSlowHigh_local, HTSFastHigh_local < HTSSlowLow_local, rsi_val]
+
+f_getPriceBandPosition() =>
+    HTSFastHigh_local = plotmafunc(high, lenFast, mamethod)
+    HTSFastLow_local = plotmafunc(low, lenFast, mamethod)
+    HTSSlowHigh_local = plotmafunc(high, lenSlow, mamethod)
+    HTSSlowLow_local = plotmafunc(low, lenSlow, mamethod)
+    // RSI obliczane w kontekście funkcji
+    rsi_val = ta.rsi(close, rsiLength)
+    [close > HTSFastHigh_local, close < HTSFastLow_local, close > HTSSlowHigh_local, close < HTSSlowLow_local, rsi_val]
+
+f_intervalToLabel(interval) =>
+    switch interval
+        '1' => 'm1',
+        '3' => 'm3',
+        '5' => 'm5',
+        '15' => 'm15',
+        '30' => 'm30',
+        '45' => 'm45',
+        '60' => 'H1',
+        '120' => 'H2',
+        '180' => 'H3',
+        '240' => 'H4',
+        'D' => 'D1',
+        'W' => 'W1',
+        'M' => 'M1',
+        => interval
+
+f_fillCell(_table, _column, _row, _cellText, _c_color, _text_color, _size) =>
+    if not na(_table)
+        table.cell(_table, _column, _row, _cellText, bgcolor=_c_color, text_color=_text_color, text_size=_size)
+
+f_rsiColor(rsi) =>
+    rsi > 70 ? #f23645 : rsi < 30 ? #089981 : #b2b5be
+
+f_getPivots(piv_tf) =>
+    [h, l, c, o] = request.security(syminfo.tickerid, piv_tf, [high[1], low[1], close[1], open[1]], lookahead=barmerge.lookahead_on)
+    pivots = map.new<string, float>()
+    pivot_range = h - l
+    
+    if pivotTypeInput == TRADITIONAL
+        p = (h + l + c) / 3
+        map.put(pivots, 'PP', p), map.put(pivots, 'R1', 2 * p - l), map.put(pivots, 'S1', 2 * p - h)
+        map.put(pivots, 'R2', p + pivot_range), map.put(pivots, 'S2', p - pivot_range)
+        map.put(pivots, 'R3', p * 2 + h - 2 * l), map.put(pivots, 'S3', p * 2 - (2 * h - l))
+        map.put(pivots, 'R4', p * 3 + h - 3 * l), map.put(pivots, 'S4', p * 3 - (3 * h - l))
+        map.put(pivots, 'R5', p * 4 + h - 4 * l), map.put(pivots, 'S5', p * 4 - (4 * h - l))
+    else if pivotTypeInput == FIBONACCI
+        p = (h + l + c) / 3
+        map.put(pivots, 'PP', p), map.put(pivots, 'R1', p + 0.382 * pivot_range), map.put(pivots, 'S1', p - 0.382 * pivot_range)
+        map.put(pivots, 'R2', p + 0.618 * pivot_range), map.put(pivots, 'S2', p - 0.618 * pivot_range)
+        map.put(pivots, 'R3', p + 1 * pivot_range), map.put(pivots, 'S3', p - 1 * pivot_range)
+    else if pivotTypeInput == WOODIE
+        p = (h + l + 2 * o) / 4
+        map.put(pivots, 'PP', p), map.put(pivots, 'R1', 2 * p - l), map.put(pivots, 'S1', 2 * p - h)
+        map.put(pivots, 'R2', p + pivot_range), map.put(pivots, 'S2', p - pivot_range)
+        r3 = h + 2 * (p - l), s3 = l - 2 * (h - p)
+        map.put(pivots, 'R3', r3), map.put(pivots, 'S3', s3)
+        map.put(pivots, 'R4', r3 + pivot_range), map.put(pivots, 'S4', s3 - pivot_range)
+    else if pivotTypeInput == CLASSIC
+        p = (h + l + c) / 3
+        map.put(pivots, 'PP', p), map.put(pivots, 'R1', 2 * p - l), map.put(pivots, 'S1', 2 * p - h)
+        map.put(pivots, 'R2', p + pivot_range), map.put(pivots, 'S2', p - pivot_range)
+        map.put(pivots, 'R3', p + 2 * pivot_range), map.put(pivots, 'S3', p - 2 * pivot_range)
+        map.put(pivots, 'R4', p + 3 * pivot_range), map.put(pivots, 'S4', p - 3 * pivot_range)
+    else if pivotTypeInput == DEMARK
+        x = c > o ? 2 * h + l + c : c < o ? h + 2 * l + c : h + l + 2 * c
+        p = x / 4
+        map.put(pivots, 'PP', p), map.put(pivots, 'R1', x / 2 - l), map.put(pivots, 'S1', x / 2 - h)
+    else if pivotTypeInput == CAMARILLA
+        p = (h + l + c) / 3
+        map.put(pivots, 'PP', p)
+        map.put(pivots, 'R1', c + pivot_range * 1.1 / 12), map.put(pivots, 'S1', c - pivot_range * 1.1 / 12)
+        map.put(pivots, 'R2', c + pivot_range * 1.1 / 6), map.put(pivots, 'S2', c - pivot_range * 1.1 / 6)
+        map.put(pivots, 'R3', c + pivot_range * 1.1 / 4), map.put(pivots, 'S3', c - pivot_range * 1.1 / 4)
+        map.put(pivots, 'R4', c + pivot_range * 1.1 / 2), map.put(pivots, 'S4', c - pivot_range * 1.1 / 2)
+        r5 = c + pivot_range * 1.1 / 1.0
+        map.put(pivots, 'R5', r5), map.put(pivots, 'S5', 2 * c - r5)
+    pivots
+
+// === GŁÓWNA LOGIKA RYSUJĄCA TABELĘ ===
+if barstate.islast
+    // Czyszczenie starej tabeli
+    if not na(mainTable)
+        table.delete(mainTable)
+    
+    // Rysowanie połączonej tabeli, jeśli jest włączona
+    if show_trend_table
+        // --- Przygotowanie danych i wymiarów ---
+        int tfRows = array.size(active_tfs)
+
+        // Zmienna określająca czy sekcja pivotów ma być w ogóle rysowana
+        bool should_show_pivots = show_pivots_column and (show_pivot_daily or show_pivot_weekly)
+
+        // Przygotowanie danych dla Pivot Points
+        var active_pivot_labels = array.new_string()
+        var active_pivot_colors = array.new_color()
+        array.clear(active_pivot_labels)
+        array.clear(active_pivot_colors)
+
+        if should_show_pivots
+            pivot_labels_all = array.from("R5", "R4", "R3", "R2", "R1", "PP", "S1", "S2", "S3", "S4", "S5")
+            pivot_colors_all = array.from(r5ColorInput, r4ColorInput, r3ColorInput, r2ColorInput, r1ColorInput, pColorInput, s1ColorInput, s2ColorInput, s3ColorInput, s4ColorInput, s5ColorInput)
+            pivot_shows_all = array.from(show_pivot_r5, show_pivot_r4, show_pivot_r3, show_pivot_r2, show_pivot_r1, show_pivot_p, show_pivot_s1, show_pivot_s2, show_pivot_s3, show_pivot_s4, show_pivot_s5)
+            for i = 0 to array.size(pivot_labels_all) - 1
+                if array.get(pivot_shows_all, i)
+                    array.push(active_pivot_labels, array.get(pivot_labels_all, i))
+                    array.push(active_pivot_colors, array.get(pivot_colors_all, i))
+        
+        int pivotRows = array.size(active_pivot_labels)
+        int rowCount = math.max(tfRows, pivotRows) + 1 // +1 dla nagłówka
+
+        // Obliczanie liczby kolumn
+        int colCount = 3 // 'HTS', Fast, Slow
+        if show_rsi_row
+            colCount += 1
+        if should_show_pivots
+            colCount += 1 // 'Pivoty'
+            if show_pivot_daily
+                colCount += 1
+            if show_pivot_weekly
+                colCount += 1
+        
+        // --- Tworzenie i wypełnianie tabeli ---
+        if tfRows > 0 or should_show_pivots
+            mainTable := table.new(tablePos, colCount, rowCount, border_width=1)
+            
+        // --- Nagłówki ---
+            int current_col = 0
+            f_fillCell(mainTable, current_col, 0, 'HTS', table_bg_color, #b2b5be, tableFontSize)
+            current_col += 1
+            f_fillCell(mainTable, current_col, 0, str.tostring(lenFast), table_bg_color, color.new(HTSFastColor, 0), tableFontSize)
+            current_col += 1
+            f_fillCell(mainTable, current_col, 0, str.tostring(lenSlow), table_bg_color, color.new(HTSSlowColor, 0), tableFontSize)
+            current_col += 1
+            if show_rsi_row
+                f_fillCell(mainTable, current_col, 0, 'RSI', table_bg_color, #b2b5be, tableFontSize)
+                current_col += 1
+            
+            if should_show_pivots
+                f_fillCell(mainTable, current_col, 0, 'Pivoty', table_bg_color, #b2b5be, tableFontSize)
+                current_col += 1
+                if show_pivot_daily
+                    f_fillCell(mainTable, current_col, 0, 'Daily', table_bg_color, #b2b5be, tableFontSize)
+                    current_col += 1
+                if show_pivot_weekly
+                    f_fillCell(mainTable, current_col, 0, 'Weekly', table_bg_color, #b2b5be, tableFontSize)
+
+            // --- Wiersze z danymi HTS ---
+            for i = 0 to tfRows - 1
+                current_col := 0
+                string current_tf = array.get(active_tfs, i)
+
+                // Pobranie danych z wymuszeniem kontekstu docelowego TF
+                [isUptrend_tf, isDowntrend_tf, rsi_value] = request.security(syminfo.tickerid, current_tf, f_getTrend(), gaps=barmerge.gaps_off)
+                [isAboveFast, isBelowFast, isAboveSlow, isBelowSlow, _] = request.security(syminfo.tickerid, current_tf, f_getPriceBandPosition(), gaps=barmerge.gaps_off)
+                
+                // Kolumna 1: HTS
+                string hts_label = f_intervalToLabel(current_tf) + (isUptrend_tf ? ' ▲' : isDowntrend_tf ? ' ▼' : ' ' + neutralSymbol)
+                color hts_textcolor = isUptrend_tf ? #089981 : isDowntrend_tf ? #f23645 : #b2b5be
+                f_fillCell(mainTable, current_col, i + 1, hts_label, table_bg_color, hts_textcolor, tableFontSize)
+                current_col += 1
+
+                // Kolumna 2: Fast
+                string glyphFast = isAboveFast ? '▲' : isBelowFast ? '▼' : neutralSymbol
+                color textcolorFast = isAboveFast ? #089981 : isBelowFast ? #f23645 : #b2b5be
+                f_fillCell(mainTable, current_col, i + 1, glyphFast, table_bg_color, textcolorFast, tableFontSize)
+                current_col += 1
+
+                // Kolumna 3: Slow
+                string glyphSlow = isAboveSlow ? '▲' : isBelowSlow ? '▼' : neutralSymbol
+                color textcolorSlow = isAboveSlow ? #089981 : isBelowSlow ? #f23645 : #b2b5be
+                f_fillCell(mainTable, current_col, i + 1, glyphSlow, table_bg_color, textcolorSlow, tableFontSize)
+                current_col += 1
+                
+                // Kolumna 4: RSI (używamy wartości pobranej razem z trendem)
+                if show_rsi_row
+                    f_fillCell(mainTable, current_col, i + 1, str.tostring(rsi_value, '#.0'), table_bg_color, f_rsiColor(rsi_value), tableFontSize)
+                    current_col += 1
+
+            // --- Wiersze z danymi Pivot Points ---
+            if should_show_pivots and pivotRows > 0
+                map<string, float> daily_pivots = show_pivot_daily ? f_getPivots('D') : na
+                map<string, float> weekly_pivots = show_pivot_weekly ? f_getPivots('W') : na
+                
+                int pivot_col_start = 3 + (show_rsi_row ? 1 : 0)
+
+                for i = 0 to pivotRows - 1
+                    current_col := pivot_col_start
+                    string label = array.get(active_pivot_labels, i)
+                    color p_color_local = array.get(active_pivot_colors, i)
+                    
+                    f_fillCell(mainTable, current_col, i + 1, label, table_bg_color, p_color_local, tableFontSize)
+                    current_col += 1
+                    
+                    if show_pivot_daily
+                        float daily_val = map.get(daily_pivots, label)
+                        string daily_str = na(daily_val) ? 'N/A' : str.tostring(daily_val, format.mintick)
+                        f_fillCell(mainTable, current_col, i + 1, daily_str, table_bg_color, p_color_local, tableFontSize)
+                        current_col += 1
+
+                    if show_pivot_weekly
+                        float weekly_val = map.get(weekly_pivots, label)
+                        string weekly_str = na(weekly_val) ? 'N/A' : str.tostring(weekly_val, format.mintick)
+                        f_fillCell(mainTable, current_col, i + 1, weekly_str, table_bg_color, p_color_local, tableFontSize)
+                        
+// Alerty
+isUptrendAlert = ta.crossover(HTSFastLow, HTSSlowHigh)
+isDowntrendAlert = ta.crossunder(HTSFastHigh, HTSSlowLow)
+
+// HTS Wstęgi - Bandy ATR
+// Ustawienia dla Bandy ATR
+atrLen_atr = input.int(title = 'Length', defval = 288, minval = 1, group = g7)
+smoothing_atr = input.string(title = 'Smoothing', defval = 'EMA', options = ['RMA', 'SMA', 'EMA', 'WMA'], group = g7)
+m_atr = input.float(1.3, 'Multiplier', group = g7)
+srcUpperHighInput_atr = input.string(defval = 'High', title = 'Źródło: Górne Pasmo (High)', options = ['Close', 'High', 'Low', 'Open', 'HL2', 'HLC3', 'OHLC4'], group = g7)
+srcUpperLowInput_atr = input.string(defval = 'Close', title = 'Źródło: Górne Pasmo (Low)', options = ['Close', 'High', 'Low', 'Open', 'HL2', 'HLC3', 'OHLC4'], group = g7)
+srcLowerHighInput_atr = input.string(defval = 'Close', title = 'Źródło: Dolne Pasmo (High)', options = ['Close', 'High', 'Low', 'Open', 'HL2', 'HLC3', 'OHLC4'], group = g7)
+srcLowerLowInput_atr = input.string(defval = 'Low', title = 'Źródło: Dolne Pasmo (Low)', options = ['Close', 'High', 'Low', 'Open', 'HL2', 'HLC3', 'OHLC4'], group = g7)
+typeMA_atr = input.string(title = 'Method', defval = 'SMMA (RMA)', options = ['SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'], group = g7)
+smoothingLength_atr = input.int(title = 'Length', defval = 9, minval = 1, group = g7)
+haikinAshiMode_atr = input.bool(true, title = 'Tryb HaikinAshi', tooltip = 'Gdy włączone, wszystkie obliczenia (ATR, pasma, sygnały) bazują na danych Heikin Ashi, aby idealnie symulować wskaźnik na wykresie HA.', group = g7)
+
+// Nowe ustawienia kolorów wypełnienia
+upperFillColor_atr = input.color(color.new(#f23645, 90), title = 'Kolor wypełnienia górnego pasma:', group = g7)
+lowerFillColor_atr = input.color(color.new(#00bcd4, 90), title = 'Kolor wypełnienia dolnego pasma:', group = g7)
+
+ha_ticker_atr = ticker.heikinashi(syminfo.tickerid)
+[ha_open_atr, ha_high_atr, ha_low_atr, ha_close_atr] = request.security(ha_ticker_atr, timeframe.period, [open, high, low, close])
+
+_open_atr = haikinAshiMode_atr ? ha_open_atr : open
+_high_atr = haikinAshiMode_atr ? ha_high_atr : high
+_low_atr = haikinAshiMode_atr ? ha_low_atr : low
+_close_atr = haikinAshiMode_atr ? ha_close_atr : close
+_hl2_atr = (_high_atr + _low_atr) / 2
+_hlc3_atr = (_high_atr + _low_atr + _close_atr) / 3
+_ohlc4_atr = (_open_atr + _high_atr + _low_atr + _close_atr) / 4
+
+getSource_atr(srcString) =>
+    switch srcString
+        'Close' => _close_atr
+        'High' => _high_atr
+        'Low' => _low_atr
+        'Open' => _open_atr
+        'HL2' => _hl2_atr
+        'HLC3' => _hlc3_atr
+        'OHLC4' => _ohlc4_atr
+
+ma_function_atr(source, atrLen) =>
+    switch smoothing_atr
+        'RMA' => ta.rma(source, atrLen)
+        'SMA' => ta.sma(source, atrLen)
+        'EMA' => ta.ema(source, atrLen)
+        'WMA' => ta.wma(source, atrLen)
+
+ma_atr(source, atrLen, type) =>
+    switch type
+        'SMA' => ta.sma(source, atrLen)
+        'EMA' => ta.ema(source, atrLen)
+        'SMMA (RMA)' => ta.rma(source, atrLen)
+        'WMA' => ta.wma(source, atrLen)
+        'VWMA' => ta.vwma(source, atrLen)
+
+_tr_atr = ta.tr(false)
+if haikinAshiMode_atr
+    _tr_atr := math.max(_high_atr - _low_atr, math.abs(_high_atr - _close_atr[1]), math.abs(_low_atr - _close_atr[1]))
+a_atr = ma_function_atr(_tr_atr, atrLen_atr) * m_atr
+
+rawUpperHigh_atr = getSource_atr(srcUpperHighInput_atr) + a_atr
+rawUpperLow_atr = getSource_atr(srcUpperLowInput_atr) + a_atr
+rawLowerHigh_atr = getSource_atr(srcLowerHighInput_atr) - a_atr
+rawLowerLow_atr = getSource_atr(srcLowerLowInput_atr) - a_atr
+
+smoothingLineUpperHigh_atr = ma_atr(rawUpperHigh_atr, smoothingLength_atr, typeMA_atr)
+smoothingLineUpperLow_atr = ma_atr(rawUpperLow_atr, smoothingLength_atr, typeMA_atr)
+smoothingLineLowerHigh_atr = ma_atr(rawLowerHigh_atr, smoothingLength_atr, typeMA_atr)
+smoothingLineLowerLow_atr = ma_atr(rawLowerLow_atr, smoothingLength_atr, typeMA_atr)
+
+// Rysowanie niewidocznych linii (dla funkcji fill)
+upperHighPlot_atr = plot(show_atr_band ? smoothingLineUpperHigh_atr : na, title = 'ATR Górne Pasmo (High)', color = color.new(color.white, 100), linewidth = 1)
+upperLowPlot_atr = plot(show_atr_band ? smoothingLineUpperLow_atr : na, title = 'ATR Górne Pasmo (Low)', color = color.new(color.white, 100), linewidth = 1)
+fill(upperHighPlot_atr, upperLowPlot_atr, color = show_atr_band ? upperFillColor_atr : na, title = 'Wypełnienie górnego pasma ATR')
+
+lowerHighPlot_atr = plot(show_atr_band ? smoothingLineLowerHigh_atr : na, title = 'ATR Dolne Pasmo (High)', color = color.new(color.white, 100), linewidth = 1)
+lowerLowPlot_atr = plot(show_atr_band ? smoothingLineLowerLow_atr : na, title = 'ATR Dolne Pasmo (Low)', color = color.new(color.white, 100), linewidth = 1)
+fill(lowerHighPlot_atr, lowerLowPlot_atr, color = show_atr_band ? lowerFillColor_atr : na, title = 'Wypełnienie dolnego pasma ATR')
+
+short_condition_atr = _close_atr[1] > smoothingLineUpperHigh_atr[1] and _close_atr < smoothingLineUpperHigh_atr
+long_condition_atr = _close_atr[1] < smoothingLineLowerLow_atr[1] and _close_atr > smoothingLineLowerLow_atr
+
+plotshape(show_atr_band and short_condition_atr, title = 'ATR Short', style = shape.labeldown, color = #f23645, location = location.abovebar, size = size.tiny)
+plotshape(show_atr_band and long_condition_atr, title = 'ATR Long', style = shape.labelup, color = #00bcd4, location = location.belowbar, size = size.tiny)
+
+// Alerty Bandy ATR z warunkiem
+alertup_atr = high > smoothingLineUpperHigh_atr and close < smoothingLineUpperHigh_atr
+alertdown_atr = low < smoothingLineLowerLow_atr and close > smoothingLineLowerLow_atr
+allert_atr = alertup_atr == true or alertdown_atr == true
+
+alertcondition(show_atr_band and allert_atr, title = 'Bandy ATR Alert (Recommended✅)', message = '{{ticker}}, Price:{{close}}, Timeframe:{{interval}}, Trading Opportunity!')
+alertcondition(show_atr_band and alertup_atr, title = 'Bandy ATR Long', message = '{{ticker}}, Price:{{close}}, Timeframe:{{interval}}, Bandy ATR Long 📈')
+alertcondition(show_atr_band and alertdown_atr, title = 'Bandy ATR Short', message = '{{ticker}}, Price:{{close}}, Timeframe:{{interval}}, Bandy ATR Short 📉')
+
+// HTS Wstęgi - VIDYA + TMA
+// Ustawienia dla VIDYA + TMA
+vidya_length = input.int(22, title = 'VIDYA Periods', group = g8)
+vidya_src = input(close, title = 'VIDYA Source', group = g8)
+tma_src = input(close, title = 'TMA Source', group = g8)
+tma_length = input.int(33, title = 'TMA Periods', group = g8)
+vidya_color = input.color(#12d300, title = 'Kolor VIDYA', group = g8)
+tma_color = input.color(#9c27b0, title = 'Kolor TMA', group = g8)
+
+getCMO(src, length) =>
+    mom = ta.change(src)
+    upSum = math.sum(math.max(mom, 0), length)
+    downSum = math.sum(-math.min(mom, 0), length)
+    out = (upSum - downSum) / (upSum + downSum)
+    out
+
+cmo = math.abs(getCMO(vidya_src, vidya_length))
+
+ema_val = ta.ema(vidya_src, vidya_length)
+alpha = 2 / ema_val + 1
+
+vidya = 0.0
+vidya := vidya_src * alpha * cmo + nz(vidya[1], vidya_src) * (1 - alpha * cmo)
+
+trima = ta.sma(ta.sma(tma_src, tma_length), tma_length)
+
+// Rysowanie VIDYA i TMA
+plot(show_vidya_tma ? vidya : na, title = 'VIDYA', linewidth = 1, color = vidya_color)
+plot(show_vidya_tma ? trima : na, title = 'TMA', linewidth = 1, color = tma_color)
+
+// HTS Wstęgi - VIDYA + TMA - Drugi interwał czasowy
+// Ustawienia dla VIDYA + TMA
+vidya_tma2_tf = input.timeframe(title = 'Interwał czasowy:', defval = '60', group = g9)
+vidya2_length = input.int(22, title = 'VIDYA Periods - Drugi interwał', group = g9)
+vidya2_src = input(close, title = 'VIDYA Source - Drugi interwał', group = g9)
+tma2_src = input(close, title = 'TMA Source - Drugi interwał', group = g9)
+tma2_length = input.int(33, title = 'TMA Periods - Drugi interwał', group = g9)
+vidya2_color = input.color(#12d300, title = 'Kolor VIDYA - Drugi interwał', group = g9)
+tma2_color = input.color(#9c27b0, title = 'Kolor TMA - Drugi interwał', group = g9)
+
+get_vidya_tma2() =>
+    cmo2 = math.abs(getCMO(vidya2_src, vidya2_length))
+    ema2 = ta.ema(vidya2_src, vidya2_length)
+    alpha2 = 2 / ema2 + 1
+    vidya2 = 0.0
+    vidya2 := vidya2_src * alpha2 * cmo2 + nz(vidya2[1], vidya2_src) * (1 - alpha2 * cmo2)
+
+    trima2 = ta.sma(ta.sma(tma2_src, tma2_length), tma2_length)
+
+    [vidya2, trima2]
+
+[vidya2_val, trima2_val] = request.security(syminfo.tickerid, vidya_tma2_tf, get_vidya_tma2(), gaps = barmerge.gaps_on)
+
+plot(show_vidya_tma2 ? vidya2_val : na, title = 'VIDYA - Drugi interwał', linewidth = 1, color = vidya2_color)
+plot(show_vidya_tma2 ? trima2_val : na, title = 'TMA - Drugi interwał', linewidth = 1, color = tma2_color)
+
+// HTS Wstęgi - Dowolne dwie średnie kroczące
+// Ustawienia dla Dowolnych dwóch średnich
+ma1_type = input.string('EMA', title = 'Typ pierwszej średniej:', options = ['RMA', 'EMA', 'SMA', 'WMA', 'VWMA'], group = g10)
+ma1_len = input.int(9, minval = 1, title = 'Długość pierwszej średniej:', group = g10)
+ma1_color = input.color(#089981, title = 'Kolor pierwszej średniej:', group = g10)
+
+ma2_type = input.string('EMA', title = 'Typ drugiej średniej:', options = ['RMA', 'EMA', 'SMA', 'WMA', 'VWMA'], group = g10)
+ma2_len = input.int(21, minval = 1, title = 'Długość drugiej średniej:', group = g10)
+ma2_color = input.color(#f23645, title = 'Kolor drugiej średniej:', group = g10)
+
+// Obliczenie średnich przy użyciu istniejącej funkcji
+ma1 = plotmafunc(close, ma1_len, ma1_type)
+ma2 = plotmafunc(close, ma2_len, ma2_type)
+
+// Rysowanie średnich na wykresie
+plot(show_double_ema ? ma1 : na, title = 'Średnia 1', color = ma1_color, linewidth = 1)
+plot(show_double_ema ? ma2 : na, title = 'Średnia 2', color = ma2_color, linewidth = 1)
+
+// HTS Wstęgi - VWAP - Volume Weighted Average Price
+// ustawienia VWAP
+vwap_tf = input.timeframe(title = 'Interwał czasowy VWAP', defval = '', group = g11, tooltip="Pozostaw puste, aby używać interwału z wykresu.")
+hideonDWM = input(false, title="Ukryj VWAP na wykresach D, W, M", group = g11)
+anchor = input.string(defval = "Session", title="Okres zakotwiczenia (Anchor)", options=["Session", "Week", "Month", "Quarter", "Year", "Decade", "Century", "Earnings", "Dividends", "Splits"], group = g11)
+src_vwap = input(title = "Source", defval = hlc3, group = g11, display = display.data_window)
+offset_vwap = input.int(0, title="Przesunięcie (Offset)", group = g11, minval=0)
+vwap_color = input.color(#2962ff, title="Kolor linii VWAP", group = g11)
+
+float vwapValue = na
+
+if show_vwap and not(hideonDWM and timeframe.isdwm)
+
+    cumVolume = ta.cum(volume)
+    if barstate.islast and cumVolume == 0
+        runtime.error("Błąd: Brak danych o wolumenie. Aby użyć VWAP, zmień instrument na taki, który posiada dane o wolumenie (np. akcje) lub wyłącz VWAP w ustawieniach.")
+
+    new_earnings = request.earnings(syminfo.tickerid, earnings.actual, barmerge.gaps_on, barmerge.lookahead_on, ignore_invalid_symbol=true)
+    new_dividends = request.dividends(syminfo.tickerid, dividends.gross, barmerge.gaps_on, barmerge.lookahead_on, ignore_invalid_symbol=true)
+    new_split = request.splits(syminfo.tickerid, splits.denominator, barmerge.gaps_on, barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+    isNewPeriod = switch anchor
+        "Earnings"  => not na(new_earnings)
+        "Dividends" => not na(new_dividends)
+        "Splits"    => not na(new_split)
+        "Session"   => timeframe.change("D")
+        "Week"      => timeframe.change("W")
+        "Month"     => timeframe.change("M")
+        "Quarter"   => timeframe.change("3M")
+        "Year"      => timeframe.change("12M")
+        "Decade"    => timeframe.change("12M") and year % 10 == 0
+        "Century"   => timeframe.change("12M") and year % 100 == 0
+        => false
+
+    isEsdAnchor = anchor == "Earnings" or anchor == "Dividends" or anchor == "Splits"
+    if na(src_vwap[1]) and not isEsdAnchor
+        isNewPeriod := true
+    
+    [_vwap, _, _] = ta.vwap(src_vwap, isNewPeriod, 1)
+    vwapValue := _vwap
+
+plot(vwapValue, title = 'VWAP', color = vwap_color, offset = offset_vwap)
+
+// HTS Wstęgi - PO3 - Power of Three
+// Ustawienia dla PO3
+var tf_po3 = input.timeframe('60', 'Interwał:', inline = 'tf', group = g12)
+var tf_auto = input.bool(false, 'Ustal automatycznie', inline = 'tf', group = g12)
+var tf_2lvs = input.bool(false, 'Dwu poziomowy', inline = 'tf', group = g12)
+var num = input.int(1, 'Liczba HTF świeczek:', minval = 1, group = g12)
+var offset_po3 = input.int(10, 'Odsadzenie:', group = g12)
+var size_po3 = input.string('Medium', 'Wielkość:', options = ['Small', 'Medium', 'Large'], group = g12)
+var type_po3 = input.string('Candles', 'Typ:', options = ['Candles', 'Heikin Ashi'], group = g12)
+var margin = input.int(1, 'Odstep między:', minval = 1, group = g12)
+var htf_data = input.string('Is Weekly', 'Użyj HTF danych do wygenerowania świeczki:', options = ['Is Weekly', 'Always', 'Never'], group = g12)
+
+// Inputs for Candle Colors
+var up_col = input.color(#089981, 'Body', inline = 'Candles', group = g12)
+var up_col_wick = input.color(#089981, 'Wick', inline = 'Candles', group = g12)
+var up_col_border = input.color(#089981, 'Border', inline = 'Candles', group = g12)
+var down_col = input.color(#f23645, 'Body', inline = 'Candles', group = g12)
+var down_col_wick = input.color(#f23645, 'Wick', inline = 'Candles', group = g12)
+var down_col_border = input.color(#f23645, 'Border', inline = 'Candles', group = g12)
+
+// Inputs for Projections
+var o_col = input.color(color.new(#b2b5be, 10), '', inline = 'o', group = g12)
+var o_style = input.string('Dotted', '', options = ['Solid', 'Dotted', 'Dashed'], inline = 'o', group = g12)
+var o_width = input.int(1, 'Grubość lini:', minval = 1, inline = 'o', group = g12)
+var o_enabled = input.bool(true, 'Open', inline = 'o', group = g12)
+var hl_col = input.color(color.new(#b2b5be, 10), '', inline = 'hl', group = g12)
+var hl_style = input.string('Dotted', '', options = ['Solid', 'Dotted', 'Dashed'], inline = 'hl', group = g12)
+var hl_width = input.int(1, 'Grubość lini:', minval = 1, inline = 'hl', group = g12)
+var hl_enabled = input.bool(true, 'High/Low', inline = 'hl', group = g12)
+var ohlc_col = input.color(color.new(#b2b5be, 10), '', inline = 'ohlc', group = g12)
+var ohlc_size = input.string('Auto', '', options = ['Auto', 'Tiny', 'Small', 'Normal', 'Large', 'Huge'], inline = 'ohlc', group = g12)
+var ohlc_enabled = input.bool(true, 'OHLC Prices', inline = 'ohlc', group = g12)
+
+// New Inputs for Label Font Size and Color
+var font_size = input.string('Small', 'Wielkośc czcionki:', options = ['Tiny', 'Small', 'Normal', 'Large', 'Huge'], group = g12)
+var font_color = input.color(#b2b5be, 'Kolor czcionki:', group = g12)
+
+// Candle Structure
+type Candle
+	box body
+	line upperWick
+	line lowerWick
+	line o
+	line h
+	line l
+	label labelO
+	label labelH
+	label labelL
+	label labelC
+
+// Helper Functions
+getAutoTimeframe(s, m5, m15, m60, m240, m, d, w, q, y) =>
+    timeframe.isseconds ? s : timeframe.isminutes ? timeframe.multiplier < 5 ? m5 : timeframe.multiplier < 15 ? m15 : timeframe.multiplier < 60 ? m60 : timeframe.multiplier < 240 ? m240 : m : timeframe.isdaily ? d : timeframe.isweekly ? w : timeframe.ismonthly and timeframe.multiplier < 6 ? q : y
+
+determineAutoTimeframe() =>
+    if tf_2lvs
+        getAutoTimeframe('5', '15', '60', '240', '1D', '1W', '1M', '3M', '12M', '12M')
+    else
+        getAutoTimeframe('1', '5', '15', '60', '240', '1D', '1W', '1M', '3M', '12M')
+
+getSizeMultiplier() =>
+    result = switch size_po3
+        'Small' => 1
+        'Medium' => 2
+        'Large' => 3
+    result
+
+getLineStyle(style) =>
+    result = switch style
+        'Solid' => line.style_solid
+        'Dotted' => line.style_dotted
+        'Dashed' => line.style_dashed
+    result
+
+getLabelSize() =>
+    result = switch font_size
+	    'Auto' => size.auto
+        'Tiny' => size.tiny
+        'Small' => size.small
+        'Normal' => size.normal
+        'Large' => size.large
+        'Huge' => size.huge
+    result
+
+// Main Logic
+var maxIndex = num - 1
+var curr_tf = tf_auto ? determineAutoTimeframe() : tf_po3
+var useHtfData = timeframe.isweekly and htf_data == 'Is Weekly' or htf_data == 'Always'
+var sizeMultiplier = getSizeMultiplier()
+newCandle = ta.change(time(curr_tf)) != 0
+
+ohlc() =>
+    [htf_o, htf_h, htf_l, htf_c] = request.security(syminfo.tickerid, curr_tf, [open, high, low, close], lookahead = barmerge.lookahead_on)
+    var o = 0.
+    var h = 0.
+    var l = 0.
+    c = close
+
+    if newCandle
+        o := open
+        h := high
+        l := low
+        l
+    else
+        o := o[1]
+        h := math.max(high, h[1])
+        l := math.min(low, l[1])
+        l
+
+    [o, h, l, c, htf_o, htf_h, htf_l, htf_c]
+
+getCandlePostion(l_pos) =>
+    m_pos = l_pos + sizeMultiplier
+    r_pos = l_pos + sizeMultiplier * 2
+    [m_pos, r_pos]
+
+createLabel(r_pos, s) =>
+    label.new(r_pos, s, str.tostring(s, format.mintick), style = label.style_label_left, color = color.new(color.black, 100), textcolor = font_color, size = getLabelSize())
+
+createLabels(Candle candle, o, h, l, c, l_pos) =>
+    if show_po3 and ohlc_enabled
+        [m_pos, r_pos] = getCandlePostion(l_pos)
+        if o_enabled
+            candle.labelO := createLabel(r_pos, o)
+            candle.labelC := createLabel(r_pos, c)
+            candle.labelC
+        if hl_enabled
+            candle.labelH := createLabel(r_pos, h)
+            candle.labelL := createLabel(r_pos, l)
+            candle.labelL
+
+moveLabel(label la, r_pos, s) =>
+    la.set_text(str.tostring(s, format.mintick))
+    la.set_xy(r_pos, s)
+
+moveLabels(Candle candle, l_pos, o, h, l, c) =>
+    if show_po3
+        [m_pos, r_pos] = getCandlePostion(l_pos)
+        if o_enabled
+            moveLabel(candle.labelO, r_pos, o)
+            moveLabel(candle.labelC, r_pos, c)
+        if hl_enabled
+            moveLabel(candle.labelH, r_pos, h)
+            moveLabel(candle.labelL, r_pos, l)
+
+deleteLabels(Candle candle) =>
+    if show_po3
+        if o_enabled
+            candle.labelO.delete()
+            candle.labelC.delete()
+        if hl_enabled
+            candle.labelH.delete()
+            candle.labelL.delete()
+
+createProjections(Candle candle, o, h, l, curr_o, curr_h, curr_l, htf_o, htf_h, htf_l, l_pos) =>
+    [m_pos, r_pos] = getCandlePostion(l_pos)
+    b_o = bar_index
+    b_h = bar_index
+    b_l = bar_index
+    o_o = o
+    o_h = h
+    o_l = l
+    if useHtfData
+        if htf_o != o
+            b_o := b_o - 1
+            o_o := curr_o
+            o_o
+        if htf_h != h
+            b_h := b_h - 1
+            o_h := curr_h
+            o_h
+        if htf_l != l
+            b_l := b_l - 1
+            o_l := curr_l
+            o_l
+
+    if show_po3 and o_enabled
+        candle.o := line.new(b_o, o_o, m_pos, o_o, style = getLineStyle(o_style), color = o_col, width = o_width)
+        candle.o
+    if show_po3 and hl_enabled
+        candle.h := line.new(b_h, o_h, m_pos, o_h, style = getLineStyle(hl_style), color = hl_col, width = hl_width)
+        candle.l := line.new(b_l, o_l, m_pos, o_l, style = getLineStyle(hl_style), color = hl_col, width = hl_width)
+        candle.l
+
+moveProjections(Candle candle, l_pos, o, h, l, curr_o, curr_h, curr_l) =>
+    [m_pos, r_pos] = getCandlePostion(l_pos)
+    if show_po3 and o_enabled
+        candle.o.set_y1(curr_o)
+        candle.o.set_xy2(m_pos, curr_o)
+    if show_po3 and hl_enabled
+        old_h = candle.h.get_y1()
+        old_l = candle.l.get_y1()
+
+        if h > old_h or useHtfData and h[1] < old_h
+            candle.h.set_x1(bar_index)
+        candle.h.set_y1(curr_h)
+        candle.h.set_xy2(m_pos, curr_h)
+
+        if l < old_l or useHtfData and l[1] > old_l
+            candle.l.set_x1(bar_index)
+        candle.l.set_y1(curr_l)
+        candle.l.set_xy2(m_pos, curr_l)
+
+deleteProjections(Candle candle) =>
+    if show_po3 and o_enabled
+        candle.o.delete()
+    if show_po3 and hl_enabled
+        candle.h.delete()
+        candle.l.delete()
+
+getCandleProperties(o, h, l, c) =>
+    h_body = math.max(o, c)
+    l_body = math.min(o, c)
+    body_col = o > c ? down_col : up_col
+    wick_col = o > c ? down_col_wick : up_col_wick
+    border_col = o > c ? down_col_border : up_col_border
+    [h_body, l_body, body_col, wick_col, border_col]
+
+createCandle(l_pos, o, h, l, c) =>
+    [m_pos, r_pos] = getCandlePostion(l_pos)
+    [h_body, l_body, body_col, wick_col, border_col] = getCandleProperties(o, h, l, c)
+    candle = Candle.new()
+    if show_po3
+        candle.body := box.new(l_pos, h_body, r_pos, l_body, border_col, bgcolor = body_col)
+        candle.upperWick := line.new(m_pos, h_body, m_pos, h, color = wick_col)
+        candle.lowerWick := line.new(m_pos, l_body, m_pos, l, color = wick_col)
+        candle.lowerWick
+    candle
+
+moveCandle(Candle candle, l_pos) =>
+    [m_pos, r_pos] = getCandlePostion(l_pos)
+    candle.body.set_left(l_pos)
+    candle.body.set_right(r_pos)
+    candle.upperWick.set_x1(m_pos)
+    candle.upperWick.set_x2(m_pos)
+    candle.lowerWick.set_x1(m_pos)
+    candle.lowerWick.set_x2(m_pos)
+
+updateCandle(Candle candle, l_pos, o, h, l, c) =>
+    [m_pos, r_pos] = getCandlePostion(l_pos)
+    [h_body, l_body, body_col, wick_col, border_col] = getCandleProperties(o, h, l, c)
+    if show_po3
+        candle.body.set_bgcolor(body_col)
+        candle.body.set_lefttop(l_pos, h_body)
+        candle.body.set_rightbottom(r_pos, l_body)
+        candle.body.set_border_color(border_col)
+        candle.upperWick.set_color(wick_col)
+        candle.upperWick.set_xy1(m_pos, h_body)
+        candle.upperWick.set_xy2(m_pos, h)
+        candle.lowerWick.set_color(wick_col)
+        candle.lowerWick.set_xy1(m_pos, l_body)
+        candle.lowerWick.set_xy2(m_pos, l)
+    if show_po3 and ohlc_enabled
+        moveLabel(candle.labelC, r_pos, c)
+
+deleteCandle(Candle candle) =>
+    if show_po3
+        candle.body.delete()
+        candle.upperWick.delete()
+        candle.lowerWick.delete()
+        deleteLabels(candle)
+    deleteProjections(candle)
+
+var candles = array.new<Candle>(num, Candle.new())
+[o, h, l, c, htf_o, htf_h, htf_l, htf_c] = ohlc()
+curr_o = o
+curr_h = h
+curr_l = l
+curr_c = c
+
+if useHtfData
+    curr_o := htf_o
+    curr_h := htf_h
+    curr_l := htf_l
+    curr_c := htf_c
+    curr_c
+
+candle_o = curr_o
+candle_h = curr_h
+candle_l = curr_l
+candle_c = curr_c
+
+if type_po3 == 'Heikin Ashi' and not chart.is_heikinashi
+    candle_c := (curr_o + curr_h + curr_l + curr_c) / 4
+    if newCandle
+        candle_o := na(candle_o[1]) ? (curr_o + curr_c) / 2 : (nz(candle_o[1]) + nz(candle_c[1])) / 2
+        candle_o
+    else
+        candle_o := nz(candle_o[1])
+        candle_o
+    candle_h := math.max(curr_h, candle_o, candle_c)
+    candle_l := math.min(curr_l, candle_o, candle_c)
+    candle_l
+
+if newCandle
+    oldCandle = candles.shift()
+    deleteCandle(oldCandle)
+    pos = bar_index + offset_po3 + maxIndex * (3 + sizeMultiplier)
+    candle = createCandle(pos, candle_o, candle_h, candle_l, candle_c)
+    createProjections(candle, o, h, l, curr_o, curr_h, curr_l, htf_o, htf_h, htf_l, pos)
+    createLabels(candle, curr_o, curr_h, curr_l, curr_c, pos)
+    candles.push(candle)
+
+if barstate.islast
+    for [i, candle] in candles
+        new_pos = bar_index + offset_po3 + i * (margin + 2 * sizeMultiplier)
+        if i < maxIndex
+            moveCandle(candle, new_pos)
+            deleteProjections(candle)
+            deleteLabels(candle)
+        else
+            updateCandle(candle, new_pos, candle_o, candle_h, candle_l, candle_c)
+            moveProjections(candle, new_pos, o, h, l, curr_o, curr_h, curr_l)
+            moveLabels(candle, new_pos, curr_o, curr_h, curr_l, curr_c)
+
+// Alerty
+alertcondition(uptrendCrossover, title = 'Trend wzrostowy - przecięcie wstęg', message = 'Trend wzrostowy! - Szybsza przecina wolniejszą w kierunku wzrostowym')
+alertcondition(downtrendCrossunder, title = 'Trend spadkowy - przecięcie wstęg', message = 'Trend spadkowy! - Szybsza przecina wolniejszą w kierunku spadkowym')
+alertcondition(ta.cross(close, vwapValue), title = 'Przecięcie ceny - VWAP', message = 'Cena przekroczyła linię VWAP')

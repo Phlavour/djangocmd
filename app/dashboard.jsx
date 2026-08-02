@@ -10687,7 +10687,7 @@ const WEEK_DAYS = [
   { id: "4", label: "Cz" }, { id: "5", label: "Pt" }, { id: "6", label: "Sb" }, { id: "0", label: "Nd" },
 ];
 
-function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, onEdit, onSetDay, newCat, onNewCatChange, newDay, onNewDayChange }) {
+function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, onEdit, onSetDay, onFail, onCarry, newCat, onNewCatChange, newDay, onNewDayChange }) {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
 
@@ -10705,7 +10705,7 @@ function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, 
           const cat = PLAN_CATS.find(c => c.id === item.category);
           const isEditing = editingId === item.id;
           return (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : "#fff", borderRadius: 8, border: `1px solid ${isEditing ? DC.cyan : item.completed ? DC.green : DC.border}` }}>
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : item.failed ? `${DC.red}10` : "#fff", borderRadius: 8, border: `1px solid ${isEditing ? DC.cyan : item.completed ? DC.green : item.failed ? DC.red : DC.border}` }}>
               <button onClick={() => onToggle(item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
               </button>
@@ -10730,9 +10730,16 @@ function PlanList({ items, newItem, onNewItemChange, onAdd, onToggle, onDelete, 
                   style={{ flex: 1, fontSize: 12, padding: "2px 6px", border: `1px solid ${DC.cyan}`, borderRadius: 4, outline: "none", fontFamily: "inherit", color: DC.text }}
                 />
               ) : (
-                <span onDoubleClick={() => startEdit(item)} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none", cursor: "text" }} title="Kliknij dwukrotnie aby edytować">{item.text}</span>
+                <span onDoubleClick={() => startEdit(item)} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : item.failed ? DC.red : DC.text, textDecoration: item.completed ? "line-through" : item.failed ? "line-through" : "none", cursor: "text" }} title="Kliknij dwukrotnie aby edytować">
+                  {item.failed && <span style={{ fontSize: 9, marginRight: 4 }}>❌</span>}
+                  {item.text}
+                </span>
               )}
-              {!isEditing && <button onClick={() => startEdit(item)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }} title="Edytuj">✎</button>}
+              {!isEditing && <>
+                <button onClick={() => startEdit(item)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }} title="Edytuj">✎</button>
+                {onFail && <button onClick={() => onFail(item)} title={item.failed ? "Cofnij oznaczenie" : "Oznacz jako niewykonane"} style={{ fontSize: 11, color: item.failed ? DC.red : DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>⚠️</button>}
+                {onCarry && item.failed && <button onClick={() => onCarry(item)} title="Przenieś na następny tydzień" style={{ fontSize: 11, color: DC.cyan, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>➡️</button>}
+              </>}
               <button onClick={() => onDelete(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
             </div>
           );
@@ -11036,11 +11043,46 @@ function DailyCheckPanel({ supa, apiKey }) {
   const togglePlanItem = async (type, item) => {
     const newVal = !item.completed;
     const setter = type === "week" ? setWeekPlan : setMonthPlan;
-    setter(p => p.map(i => i.id === item.id ? {...i, completed: newVal} : i));
+    setter(p => p.map(i => i.id === item.id ? {...i, completed: newVal, failed: newVal ? false : i.failed} : i));
     await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${item.id}`, {
       method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
-      body: JSON.stringify({ completed: newVal }),
+      body: JSON.stringify({ completed: newVal, ...(newVal ? {failed: false} : {}) }),
     }).catch(console.error);
+  };
+
+  const markFailed = async (item) => {
+    const newFailed = !item.failed;
+    setWeekPlan(p => p.map(i => i.id === item.id ? {...i, failed: newFailed, completed: false} : i));
+    await fetch(`${supa.url}/rest/v1/plan_items?id=eq.${item.id}`, {
+      method: "PATCH", headers: { ...supa.headers, "Prefer": "return=minimal" },
+      body: JSON.stringify({ failed: newFailed, completed: false }),
+    }).catch(console.error);
+  };
+
+  const carryOverToNextWeek = async (item) => {
+    // Calculate next week's Monday
+    const curWeek = new Date(weekStart + "T12:00:00");
+    const nextWeek = new Date(curWeek);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const nextWeekStr = nextWeek.toISOString().slice(0, 10);
+    const order = weekPlan.length;
+    const res = await fetch(`${supa.url}/rest/v1/plan_items`, {
+      method: "POST",
+      headers: { ...supa.headers, "Prefer": "return=representation" },
+      body: JSON.stringify([{
+        plan_type: "week", plan_date: nextWeekStr,
+        text: item.text, completed: false, failed: false,
+        sort_order: order, category: item.category || "inne",
+        assigned_day: null,
+      }]),
+    }).then(r => r.json()).catch(() => null);
+    // If we're viewing next week, add to state
+    const curWeekStart = (() => { const d = new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.toISOString().slice(0,10); })();
+    if (weekStart === nextWeekStr || nextWeekStr === curWeekStart) {
+      if (Array.isArray(res) && res[0]) setWeekPlan(p => [...p, res[0]]);
+    }
+    // Show confirmation
+    alert(`✅ Task "${item.text}" przeniesiony na tydzień ${nextWeekStr}`);
   };
 
   const deletePlanItem = async (type, id) => {
@@ -11181,10 +11223,12 @@ function DailyCheckPanel({ supa, apiKey }) {
       return `${dl}:\n${tasks_lines}${note ? "\n" + note : ""}`;
     }).join("\n\n");
     const weekNoteText = weekNote ? `\nNotatki tygodniowe: ${weekNote}` : "";
-    const wPlan = weekPlan.length > 0 ? `\nPlan tygodnia: ${weekPlan.map(i => `${i.completed ? "✅" : "❌"} ${i.text}`).join(", ")}` : "";
+    const wPlan = weekPlan.length > 0 ? `\nPlan tygodnia:\n${weekPlan.map(i => `${i.completed ? "✅" : i.failed ? "❌ NIEWYKONANE" : "⏳"} ${i.text}`).join("\n")}` : "";
+    const failedTasks = weekPlan.filter(i => i.failed);
+    const failedSection = failedTasks.length > 0 ? `\n\nNiewykonane taski (${failedTasks.length}):\n${failedTasks.map(i => `❌ ${i.text}`).join("\n")}` : "";
     fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)${weekNoteText}${wPlan}\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**` }] })
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: `Jesteś coachem lifestyle analizującym tygodniowe nawyki. Piszesz po polsku. Bądź konkretny i motywujący.\n\nDANE TYGODNIA ${weekStart}:\nWynik checklisty: ${wkTotal}/${wkMax} (${wkPct}%)${weekNoteText}${wPlan}${failedSection}\n\n${data}\n\nPrzygotuj analizę:\n**📊 WYNIK TYGODNIA**\n**✅ CO POSZŁO DOBRZE**\n**⚠️ CO WYMAGA UWAGI**\n${failedTasks.length > 0 ? "**❌ NIEWYKONANE TASKI — co poszło nie tak i jak to naprawić w przyszłym tygodniu**\n" : ""}**🎯 3 KROKI NA PRZYSZŁY TYDZIEŃ**\n**💪 MOTYWACJA (1 zdanie)**` }] })
     }).then(r => r.json()).then(d => { setAiOut(d.content?.map(b => b.text || "").join("") || "Błąd."); }).catch(() => setAiOut("Błąd API.")).finally(() => setAiLoading(false));
   };
 
@@ -11405,7 +11449,7 @@ function DailyCheckPanel({ supa, apiKey }) {
               );
             })()}
 
-            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, oldDay, newDay) => setDayPlanItem("week", id, oldDay, newDay)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
+            <PlanList items={weekPlan} newItem={newWeekItem} onNewItemChange={setNewWeekItem} onAdd={() => addPlanItem("week")} onToggle={item => togglePlanItem("week", item)} onDelete={id => deletePlanItem("week", id)} onEdit={(id, text) => editPlanItem("week", id, text)} onSetDay={(id, oldDay, newDay) => setDayPlanItem("week", id, oldDay, newDay)} onFail={item => markFailed(item)} onCarry={item => carryOverToNextWeek(item)} newCat={newWeekCat} onNewCatChange={setNewWeekCat} newDay={newWeekDay} onNewDayChange={setNewWeekDay} />
           </DCCard>
 
           {/* Month tasks */}
