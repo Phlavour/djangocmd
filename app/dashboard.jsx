@@ -5119,13 +5119,14 @@ Rules:
 - If unable to determine, return false for TPs and "" for result
 - Respond ONLY with JSON, nothing else`;
       } else if (isLJ && phase === "before") {
-        promptText = `Look at this trading chart screenshot from a futures trading platform.
+        promptText = `Look at this trading chart screenshot from a futures trading platform with an IB Range indicator.
 
 Extract this data and respond ONLY with valid JSON (no markdown, no backticks):
 {
   "instrument": "NQ" or "ES",
   "trade_date": "YYYY-MM-DD",
   "entry_time": "HH:MM",
+  "range_size": number or null,
   "hts": {
     "m1": "", "m5": "", "m15": "", "h1": "", "h4": "", "d1": ""
   }
@@ -5135,15 +5136,13 @@ INSTRUMENT: Read from title bar at top left. "Micro E-mini Nasdaq" or "MNQ" → 
 
 DATE & TIME: Read from the bottom status bar (dark bar at very bottom of chart, shows something like "Wed 08 Jul '26 23:00"). Extract date → YYYY-MM-DD (day first: 08 Jul '26 → 2026-07-08). Extract time → HH:MM 24h.
 
-HTS TABLE: Look for a small table in the bottom-right corner labeled "HTS  33  144" with rows for m1, m5, m15, H1, H4, D1.
+RANGE SIZE: Look for a label near the top-left corner of the IB Range box (a shaded rectangle on the chart). The label shows the session name and size in points, e.g. "NY AM  78.5 pkt" or "London  61.25 pkt". Extract ONLY the number (e.g. 78.5 or 61.25). If no such label is visible, return null.
 
-IMPORTANT: Read ONLY the FIRST symbol column (the one directly after the timeframe label, BEFORE the "33" column). Ignore the "33" and "144" columns entirely.
-
-For each timeframe row, the first symbol means:
+HTS TABLE: Look for a small table in the bottom-right corner labeled "HTS  33  144" with rows for m1, m5, m15, H1, H4, D1. Read ONLY the FIRST symbol column.
 - Green triangle (▲) → "up"
 - Red triangle (▼) → "down"
-- Gray/white square (■) → "overlap" (bands overlap on that timeframe)
-- If row not visible or unclear → ""
+- Gray/white square (■) → "overlap"
+- If not visible → ""
 
 Today is ${new Date().toISOString().slice(0, 10)}. Respond ONLY with JSON.`;
       } else if (is8020 && phase === "before") {
@@ -5247,11 +5246,15 @@ Respond ONLY with JSON.`;
             const newInstrument = (parsed.instrument === "NQ" || parsed.instrument === "ES") ? parsed.instrument : prev.instrument;
             const hts = parsed.hts || {};
             const validVal = v => ["up","down","in","overlap",""].includes(v) ? v : "";
+            const rangeSize = parsed.range_size != null && !isNaN(parseFloat(parsed.range_size))
+              ? String(Math.round(parseFloat(parsed.range_size) * 100) / 100)
+              : prev.lj_range_size;
             return {
               ...prev,
               instrument: newInstrument,
               entry_time: (parsed.entry_time && /^\d{1,2}:\d{2}$/.test(parsed.entry_time)) ? parsed.entry_time.padStart(5, "0") : prev.entry_time,
               trade_date: newDate,
+              lj_range_size: rangeSize,
               hts_m1: validVal(hts.m1 || ""), hts_m5: validVal(hts.m5 || ""), hts_m15: validVal(hts.m15 || ""),
               hts_h1: validVal(hts.h1 || ""), hts_h4: validVal(hts.h4 || ""), hts_d1: validVal(hts.d1 || ""),
             };
@@ -7139,7 +7142,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                 <div style={{ display: "flex", gap: 6 }}>
                   {[
                     { id: "London", label: "🇬🇧 London", color: T.purple },
-                    { id: "NY",     label: "🗽 NY",      color: T.green },
+                    { id: "NY",     label: "🗽 NY AM",   color: T.green },
+                    { id: "NY PM",  label: "🌆 NY PM",   color: T.amber },
                   ].map(opt => {
                     const active = tf.session === opt.id;
                     return (
@@ -9138,7 +9142,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
           {isLJ && (() => {
             const getSd = t => { let sd = t.strategy_data; try { if(typeof sd==="string") sd=JSON.parse(sd); } catch{sd={};} return sd; };
             const ft = filteredTrades;
-            const SESSIONS_IB = ["London", "NY"];
+            const SESSIONS_IB = ["London", "NY", "NY PM"];
             const DAYS = [["1","Pn"],["2","Wt"],["3","Śr"],["4","Cz"],["5","Pt"],["6","Sb"],["0","Nd"]];
             const sessSt = SESSIONS_IB.map(sess => {
               const st=ft.filter(t=>getSd(t).session===sess);
@@ -9163,8 +9167,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
             return (<>
               {sessSt.length>0&&(<Card style={{marginBottom:16}}><Heading icon="🕐">Performance per Sesja (IB)</Heading>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                  {sessSt.map(s=>{ const col=s.sess==="London"?T.purple:T.green; return(<div key={s.sess} style={{padding:14,background:`${parseFloat(s.wr)>=50?T.green:T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
-                    <div style={{fontSize:14,fontWeight:800,color:col,marginBottom:8}}>{s.sess==="London"?"🇬🇧":"🗽"} {s.sess}</div>
+                  {sessSt.map(s=>{ const col=s.sess==="London"?T.purple:s.sess==="NY PM"?T.amber:T.green; return(<div key={s.sess} style={{padding:14,background:`${parseFloat(s.wr)>=50?T.green:T.red}08`,borderRadius:8,border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:14,fontWeight:800,color:col,marginBottom:8}}>{s.sess==="London"?"🇬🇧":s.sess==="NY PM"?"🌆":"🗽"} {s.sess}</div>
                     <div style={{display:"flex",gap:16,alignItems:"center"}}>
                       <div style={{textAlign:"center"}}><div style={{fontSize:9,color:T.textDim,textTransform:"uppercase"}}>Win Rate</div><div style={{fontSize:28,fontWeight:800,color:parseFloat(s.wr)>=50?T.green:T.red}}>{s.wr}{s.total>0?"%":""}</div><div style={{fontSize:10,color:T.textDim}}>{s.w}W/{s.be}BE/{s.l}L · {s.total}</div></div>
                       <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
@@ -9177,7 +9181,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
               </Card>)}
               {sessDay.some(s=>s.byDay.some(d=>d.total>0))&&(<Card style={{marginBottom:16}}><Heading icon="📅">Skuteczność Sesja × Dzień tygodnia</Heading>
                 {sessDay.map(({sess,byDay})=>(<div key={sess} style={{marginBottom:12}}>
-                  <div style={{fontSize:11,fontWeight:700,color:sess==="London"?T.purple:T.green,marginBottom:6}}>{sess==="London"?"🇬🇧":"🗽"} {sess}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:sess==="London"?T.purple:sess==="NY PM"?T.amber:T.green,marginBottom:6}}>{sess==="London"?"🇬🇧":sess==="NY PM"?"🌆":"🗽"} {sess}</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
                     {byDay.map(({di,dn,total,w,l,wr})=>{ const col=total>0?(parseFloat(wr)>=50?T.green:T.red):T.border; return(<div key={di} style={{textAlign:"center",padding:"8px 4px",background:total>0?`${col}08`:T.bg2,borderRadius:6,border:`1px solid ${total>0?col:T.border}`}}><div style={{fontSize:10,fontWeight:700,color:col}}>{dn}</div><div style={{fontSize:16,fontWeight:800,color:col}}>{total>0?`${wr}%`:"—"}</div><div style={{fontSize:8,color:T.textDim}}>{total>0?`${w}W/${l}L`:""}</div></div>); })}
                   </div>
@@ -9846,7 +9850,8 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     <div style={{ display: "flex", gap: 4 }}>
                       <FilterBtn groupKey="ib_session_f" value="ALL" label="ALL" />
                       <FilterBtn groupKey="ib_session_f" value="London" label="London" activeColor={T.purple} />
-                      <FilterBtn groupKey="ib_session_f" value="NY" label="NY" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_session_f" value="NY" label="NY AM" activeColor={T.green} />
+                      <FilterBtn groupKey="ib_session_f" value="NY PM" label="NY PM" activeColor={T.amber} />
                     </div>
                   </div>
                   <div>
