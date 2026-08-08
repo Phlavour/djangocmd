@@ -4812,7 +4812,7 @@ function TradingPanel({ apiKey, supa }) {
     lj_duration_min: "",
     lj_screenshot_second: "",
     // PA in Range multi-select
-    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, pa_ict_reversal: false, lj_pa_custom: "",
+    pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, pa_ict_reversal: false, pa_strong_break: false, lj_pa_custom: "",
     // Entry moment multi-select
     em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false,
     em_pullback_random: false, em_pa_fomo: false, em_8020: false,
@@ -5480,7 +5480,7 @@ Respond ONLY with JSON.`;
     setShowAddTrade(true);
   };
 
-  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, pa_ict_reversal: false, lj_pa_custom: "", em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
+  const EMPTY_TF = { description: "", result: "WIN", direction: "LONG", meetsRequirements: true, screenshot_before: "", screenshot_after: "", reason: "", profit: "0", bounce: "1", band_type: "fast", setup_type: "A", trade_type: "standard", pair: "NQ", timeframe: "1m", notes: "", trends: {}, rsi: "", pivots: {}, entry_candle: "1", has_engulfing: false, v_quality: "clear", instrument: "NQ", session: "NY", entry_time: "10:00", trade_number: "1", profit_usd: "0", trade_date: new Date().toISOString().slice(0, 10), tp_01: false, tp_02: false, tp_03: false, account_type: "EVAL", account_passed: false, account_burned: false, smt: false, highs_lows: false, req_vwap: true, req_bands: true, req_pa: true, req_rr: true, req_range: true, entry_pullback: false, entry_boundary: false, entry_pa: false, entry_bands: false, entry_vwap: false, second_instrument_reached: false, could_reduce_sl: false, additional_entries: "0", bands_overlap: false, idea: "SWEEP", lj_range_break: "NIE", lj_tactic: "IB", lj_tactic_other: "", lj_rr: "", lj_range_size: "", lj_duration_min: "", lj_screenshot_second: "", pa_double_top: false, pa_boundary: false, pa_reverse_poi: false, pa_choppy: false, pa_below_band: false, pa_trend: false, pa_amd: false, pa_ict_reversal: false, pa_strong_break: false, lj_pa_custom: "", em_vwap_retest: false, em_band_retest: false, em_5min_gap: false, em_3565_retest: false, em_pullback_random: false, em_pa_fomo: false, em_8020: false, sl_type: "", lj_formation: "", req_vwap: true, req_bands: true, req_rr: true, req_range: true, lj_correlation: "TAK", hts_m1: "", hts_m5: "", hts_m15: "", hts_h1: "", hts_h4: "", hts_d1: "", req_8020: false, req_fvg: false, req_instrument: false, hts_pair: "NQ", hts_session: "", hts_entry_time: "", hts_extra_8020: false, hts_extra_fvg: false, hts_extra_vwap: false, hts_extra_poi: false, hts_rr: "", hts_entry_model: "", hts_candle_5m: "", hts_candle_15m: "", s8020_session: "", s8020_entry_time: "", s8020_entry_type: [], s8020_level: "", s8020_price_read: "", s8020_conf_bands: false, s8020_conf_vwap: false, s8020_conf_poi: false, s8020_conf_fvg: false };
 
   const updateTrade = async () => {
     if (!editingTradeId) return;
@@ -7078,6 +7078,7 @@ Be direct, data-driven, no fluff. Talk like a trading mentor.` }]
                     { id: "pa_trend",        label: "Trend" },
                     { id: "pa_amd",          label: "AMD" },
                     { id: "pa_ict_reversal", label: "ICT Reversal" },
+                    { id: "pa_strong_break",  label: "Mocny zrzut (wstęgi+VWAP)" },
                   ].map(opt => (
                     <button key={opt.id} onClick={() => setTf(p => ({...p, [opt.id]: !p[opt.id]}))} style={{ ...sel, flex: 1, padding: "6px 6px", fontSize: 10, background: tf[opt.id] ? `${T.cyan}20` : T.bg2, color: tf[opt.id] ? T.cyan : T.textSoft, fontWeight: tf[opt.id] ? 700 : 400, borderColor: tf[opt.id] ? T.cyan : T.border }}>
                       {tf[opt.id] ? "✓ " : ""}{opt.label}
@@ -11616,35 +11617,62 @@ Jedno mocne zdanie.`;
         <div>
 
 
-          {/* Daily one-off tasks */}
+          {/* Daily one-off tasks — now shows weekly tasks assigned to this day + one-off tasks */}
           <DCCard style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <DCHead icon="📌">Taski na ten dzień</DCHead>
-              {(dayTasksList[selectedDay] || []).length > 0 && (() => {
-                const items = dayTasksList[selectedDay] || [];
-                const done = items.filter(i => i.completed).length;
-                const total = items.length;
-                const pct = Math.round(done/total*100);
+              {(() => {
+                const dow = String(new Date(selectedDay + "T12:00:00").getDay());
+                const weekItems = weekPlan.filter(i => i.assigned_day === dow);
+                const dayItems = dayTasksList[selectedDay] || [];
+                const all = [...weekItems, ...dayItems];
+                if (!all.length) return null;
+                const done = all.filter(i => i.completed).length;
+                const pct = Math.round(done/all.length*100);
                 const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
-                return (
-                  <span style={{ fontSize:13, fontWeight:800, color:col }}>{done}/{total} · {pct}%</span>
-                );
+                return <span style={{ fontSize:13, fontWeight:800, color:col }}>{done}/{all.length} · {pct}%</span>;
               })()}
             </div>
-            {(dayTasksList[selectedDay] || []).length > 0 && (() => {
-              const items = dayTasksList[selectedDay] || [];
-              const done = items.filter(i => i.completed).length;
-              const total = items.length;
-              const pct = Math.round(done/total*100);
+            {/* Progress bar */}
+            {(() => {
+              const dow = String(new Date(selectedDay + "T12:00:00").getDay());
+              const all = [...weekPlan.filter(i => i.assigned_day === dow), ...(dayTasksList[selectedDay]||[])];
+              if (!all.length) return null;
+              const done = all.filter(i => i.completed).length;
+              const pct = Math.round(done/all.length*100);
               const col = pct>=80?DC.green:pct>=50?DC.amber:DC.red;
-              return (
-                <div style={{ height:5, background:DC.border, borderRadius:3, overflow:"hidden", marginBottom:10 }}>
-                  <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} />
-                </div>
-              );
+              return <div style={{ height:5, background:DC.border, borderRadius:3, overflow:"hidden", marginBottom:10 }}><div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:3, transition:"width .4s" }} /></div>;
             })()}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-              {(dayTasksList[selectedDay] || []).length === 0 && <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak dodatkowych tasków</div>}
+              {/* Weekly tasks assigned to this day */}
+              {(() => {
+                const dow = String(new Date(selectedDay + "T12:00:00").getDay());
+                const weekItems = weekPlan.filter(i => i.assigned_day === dow);
+                if (!weekItems.length) return null;
+                return (<>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: DC.dim, textTransform: "uppercase", marginBottom: 2, paddingLeft: 2 }}>Z planu tygodnia</div>
+                  {weekItems.map(item => {
+                    const cat = PLAN_CATS.find(c => c.id === item.category);
+                    return (
+                      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: item.completed ? `${DC.green}10` : item.failed ? `${DC.red}08` : "#fff", borderRadius: 8, border: `1px solid ${item.completed ? DC.green : item.failed ? DC.red : DC.border}` }}>
+                        <button onClick={() => togglePlanItem("week", item)} style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${item.completed ? DC.green : DC.border}`, background: item.completed ? DC.green : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {item.completed && <span style={{ color: "#fff", fontSize: 10, fontWeight: 800 }}>✓</span>}
+                        </button>
+                        {cat && <span style={{ fontSize: 9, fontWeight: 700, color: cat.color, background: cat.color + "18", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{cat.label}</span>}
+                        <span style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : item.failed ? DC.red : DC.text, textDecoration: item.completed || item.failed ? "line-through" : "none" }}>{item.text}</span>
+                        {item.failed && <span style={{ fontSize: 9, color: DC.red }}>❌</span>}
+                      </div>
+                    );
+                  })}
+                  {(dayTasksList[selectedDay]||[]).length > 0 && <div style={{ fontSize: 9, fontWeight: 700, color: DC.dim, textTransform: "uppercase", marginTop: 4, marginBottom: 2, paddingLeft: 2 }}>Jednorazowe</div>}
+                </>);
+              })()}
+
+              {/* One-off day tasks */}
+              {(dayTasksList[selectedDay] || []).length === 0 && weekPlan.filter(i => i.assigned_day === String(new Date(selectedDay + "T12:00:00").getDay())).length === 0 && (
+                <div style={{ fontSize: 12, color: DC.dim, fontStyle: "italic" }}>Brak tasków na ten dzień</div>
+              )}
               {(dayTasksList[selectedDay] || []).map(item => {
                 const cat = PLAN_CATS.find(c => c.id === item.category);
                 const isEd = editingDayTaskId === item.id;
@@ -11660,9 +11688,9 @@ Jedno mocne zdanie.`;
                         onBlur={() => { editDayTask(item.id, editingDayTaskText.trim() || item.text); setEditingDayTaskId(null); }}
                         style={{ flex: 1, fontSize: 12, padding: "2px 6px", border: `1px solid ${DC.cyan}`, borderRadius: 4, outline: "none", fontFamily: "inherit", color: DC.text }} />
                     ) : (
-                      <span onDoubleClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none", cursor: "text" }} title="Kliknij dwukrotnie aby edytować">{item.text}</span>
+                      <span onDoubleClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ flex: 1, fontSize: 12, color: item.completed ? DC.dim : DC.text, textDecoration: item.completed ? "line-through" : "none", cursor: "text" }}>{item.text}</span>
                     )}
-                    {!isEd && <button onClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }} title="Edytuj">✎</button>}
+                    {!isEd && <button onClick={() => { setEditingDayTaskId(item.id); setEditingDayTaskText(item.text); }} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✎</button>}
                     <button onClick={() => deleteDayTask(item.id)} style={{ fontSize: 10, color: DC.dim, background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
                   </div>
                 );
@@ -11672,7 +11700,7 @@ Jedno mocne zdanie.`;
               <select value={newDayTaskCat} onChange={e => setNewDayTaskCat(e.target.value)} style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 8px", fontSize: 11, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
                 {PLAN_CATS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
-              <input value={newDayTask} onChange={e => setNewDayTask(e.target.value)} onKeyDown={e => e.key === "Enter" && addDayTask()} placeholder="Dodaj task na ten dzień..." style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, outline: "none", fontFamily: "inherit", flex: 1 }} />
+              <input value={newDayTask} onChange={e => setNewDayTask(e.target.value)} onKeyDown={e => e.key === "Enter" && addDayTask()} placeholder="Dodaj jednorazowy task na dziś..." style={{ background: DC.bg2, border: `1px solid ${DC.border}`, borderRadius: 6, color: DC.text, padding: "6px 10px", fontSize: 11, outline: "none", fontFamily: "inherit", flex: 1 }} />
               <DCBtn small bg={DC.cyan} onClick={addDayTask}>Dodaj</DCBtn>
             </div>
           </DCCard>
